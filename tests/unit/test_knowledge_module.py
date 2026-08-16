@@ -1,8 +1,9 @@
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
-from src.kernel.domain.result import Ok
+from src.kernel.domain.result import Err, Ok
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
@@ -23,6 +24,7 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
 from src.modules.knowledge.domain.ontology import (
     NodeTypeDefinition,
     OntologySchema,
+    OntologyTemplate,
     PropertyDefinition,
     PropertyType,
     RelationshipTypeDefinition,
@@ -36,6 +38,9 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repo
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_object_storage import (
     InMemoryObjectStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository import (
+    InMemoryOntologyRepository,
 )
 from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
     SimpleMarkdownParser,
@@ -115,6 +120,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
     bus = InMemoryEventBus()
     store = InMemoryEventStore(event_bus=bus)
     repo = InMemoryKnowledgeBaseRepository()
+    ontology_repo = InMemoryOntologyRepository()
     storage = InMemoryObjectStorage()
     parser = SimpleMarkdownParser()
     extractor = StructuredPydanticGraphExtractor()
@@ -132,7 +138,11 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         vector_store=graph_store,
     )
 
-    create_kb_use_case = CreateKnowledgeBaseUseCase(store, repo)
+    create_kb_use_case = CreateKnowledgeBaseUseCase(
+        event_store=store,
+        repository=repo,
+        ontology_repository=ontology_repo,
+    )
     attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
     query_use_case = QueryKnowledgeUseCase(graph_store)
 
@@ -172,3 +182,51 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
     )
     assert isinstance(query_res, Ok)
     assert len(query_res.value.nodes) >= 1
+
+
+@pytest.mark.asyncio
+async def test_create_knowledge_base_with_ontology_template_id(
+    sample_ontology: OntologySchema,
+) -> None:
+    bus = InMemoryEventBus()
+    store = InMemoryEventStore(event_bus=bus)
+    repo = InMemoryKnowledgeBaseRepository()
+    ontology_repo = InMemoryOntologyRepository()
+
+    # 1. Salvar template no repo de ontologia
+    template_res = OntologyTemplate.create(
+        name=sample_ontology.name,
+        description=sample_ontology.description,
+        node_types=sample_ontology.node_types,
+        relationship_types=sample_ontology.relationship_types,
+    )
+    assert isinstance(template_res, Ok)
+    template = template_res.value
+    await ontology_repo.save(template)
+
+    create_kb_use_case = CreateKnowledgeBaseUseCase(
+        event_store=store,
+        repository=repo,
+        ontology_repository=ontology_repo,
+    )
+
+    # 2. Criar KB referenciando ontology_id
+    kb_res = await create_kb_use_case.execute(
+        CreateKnowledgeBaseRequest(
+            name="TemplateLinkedKB",
+            description="Base vinculada ao template",
+            ontology_id=template.id,
+        )
+    )
+    assert isinstance(kb_res, Ok)
+
+    # 3. Tentar criar KB com ontology_id inexistente
+    invalid_res = await create_kb_use_case.execute(
+        CreateKnowledgeBaseRequest(
+            name="InvalidKB",
+            description="Teste id invalido",
+            ontology_id=uuid4(),
+        )
+    )
+    assert isinstance(invalid_res, Err)
+    assert invalid_res.error.code == "ONTOLOGY_TEMPLATE_NOT_FOUND"
