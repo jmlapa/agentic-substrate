@@ -60,3 +60,12 @@ mypy_path = "."
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "asyncpg.*",
+    "falkordb.*",
+    "markitdown.*",
+    "aioboto3.*",
+]
+ignore_missing_imports = true
