@@ -31,8 +31,21 @@ class StructuredPydanticGraphExtractor(IGraphExtractor):
                 props: dict[str, Any] = {}
                 for p in node_def.properties:
                     if p.required:
-                        default_val = "Sample" if p.type == PropertyType.STRING else 1
-                        props[p.name] = p.default or default_val
+                        if p.enum_values:
+                            default_val: Any = p.enum_values[0]
+                        elif p.type == PropertyType.STRING:
+                            default_val = "Sample"
+                        elif p.type == PropertyType.INTEGER:
+                            default_val = 1
+                        elif p.type == PropertyType.FLOAT:
+                            default_val = 1.0
+                        elif p.type == PropertyType.BOOLEAN:
+                            default_val = True
+                        elif p.type == PropertyType.LIST_STRING:
+                            default_val = ["sample"]
+                        else:
+                            default_val = "Sample"
+                        props[p.name] = p.default if p.default is not None else default_val
 
                 dynamic_node_cls = builder.build_node_model(node_def)
                 validated_model = dynamic_node_cls(id=node_id, **props)

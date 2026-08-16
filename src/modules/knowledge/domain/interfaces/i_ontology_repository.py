@@ -1,0 +1,14 @@
+from typing import Protocol
+from uuid import UUID
+
+from src.modules.knowledge.domain.ontology.ontology_template import OntologyTemplate
+
+
+class IOntologyRepository(Protocol):
+    async def save(self, ontology: OntologyTemplate) -> None: ...
+
+    async def get_by_id(self, id: UUID) -> OntologyTemplate | None: ...
+
+    async def get_by_name_and_version(self, name: str, version: int) -> OntologyTemplate | None: ...
+
+    async def list_all(self) -> list[OntologyTemplate]: ...
