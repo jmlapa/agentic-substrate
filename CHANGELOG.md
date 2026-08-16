@@ -9,10 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Modular clean architecture with `kernel`, `knowledge`, and `api_gateway`.
-- `kernel` primitives: `Entity`, `ValueObject`, `AggregateRoot`, `DomainEvent`, `DomainError`, and `Result[T, E]`.
+- `kernel` domain primitives: `Entity`, `ValueObject`, `AggregateRoot`, `DomainEvent`, `DomainError`, and `Result[T, E]`.
 - `kernel` application contracts: `UseCase`, `EventBus`, `EventStore`, and `Logger`.
-- Dynamic ontology definitions for Knowledge Bases with runtime Pydantic validation (`DynamicOntologyModelBuilder`).
+- `kernel` infrastructure: `PostgresEventStore` with optimistic concurrency control and transactional locks.
+- `knowledge` domain: `KnowledgeBase`, `Document`, `OntologyTemplate`, `OntologySchema`, `GraphNode`, `GraphEdge`.
+- Dynamic ontology definitions with runtime Pydantic v2 validation (`DynamicOntologyModelBuilder`).
 - Choreographed Event-Driven Ingestion Saga (`DocumentIngestionSagaCoordinator`) with Event Sourcing.
-- Partitioned object storage adapters and in-memory graph/vector stores.
-- FastAPI endpoints for KB creation, document upload, and subgraph/vector querying.
-- Full Mypy strict mode, Ruff linting/formatting, and pytest test suite.
+- `LocalFileSystemStorageAdapter` for partitioned asynchronous object storage with path traversal protection.
+- `MarkItDownDocumentParser` for multi-format document-to-markdown conversion.
+- `PgVectorStoreAdapter` with PostgreSQL 16 + pgvector cosine similarity search and HNSW indexing.
+- `FalkorDbGraphStoreAdapter` with parameterized OpenCypher graph storage and subgraph querying.
+- `api_gateway` FastAPI REST endpoints for Ontology Templates, Knowledge Bases, Document Ingestion, and Knowledge Querying.
+- Dependency injection container (`AppContainer`) supporting dynamic environment-based infrastructure selection.
+
+### Removed
+- Obsolete `InMemoryObjectStorage` and `SimpleMarkdownParser` in favor of local production-grade adapters.
+
+### Verified
+- Strict Mypy compliance (`strict = true`), 100% Ruff linting/formatting pass, and automated test coverage.

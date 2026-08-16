@@ -1,96 +1,112 @@
-# Spec: Knowledge Substrate (Marco 1: Kernel + Knowledge + API Gateway)
+# Spec: Knowledge Substrate (Marco 1 e 1.5: Kernel + Knowledge + API Gateway + Local Infra)
 
 ## Objective
-Construir um substrato modular em Clean Architecture para desenvolvimento de sistemas agênticos, focado no gerenciamento de bases de conhecimento (Knowledge Bases) com GraphRAG. 
-O sistema utiliza **Event Sourcing**, **Saga Coreografada** assíncrona, particionamento de storage por KB, extração estruturada de nós/arestas baseada em **ontologias dinâmicas em runtime** (usando Pydantic) e armazenamento híbrido (Grafos + Vetores).
+Construir um substrato modular em Clean Architecture para desenvolvimento de sistemas agênticos, focado no gerenciamento de bases de conhecimento (Knowledge Bases) com GraphRAG e ontologias dinâmicas.
+O sistema utiliza **Event Sourcing**, **Saga Coreografada** orientada a eventos de domínio, particionamento de storage por KB, extração estruturada de grafos baseada em **ontologias dinâmicas em runtime** (usando Pydantic v2) e persistência de dados em infraestrutura real local (Postgres + pgvector, FalkorDB, Redis e Local FileSystem Storage).
 
 ## Tech Stack
 - **Linguagem:** Python 3.12+
-- **Gerenciador de Dependências & Ambiente:** `uv` / `poetry` / `pyproject.toml`
+- **Gerenciador de Dependências & Ambiente:** `uv` (`pyproject.toml`)
 - **Framework Web:** FastAPI + Uvicorn (ASGI assíncrono)
-- **Validação & Tipagem Dinâmica:** Pydantic v2
-- **Event Sourcing & Persistence:** PostgreSQL (Event Store, Snapshots e pgvector) + Driver `asyncpg` / `SQLAlchemy Async`
-- **Object Storage:** Compatível com S3 (MinIO localmente via `aioboto3` ou `minio-py`)
-- **Graph Store:** Abstração no domínio com adaptadores (ex: FalkorDB/Neo4j ou Property Graph in Postgres)
-- **Qualidade & Testes:** Pytest (pytest-asyncio), Ruff (linter/formatter), Mypy (type-checking estrito)
+- **Validação & Tipagem Dinâmica:** Pydantic v2 (`DynamicOntologyModelBuilder`)
+- **Event Sourcing & Vector Store:** PostgreSQL 16 (`pgvector/pgvector:pg16`) + Driver `asyncpg` com concorrência otimista e busca por similaridade de cosseno (`<=>` com índice HNSW)
+- **Object Storage:** `LocalFileSystemStorageAdapter` com bind mount em `./data/storage` e I/O assíncrono via `aiofiles`
+- **Document Parser:** `MarkItDownDocumentParser` utilizando `markitdown` da Microsoft (conversão rápida de PDF, DOCX, TXT, MD sem GPU)
+- **Graph Store:** `FalkorDbGraphStoreAdapter` utilizando `falkordb` e queries OpenCypher para persistência e consulta de subgrafos
+- **Event Bus:** `InMemoryEventBus` (com interface desacoplada para futura expansão com Redis Pub/Sub)
+- **Qualidade & Testes:** Pytest (pytest-asyncio, pytest-cov), Ruff (linter/formatter), Mypy (modo estrito: `strict = true`)
 
 ## Commands
 ```bash
-# Instalação de dependências
-uv sync # ou pip install -e ".[dev]"
+# Sincronização de dependências
+uv sync
 
-# Executar suíte de testes com cobertura
-pytest --cov=src -v
-
-# Linter e Formatação
-ruff check .
-ruff format .
-
-# Checagem de tipos estrita
-mypy src
-
-# Subir infraestrutura local (Postgres, MinIO, etc.)
+# Subir infraestrutura local via Docker
 docker compose -f docker/docker-compose.yml up -d
 
+# Executar suíte completa de testes com cobertura
+uv run pytest --cov=src --cov-report=term-missing -v
+
+# Linter e Formatação
+uv run ruff check .
+uv run ruff format --check .
+
+# Checagem de tipos estrita
+uv run mypy src tests
+
+# Gate oficial de qualidade
+make pre-commit
+
 # Executar API Gateway localmente
-uvicorn src.api_gateway.main:app --reload --port 8000
+uv run uvicorn src.api_gateway.main:app --reload --port 8000
 ```
 
 ## Project Structure
 ```
 agentic-substrate/
-├── CAPABILITY-MAP.md
-├── SPEC-knowledge-substrate.md
 ├── docker/
-│   └── docker-compose.yml
-├── pyproject.toml
+│   └── docker-compose.yml       # Postgres (pgvector), FalkorDB, Redis
+├── CAPABILITY-MAP.md            # Mapa de capacidades e status dos módulos
+├── SPEC-knowledge-substrate.md  # Especificação técnica do substrato
+├── pyproject.toml               # Dependências e configurações de ferramentas
 ├── src/
 │   ├── kernel/                  # Primitivas puras de Domínio e Aplicação
-│   │   ├── domain/              # Entity, ValueObject, AggregateRoot, DomainEvent, Result
-│   │   ├── application/         # IEventBus, IEventStore, ILogger, IUseCase
-│   │   └── infrastructure/      # EventStore in-memory/postgres, In-Memory EventBus
+│   │   ├── domain/              # Entity, ValueObject, AggregateRoot, DomainEvent, DomainError, Result
+│   │   ├── application/         # EventBus, EventStore, Logger, UseCase
+│   │   └── infrastructure/      # PostgresEventStore, InMemoryEventStore, InMemoryEventBus
 │   │
 │   ├── modules/
-│   │   └── knowledge/           # Módulo GraphRAG & Base de Conhecimento
-│   │       ├── domain/          # KnowledgeBase, Document, OntologySchema, GraphNode, GraphEdge
-│   │       ├── application/     # Sagas, Event Handlers, Use Cases (CreateKB, IngestDoc, Query)
-│   │       │   ├── sagas/       # IngestionSagaCoordinator e handlers de steps
-│   │       │   └── use_cases/   # Casos de uso de entrada e consulta
-│   │       └── infrastructure/  # MinIOStorage, MarkdownParser, DynamicPydanticExtractor, VectorStore, GraphStore
+│   │   └── knowledge/           # Módulo GraphRAG & Knowledge Base
+│   │       ├── domain/          # KnowledgeBase, Document, OntologyTemplate, OntologySchema, GraphNode, GraphEdge
+│   │       │   ├── interfaces/  # IKnowledgeBaseRepository, IOntologyRepository, IObjectStorage, IDocumentParser, IVectorStore, IGraphStore, IGraphExtractor
+│   │       │   ├── value_objects/
+│   │       │   └── events/      # Eventos de domínio do ciclo de vida da KB e documentos
+│   │       ├── application/     # Sagas e Casos de Uso
+│   │       │   ├── sagas/       # DocumentIngestionSagaCoordinator
+│   │       │   └── use_cases/   # CreateKnowledgeBase, AttachAndStoreDocument, QueryKnowledge, CreateOntology, GetOntology, ListOntologies
+│   │       └── infrastructure/  # Adaptadores reais e extratores
+│   │           ├── adapters/    # LocalFileSystemStorageAdapter, MarkItDownDocumentParser, PgVectorStoreAdapter, FalkorDbGraphStoreAdapter, InMemory repos/stores
+│   │           └── extractors/  # DynamicOntologyModelBuilder, StructuredPydanticGraphExtractor
 │   │
-│   └── api_gateway/             # Ponto de entrada HTTP
-│       ├── controllers/         # Rotas REST assíncronas
-│       ├── dependencies.py      # Injeção e Composição de Dependências (IoC)
-│       └── main.py              # Aplicação FastAPI e middlewares
+│   └── api_gateway/             # Exposição HTTP / REST
+│       ├── controllers/         # KnowledgeController, OntologyController
+│       ├── dtos/                # DTOs tipados (Request/Response)
+│       ├── container.py         # Container IoC / Injeção de dependências configurável
+│       └── main.py              # Aplicação FastAPI e rotas
 └── tests/
-    ├── unit/                    # Testes de unidade puros (Domínio e Aplicação)
-    └── integration/             # Testes de integração (Storage, Event Store, API)
+    ├── unit/                    # Testes de unidade de domínio, use cases e adaptadores
+    └── integration/             # Testes de integração (API E2E, Container IoC)
 ```
 
 ## Code Style & Architecture Conventions
-- **Single Class per File (Segregação Estrita de Arquivos):** Cada entidade, value object, aggregate, evento de domínio, DTO (Request/Response), caso de uso, interface/protocolo e adaptador de infraestrutura DEVE residir em seu próprio arquivo isolado. É expressamente proibido agrupar múltiplos casos de uso, DTOs ou entidades em mono-arquivos. Os arquivos `__init__.py` devem ser utilizados apenas para expor a API pública do pacote (facade).
-- **Clean Architecture:** Camadas internas (`domain`) NUNCA dependem de camadas externas (`infrastructure`, `api_gateway`).
-- **Interfaces por Protocolos:** Utilizar `typing.Protocol` ou `abc.ABC` para contratos de infraestrutura definidos no domínio/aplicação.
-- **Tratamento de Falhas com `Result[T, E]`:** Métodos de domínio e casos de uso retornam estruturas explícitas `Result.ok(val)` ou `Result.err(error)` evitando exceções não controladas para regras de negócio.
-- **Tipagem Forte em Runtime:** Ontologias de KBs geram classes dinâmicas `pydantic.create_model` para validação determinística de saídas de LLM.
+- **Single Class per File:** Cada entidade, value object, aggregate, evento de domínio, DTO (Request/Response), caso de uso, interface/protocolo e adaptador de infraestrutura reside estritamente em seu próprio arquivo isolado. Arquivos `__init__.py` funcionam exclusivamente como facades.
+- **Clean Architecture & Inversão de Dependências:** Domínio e Aplicação dependem apenas de abstrações (`Protocol` / `ABC`), isolando qualquer dependência de framework ou driver de terceiros.
+- **Tratamento Funcional de Erros com `Result[T, E]`:** Casos de uso e operações de domínio retornam `Ok(value)` ou `Err(error)`, eliminando exceções não tratadas em regras de negócio.
+- **Tipagem Estrita (Mypy Strict):** 100% do código tipado sem uso implícito de `Any`.
+- **Validação Dinâmica de Esquemas:** Extração ontológica orientada por `pydantic.create_model` para validação determinística de nós e arestas.
 
 ## Boundaries
 - **Always:**
-  - Garantir que cada módulo tenha sua pasta e contratos isolados.
-  - Manter o `kernel` sem nenhuma regra de negócio específica de módulos.
-  - Criar testes unitários para toda regra de domínio e passos da Saga.
-  - Validar tipos com `mypy` e conformidade com `ruff`.
+  - Executar o gate oficial `make pre-commit` antes de commits.
+  - Manter 1 classe por arquivo em todas as camadas.
+  - Utilizar operações assíncronas (`async`/`await`) em qualquer chamada de I/O ou banco.
+  - Executar operações síncronas bloqueantes em threadpool via `asyncio.to_thread`.
 - **Ask first:**
-  - Adição de serviços externos adicionais além dos especificados (Postgres, MinIO, Vector/Graph).
-  - Alterações no modelo ontológico base ou quebras de compatibilidade nos schemas de eventos.
+  - Adição de dependências pesadas ou serviços adicionais no docker-compose.
+  - Quebra de compatibilidade em eventos de domínio ou rotas públicas da API.
 - **Never:**
-  - Fazer acoplamento direto entre submódulos sem passar por interfaces do `kernel` ou contratos públicos.
-  - Gravar credenciais, API keys ou segredos em arquivos de configuração ou código.
+  - Realizar bypass de tipagem estrita ou suprimir erros com `# type: ignore` sem justificativa formal.
+  - Misturar múltiplos DTOs, entidades ou adaptadores no mesmo arquivo.
+  - Incluir credenciais, segredos ou arquivos temporários no Git.
 
-## Success Criteria
-1. Criação de Knowledge Bases com definição de Ontologias dinâmicas (Nós, Propriedades e Arestas permitidas).
-2. Upload assíncrono particionado por KB em Object Storage.
-3. Execução da Saga coreografada orientada a Event Sourcing:
-   - `DocumentUploadedEvent` ➔ `DocumentStoredEvent` ➔ `DocumentParsedToMarkdownEvent` ➔ `GraphExtractedEvent` ➔ `KnowledgeIndexedEvent`.
-4. Extrator dinâmico baseado em Pydantic validando tipagem estrita de nós e relacionamentos extraídos.
-5. Endpoints REST da API funcionais com injeção de dependências desacoplada e 100% de testes unitários passando.
+## Success Criteria & Capacidades Validadas
+1. **Gerenciamento de Ontologias:** Criação, recuperação e listagem de templates de ontologia reutilizáveis (`OntologyTemplate`).
+2. **Criação de Knowledge Base:** Inicialização com ontologia inline ou vinculada por `ontology_id` via Event Sourcing (`KnowledgeBaseCreatedEvent`).
+3. **Storage Particionado & Parsing:** Upload assíncrono particionado (`data/storage/{kb_id}/{doc_id}`) e parsing local via MarkItDown.
+4. **Saga Coreografada com 5 Eventos:** `DocumentAttachedEvent` ➔ `DocumentStoredEvent` ➔ `DocumentParsedToMarkdownEvent` ➔ `GraphExtractedFromDocumentEvent` ➔ `DocumentKnowledgeIndexedEvent`.
+5. **Persistência Híbrida Real:**
+   - Vetores: `PgVectorStoreAdapter` com similaridade de cosseno e isolamento por `kb_id`.
+   - Grafos: `FalkorDbGraphStoreAdapter` com OpenCypher parametrizado contra injeção.
+   - Eventos: `PostgresEventStore` com controle de versão otimista.
+6. **Container IoC Configurável:** Alternância transparente entre infraestrutura real e in-memory via variáveis de ambiente.
+7. **Qualidade Total:** 100% de testes automatizados passando e zero erros de linter ou tipagem.
