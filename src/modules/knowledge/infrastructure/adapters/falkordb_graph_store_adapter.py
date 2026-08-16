@@ -56,20 +56,14 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
 
         return len(graph.nodes), len(graph.edges)
 
-    def _query_subgraph_sync(
-        self, kb_id: UUID, query: str, top_k: int = 5
-    ) -> list[dict[str, Any]]:
+    def _query_subgraph_sync(self, kb_id: UUID, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
         is_cypher = query.strip().upper().startswith(("MATCH", "RETURN", "WITH", "UNWIND"))
 
         if is_cypher:
             cypher_query = query
         else:
-            cypher_query = (
-                "MATCH (n) "
-                "RETURN n "
-                f"LIMIT {top_k}"
-            )
+            cypher_query = f"MATCH (n) RETURN n LIMIT {top_k}"
 
         try:
             res = graph_handle.query(cypher_query)
@@ -94,7 +88,5 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
     async def store_graph(self, kb_id: UUID, graph: ExtractedGraph) -> tuple[int, int]:
         return await asyncio.to_thread(self._store_graph_sync, kb_id, graph)
 
-    async def query_subgraph(
-        self, kb_id: UUID, query: str, top_k: int = 5
-    ) -> list[dict[str, Any]]:
+    async def query_subgraph(self, kb_id: UUID, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._query_subgraph_sync, kb_id, query, top_k)

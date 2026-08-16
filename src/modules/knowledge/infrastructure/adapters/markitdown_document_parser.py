@@ -45,8 +45,6 @@ class MarkItDownDocumentParser(IDocumentParser):
         except UnicodeDecodeError:
             return raw_bytes.decode("latin-1", errors="ignore")
 
-    async def parse_to_markdown(
-        self, raw_bytes: bytes, file_name: str, content_type: str
-    ) -> str:
+    async def parse_to_markdown(self, raw_bytes: bytes, file_name: str, content_type: str) -> str:
         file_extension = self._infer_extension(file_name, content_type)
         return await asyncio.to_thread(self._convert_sync, raw_bytes, file_extension)
