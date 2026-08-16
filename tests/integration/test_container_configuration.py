@@ -1,3 +1,4 @@
+import tempfile
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,28 +13,14 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
-from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
-    SimpleMarkdownParser,
-)
 
 
 @pytest.mark.asyncio
-async def test_container_creates_local_adapters() -> None:
-    container = create_app_container(
-        storage_type="local",
-        parser_type="markitdown",
-    )
-    assert isinstance(container.object_storage, LocalFileSystemStorageAdapter)
-    assert isinstance(container.parser, MarkItDownDocumentParser)
-
-
-@pytest.mark.asyncio
-async def test_container_creates_in_memory_and_simple_parser() -> None:
-    container = create_app_container(
-        storage_type="memory",
-        parser_type="simple",
-    )
-    assert isinstance(container.parser, SimpleMarkdownParser)
+async def test_container_creates_local_adapters_by_default() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        container = create_app_container(storage_base_dir=tmpdir)
+        assert isinstance(container.object_storage, LocalFileSystemStorageAdapter)
+        assert isinstance(container.parser, MarkItDownDocumentParser)
 
 
 @pytest.mark.asyncio

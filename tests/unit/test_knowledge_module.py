@@ -1,3 +1,4 @@
+import tempfile
 from typing import Any
 from uuid import uuid4
 
@@ -36,14 +37,14 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_st
 from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repository import (
     InMemoryKnowledgeBaseRepository,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_object_storage import (
-    InMemoryObjectStorage,
-)
 from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository import (
     InMemoryOntologyRepository,
 )
-from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
-    SimpleMarkdownParser,
+from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
+    LocalFileSystemStorageAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
+    MarkItDownDocumentParser,
 )
 from src.modules.knowledge.infrastructure.extractors.dynamic_ontology_model_builder import (
     DynamicOntologyModelBuilder,
@@ -117,71 +118,72 @@ def test_dynamic_ontology_pydantic_builder(sample_ontology: OntologySchema) -> N
 
 @pytest.mark.asyncio
 async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) -> None:
-    bus = InMemoryEventBus()
-    store = InMemoryEventStore(event_bus=bus)
-    repo = InMemoryKnowledgeBaseRepository()
-    ontology_repo = InMemoryOntologyRepository()
-    storage = InMemoryObjectStorage()
-    parser = SimpleMarkdownParser()
-    extractor = StructuredPydanticGraphExtractor()
-    graph_store = InMemoryGraphAndVectorStore()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bus = InMemoryEventBus()
+        store = InMemoryEventStore(event_bus=bus)
+        repo = InMemoryKnowledgeBaseRepository()
+        ontology_repo = InMemoryOntologyRepository()
+        storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
+        parser = MarkItDownDocumentParser()
+        extractor = StructuredPydanticGraphExtractor()
+        graph_store = InMemoryGraphAndVectorStore()
 
-    # Coordinator listens to bus
-    _ = DocumentIngestionSagaCoordinator(
-        event_bus=bus,
-        event_store=store,
-        kb_repository=repo,
-        storage=storage,
-        parser=parser,
-        extractor=extractor,
-        graph_store=graph_store,
-        vector_store=graph_store,
-    )
-
-    create_kb_use_case = CreateKnowledgeBaseUseCase(
-        event_store=store,
-        repository=repo,
-        ontology_repository=ontology_repo,
-    )
-    attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
-    query_use_case = QueryKnowledgeUseCase(graph_store)
-
-    # 1. Create Knowledge Base
-    kb_res = await create_kb_use_case.execute(
-        CreateKnowledgeBaseRequest(
-            name="ArchKB",
-            description="Base de conhecimento de arquitetura",
-            ontology=sample_ontology,
+        # Coordinator listens to bus
+        _ = DocumentIngestionSagaCoordinator(
+            event_bus=bus,
+            event_store=store,
+            kb_repository=repo,
+            storage=storage,
+            parser=parser,
+            extractor=extractor,
+            graph_store=graph_store,
+            vector_store=graph_store,
         )
-    )
-    assert isinstance(kb_res, Ok)
-    kb_id = kb_res.value.id
 
-    # 2. Attach and Store raw document (triggers Saga)
-    raw_doc = b"Document detailing Microservice auth connecting to Database postgres"
-    doc_res = await attach_doc_use_case.execute(
-        AttachAndStoreDocumentRequest(
-            kb_id=kb_id,
-            file_name="architecture_overview.txt",
-            content_type="text/plain",
-            file_content=raw_doc,
+        create_kb_use_case = CreateKnowledgeBaseUseCase(
+            event_store=store,
+            repository=repo,
+            ontology_repository=ontology_repo,
         )
-    )
-    assert isinstance(doc_res, Ok)
-    doc_id = doc_res.value.document_id
+        attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
+        query_use_case = QueryKnowledgeUseCase(graph_store)
 
-    # 3. Verify that the Saga completed all steps
-    updated_kb = await repo.get_by_id(kb_id)
-    assert updated_kb is not None
-    doc_info = updated_kb.documents[doc_id]
-    assert doc_info["status"] == DocumentStatus.INDEXED
+        # 1. Create Knowledge Base
+        kb_res = await create_kb_use_case.execute(
+            CreateKnowledgeBaseRequest(
+                name="ArchKB",
+                description="Base de conhecimento de arquitetura",
+                ontology=sample_ontology,
+            )
+        )
+        assert isinstance(kb_res, Ok)
+        kb_id = kb_res.value.id
 
-    # 4. Verify graph query
-    query_res = await query_use_case.execute(
-        QueryKnowledgeRequest(kb_id=kb_id, query="What databases are connected?")
-    )
-    assert isinstance(query_res, Ok)
-    assert len(query_res.value.nodes) >= 1
+        # 2. Attach and Store raw document (triggers Saga)
+        raw_doc = b"Document detailing Microservice auth connecting to Database postgres"
+        doc_res = await attach_doc_use_case.execute(
+            AttachAndStoreDocumentRequest(
+                kb_id=kb_id,
+                file_name="architecture_overview.txt",
+                content_type="text/plain",
+                file_content=raw_doc,
+            )
+        )
+        assert isinstance(doc_res, Ok)
+        doc_id = doc_res.value.document_id
+
+        # 3. Verify that the Saga completed all steps
+        updated_kb = await repo.get_by_id(kb_id)
+        assert updated_kb is not None
+        doc_info = updated_kb.documents[doc_id]
+        assert doc_info["status"] == DocumentStatus.INDEXED
+
+        # 4. Verify graph query
+        query_res = await query_use_case.execute(
+            QueryKnowledgeRequest(kb_id=kb_id, query="What databases are connected?")
+        )
+        assert isinstance(query_res, Ok)
+        assert len(query_res.value.nodes) >= 1
 
 
 @pytest.mark.asyncio

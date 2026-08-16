@@ -48,9 +48,6 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_st
 from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repository import (
     InMemoryKnowledgeBaseRepository,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_object_storage import (
-    InMemoryObjectStorage,
-)
 from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository import (
     InMemoryOntologyRepository,
 )
@@ -62,9 +59,6 @@ from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser im
 )
 from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import (
     PgVectorStoreAdapter,
-)
-from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
-    SimpleMarkdownParser,
 )
 from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
     StructuredPydanticGraphExtractor,
@@ -92,8 +86,7 @@ class AppContainer:
 
 
 def create_app_container(
-    storage_type: str | None = None,
-    parser_type: str | None = None,
+    storage_base_dir: str | None = None,
     graph_store_type: str | None = None,
     vector_store_type: str | None = None,
     event_store_type: str | None = None,
@@ -113,22 +106,12 @@ def create_app_container(
     repo: IKnowledgeBaseRepository = InMemoryKnowledgeBaseRepository()
     ontology_repo: IOntologyRepository = InMemoryOntologyRepository()
 
-    # Storage
-    stg_type = storage_type or os.getenv("STORAGE_TYPE", "memory")
-    storage: IObjectStorage
-    if stg_type == "local":
-        base_dir = os.getenv("STORAGE_LOCAL_BASE_DIR", "./data/storage")
-        storage = LocalFileSystemStorageAdapter(base_directory=base_dir)
-    else:
-        storage = InMemoryObjectStorage()
+    # Object Storage (Local File System)
+    base_dir = storage_base_dir or os.getenv("STORAGE_LOCAL_BASE_DIR") or "./data/storage"
+    storage: IObjectStorage = LocalFileSystemStorageAdapter(base_directory=base_dir)
 
-    # Parser
-    prs_type = parser_type or os.getenv("PARSER_TYPE", "markitdown")
-    parser: IDocumentParser
-    if prs_type == "simple":
-        parser = SimpleMarkdownParser()
-    else:
-        parser = MarkItDownDocumentParser()
+    # Document Parser (MarkItDown)
+    parser: IDocumentParser = MarkItDownDocumentParser()
 
     extractor: IGraphExtractor = StructuredPydanticGraphExtractor()
 
