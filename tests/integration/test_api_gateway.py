@@ -1,0 +1,77 @@
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.api_gateway.main import app
+
+
+@pytest.mark.asyncio
+async def test_api_e2e_flow() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Health check
+        health_resp = await client.get("/health")
+        assert health_resp.status_code == 200
+        assert health_resp.json()["status"] == "healthy"
+
+        # 2. Create Knowledge Base with dynamic ontology
+        ontology_payload = {
+            "name": "E2ETestOntology",
+            "description": "Ontologia de teste E2E",
+            "node_types": [
+                {
+                    "name": "Microservice",
+                    "description": "Serviço",
+                    "properties": [
+                        {"name": "language", "type": "string", "required": True},
+                        {"name": "port", "type": "integer", "required": False, "default": 3000},
+                    ],
+                }
+            ],
+            "relationship_types": [],
+        }
+
+        create_kb_resp = await client.post(
+            "/api/v1/knowledge/bases",
+            json={
+                "name": "E2E Knowledge Base",
+                "description": "Base criada via API",
+                "ontology": ontology_payload,
+            },
+        )
+        assert create_kb_resp.status_code == 201
+        kb_data = create_kb_resp.json()
+        kb_id = kb_data["id"]
+        assert kb_data["name"] == "E2E Knowledge Base"
+        assert "storage_partition" in kb_data
+
+        # 3. Upload Document
+        files = {
+            "file": (
+                "service_doc.txt",
+                b"Architecture includes Microservice auth",
+                "text/plain",
+            )
+        }
+        upload_resp = await client.post(
+            f"/api/v1/knowledge/bases/{kb_id}/documents",
+            files=files,
+        )
+        assert upload_resp.status_code == 202
+        upload_data = upload_resp.json()
+        assert "document_id" in upload_data
+
+        # 4. Check KB status and processed document
+        get_kb_resp = await client.get(f"/api/v1/knowledge/bases/{kb_id}")
+        assert get_kb_resp.status_code == 200
+        kb_details = get_kb_resp.json()
+        assert len(kb_details["documents"]) == 1
+        assert kb_details["documents"][0]["status"] == "INDEXED"
+
+        # 5. Query Knowledge Base
+        query_resp = await client.post(
+            f"/api/v1/knowledge/bases/{kb_id}/query",
+            json={"query": "Tell me about Microservice", "top_k": 3},
+        )
+        assert query_resp.status_code == 200
+        query_data = query_resp.json()
+        assert len(query_data["nodes"]) >= 1
