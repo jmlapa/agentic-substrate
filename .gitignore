@@ -48,5 +48,7 @@ htmlcov/
 *.swo
 
 # Docker volume mounts (if local)
+data/
 postgres_data/
 minio_data/
+falkordb_data/

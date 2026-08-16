@@ -1,68 +1,90 @@
-# Plano de Implementação: Motor de Ontologias Dinâmicas e Reutilizáveis (Ontology Engine)
+# Plano de Implementação: Infraestrutura Local e Adaptadores de Produção (Marco 1.5)
 
 ## Visão Geral
-Implementar o subsistema de Ontologias como cidadão de primeira classe dentro do módulo `knowledge`. Isso inclui o modelo de domínio de templates de ontologia (`OntologyTemplate`), repositório de persistência, validação de integridade referencial de grafos, casos de uso de gerenciamento de templates (criação, consulta, listagem), aprimoramento do compilador dinâmico de modelos Pydantic com suporte completo a Enums dinâmicos em memória para `pydantic-ai` v2, e integração com o fluxo de criação de Knowledge Base.
+Estruturar e implementar a camada de infraestrutura real e adaptadores locais para validação ágil do ecossistema do **Agentic Substrate** via `docker-compose.yml`. O ambiente local utilizará imagens oficiais do Docker Hub, persistência em PostgreSQL (`pgvector`), grafo em **FalkorDB**, armazenamento em **Local FileSystem** (com bind mount para o host) e parser baseado em **MarkItDown** (Microsoft).
 
 ---
 
-## Decisões Arquiteturais e Padrões
-1. **Clean Architecture & Single Class per File:** Cada classe, DTO, interface e caso de uso residirá em seu próprio arquivo isolado.
-2. **Tipagem Estrita com Mypy:** Toda assinatura e retorno com tipos explícitos (`strict = true`).
-3. **Padrão Result[T, E]:** Tratamento explícito de erros com `Ok` e `Err(DomainError)`.
-4. **Geração Dinâmica de Enums em Memória:** Uso nativo de `enum.Enum` dinâmico integrado ao `pydantic.create_model` para alimentar o `result_type` do `pydantic-ai` sem gerar arquivos estáticos.
-5. **Precedência de Ontologia:** Criação de Knowledge Base passa a aceitar `ontology_id` para reuso de receitas de ontologia pré-existentes.
+## Decisões Arquiteturais e Escolhas Técnicas
+
+1. **Object Storage -> LocalFileSystemStorageAdapter:**
+   - Implementa `IObjectStorage` operando diretamente no diretório montado do host (`./data/storage`), garantindo I/O assíncrono com `aiofiles`.
+   - Permite inspecionar diretamente os arquivos brutos e processados no disco local sem overhead de MinIO/S3.
+
+2. **Parser de Documentos -> MarkItDownDocumentParser:**
+   - Implementa `IDocumentParser` utilizando `markitdown` da Microsoft.
+   - **Por que MarkItDown vs Docling agora:** `markitdown` é extremamente leve, inicializa instantaneamente, converte PDF, DOCX, XLSX, PPTX e HTML para Markdown limpo sem necessidade de carregar modelos pesados de Deep Learning em CPU/GPU. O `Docling` fica como candidato futuro para cenários de tabelas científicas ultra-complexas.
+
+3. **Graph Store -> FalkorDbGraphStoreAdapter:**
+   - Implementa `IGraphStore` conectando ao container oficial `falkordb/falkordb`.
+   - Executa queries OpenCypher para inserção de nós/arestas com tipagem estrita da ontologia e consultas de subgrafos.
+
+4. **Vector Store -> PgVectorStoreAdapter:**
+   - Implementa `IVectorStore` conectando à extensão `pgvector` no PostgreSQL 16.
+   - Criação automática da tabela de embeddings particionada por `kb_id` e busca por similaridade de cosseno com índice HNSW.
+
+5. **Event Store -> PostgresEventStore:**
+   - Implementa `EventStore` do Kernel gravando fluxos de eventos append-only na tabela `events` com concorrência otimista baseada em versão.
+
+6. **Ambiente Local via Docker Compose:**
+   - Serviços: `postgres` (`pgvector/pgvector:pg16`), `falkordb` (`falkordb/falkordb:latest`), `redis` (`redis:7-alpine`).
+   - Volumes mapeados no host sob pasta `./data/`.
 
 ---
 
 ## Estrutura do Grafo de Dependências
+
 ```
-Domain: OntologyTemplate & VOs
+docker-compose.yml (Postgres + pgvector, FalkorDB, Redis)
     │
-    ├── Domain: IOntologyRepository Protocol
-    │       │
-    │       ├── Infrastructure: InMemoryOntologyRepository
-    │       │
-    │       └── Application: Use Cases (Create, Get, List Ontology Template)
+    ├── Kernel Infrastructure: PostgresEventStore (asyncpg / sqlalchemy async)
     │
-    └── Infrastructure: DynamicOntologyModelBuilder (Runtime Enum/Pydantic Compilation)
-            │
-            └── Application/Integration: CreateKnowledgeBaseUseCase (vinculação por ontology_id)
+    ├── Knowledge Infrastructure: LocalFileSystemStorageAdapter (aiofiles)
+    │
+    ├── Knowledge Infrastructure: MarkItDownDocumentParser (markitdown)
+    │
+    ├── Knowledge Infrastructure: FalkorDbGraphStoreAdapter (falkordb async/client)
+    │
+    ├── Knowledge Infrastructure: PgVectorStoreAdapter (pgvector / asyncpg)
+    │
+    └── API Gateway & DI Container: Injeção dos adaptadores reais configuráveis por ambiente
 ```
 
 ---
 
-## Fases de Implementação e Tarefas
+## Fases de Implementação
 
-### Fase 1: Domínio e Contratos do Motor de Ontologia
-- **Tarefa 1:** Criar a entidade de domínio `OntologyTemplate` com validação de topologia e integridade referencial.
-- **Tarefa 2:** Criar a interface de repositório `IOntologyRepository` no domínio.
-- **Tarefa 3:** Implementar o adaptador `InMemoryOntologyRepository` na infraestrutura.
+### Fase 1: Docker Compose e Armazenamento Local
+- Configurar `docker/docker-compose.yml` com Postgres+pgvector, FalkorDB, Redis e volumes no host.
+- Implementar `LocalFileSystemStorageAdapter` com suporte assíncrono.
+- Implementar `MarkItDownDocumentParser`.
 
-### Ponto de Verificação 1: Domínio & Persistência Base
-- [ ] Testes unitários do domínio `OntologyTemplate` passando (validações de nós, arestas órfãs e versionamento).
-- [ ] Repositório em memória testado e tipado rigorosamente.
+### Ponto de Verificação 1: Storage Local & Parser
+- [ ] Subida dos containers com `docker compose up -d`.
+- [ ] Testes unitários e de integração do `LocalFileSystemStorageAdapter` e `MarkItDownDocumentParser`.
 
-### Fase 2: Casos de Uso de Gerenciamento de Ontologias
-- **Tarefa 4:** Implementar o caso de uso `CreateOntologyTemplateUseCase` (com request, response e testes).
-- **Tarefa 5:** Implementar os casos de uso `GetOntologyTemplateUseCase` e `ListOntologyTemplatesUseCase` (com requests, responses e testes).
+### Fase 2: Persistência Real (Postgres Event Store & PgVector)
+- Implementar `PostgresEventStore` no `src/kernel/infrastructure/postgres_event_store.py`.
+- Implementar `PgVectorStoreAdapter` no `src/modules/knowledge/infrastructure/adapters/pgvector_store_adapter.py`.
+- Scripts de inicialização DDL e migrações das tabelas.
 
-### Ponto de Verificação 2: Casos de Uso da Aplicação
-- [ ] Casos de uso de criação, busca e listagem de templates operacionais com 100% de cobertura.
+### Ponto de Verificação 2: Event Sourcing & Vetores no Postgres
+- [ ] Testes de integração gravando eventos reais e recuperando histórico por `aggregate_id`.
+- [ ] Testes de indexação e busca por similaridade vetorial no `pgvector`.
 
-### Fase 3: Compilação Dinâmica para `pydantic-ai` v2 & Integração com Knowledge Base
-- **Tarefa 6:** Aprimorar `DynamicOntologyModelBuilder` para suportar compilação dinâmica de Enums com validação estrita e testes de rejeição a valores inválidos.
-- **Tarefa 7:** Atualizar `CreateKnowledgeBaseUseCase` para suportar criação via `ontology_id` existente com fallback para schema inline.
-- **Tarefa 8:** Atualizar endpoints no `api_gateway` (ou controllers) para expor a gestão de templates de ontologia.
+### Fase 3: Grafo Real (FalkorDB) e Composição de Injeção de Dependências
+- Implementar `FalkorDbGraphStoreAdapter` no `src/modules/knowledge/infrastructure/adapters/falkordb_graph_store_adapter.py`.
+- Atualizar o container de Injeção de Dependências (`src/api_gateway/container.py`) para alternar entre adaptadores em memória e adaptadores de infraestrutura real via variáveis de ambiente (`ENVIRONMENT=local|dev|test|prod`).
 
-### Ponto de Verificação 3: Integração & Qualidade Total
-- [ ] `make pre-commit` executado com sucesso (Ruff check, Ruff format, Mypy strict, Pytest com 100% de cobertura).
-- [ ] Fluxo ponta a ponta: Cadastro de Template -> Criação de KB vinculada -> Compilação de schema para IA validada.
+### Ponto de Verificação 3: Integração Completa Ponta a Ponta
+- [ ] Pipeline completo executando com infraestrutura local real (Upload -> Storage Local -> Parser MarkItDown -> Extração Ontológica -> PgVector + FalkorDB).
+- [ ] `make pre-commit` executado com 100% de sucesso.
 
 ---
 
 ## Riscos e Mitigações
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Arestas conectando nós inexistentes na ontologia | Alto | Validação no método de fábrica/construtor do `OntologyTemplate` antes de salvar. |
-| Incompatibilidade de nomes de Enums dinâmicos | Médio | Normalização e sanitização de identificadores de enum para caracteres válidos em Python. |
-| Quebra de retrocompatibilidade com KBs antigas | Médio | Manter suporte opcional a ontologia inline no DTO de criação de KB. |
+| Latência de inicialização de conexões nos adaptadores | Médio | Gerenciar pools de conexão (`asyncpg.create_pool` e FalkorDB client) no ciclo de vida da aplicação FastAPI (`lifespan`). |
+| Incompatibilidade de tipos vetoriais no pgvector | Médio | Criar extensão `vector` no bootstrap do banco e registrar tipos no pool do `asyncpg`. |
+| Concorrência no FileSystem local | Baixo | Utilizar diretórios particionados deterministicamente por `kb_id` e identificador do documento. |
