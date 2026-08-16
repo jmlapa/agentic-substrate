@@ -1,3 +1,6 @@
+from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
+    FalkorDbGraphStoreAdapter,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
     InMemoryGraphAndVectorStore,
 )
@@ -24,6 +27,7 @@ from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import
 )
 
 __all__ = [
+    "FalkorDbGraphStoreAdapter",
     "InMemoryGraphAndVectorStore",
     "InMemoryKnowledgeBaseRepository",
     "InMemoryObjectStorage",
