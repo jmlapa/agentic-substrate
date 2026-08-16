@@ -1,0 +1,10 @@
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class IObjectStorage(Protocol):
+    async def put_object(self, path: str, content: bytes, content_type: str) -> None: ...
+
+    async def get_object(self, path: str) -> bytes: ...
+
+    async def generate_upload_url(self, path: str) -> str: ...
