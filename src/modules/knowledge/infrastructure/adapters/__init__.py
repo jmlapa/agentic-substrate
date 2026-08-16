@@ -16,6 +16,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import (
+    PgVectorStoreAdapter,
+)
 from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
     SimpleMarkdownParser,
 )
@@ -27,5 +30,6 @@ __all__ = [
     "InMemoryOntologyRepository",
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
+    "PgVectorStoreAdapter",
     "SimpleMarkdownParser",
 ]
