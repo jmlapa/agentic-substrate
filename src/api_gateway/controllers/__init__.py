@@ -1,7 +1,6 @@
-from src.api_gateway.controllers.knowledge_controller import router as knowledge_router
-from src.api_gateway.dtos.create_knowledge_base_dto import (
-    CreateKnowledgeBaseDTO,
+from src.api_gateway.controllers.knowledge_controller import (
+    router as knowledge_router,
 )
-from src.api_gateway.dtos.query_knowledge_dto import QueryKnowledgeDTO
+from src.api_gateway.controllers.ontology_controller import ontology_router
 
-__all__ = ["CreateKnowledgeBaseDTO", "QueryKnowledgeDTO", "knowledge_router"]
+__all__ = ["knowledge_router", "ontology_router"]

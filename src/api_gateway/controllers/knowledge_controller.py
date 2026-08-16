@@ -43,6 +43,7 @@ async def create_knowledge_base(
         CreateKnowledgeBaseRequest(
             name=payload.name,
             description=payload.description,
+            ontology_id=payload.ontology_id,
             ontology=payload.ontology,
         )
     )
