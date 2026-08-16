@@ -13,6 +13,9 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
 )
+from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
+    MarkItDownDocumentParser,
+)
 from src.modules.knowledge.infrastructure.adapters.simple_markdown_parser import (
     SimpleMarkdownParser,
 )
@@ -23,5 +26,6 @@ __all__ = [
     "InMemoryObjectStorage",
     "InMemoryOntologyRepository",
     "LocalFileSystemStorageAdapter",
+    "MarkItDownDocumentParser",
     "SimpleMarkdownParser",
 ]
