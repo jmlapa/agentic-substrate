@@ -4,9 +4,9 @@
 Establish a reproducible, single-command local infrastructure utilizing Docker Compose (PostgreSQL 16 + pgvector, FalkorDB, Redis) and a fully configured local `.env` environment file. This enables developers and automated integration suites to execute real database migrations (`make migrate`), persistent event sourcing, vector search, graph storage, and local file storage without external cloud dependencies.
 
 ## 2. Tech Stack & Dependencies
-- **PostgreSQL 16 with pgvector**: `pgvector/pgvector:0.8.0-pg16`
-- **FalkorDB**: `falkordb/falkordb:v0.4.0`
-- **Redis**: `redis:7.2.4-alpine`
+- **PostgreSQL 16 with pgvector**: `pgvector/pgvector:0.8.6-pg16`
+- **FalkorDB**: `falkordb/falkordb:v4.20.3-alpine`
+- **Redis**: `redis:7.4.10-alpine`
 - **Configuration Engine**: `pydantic-settings` via `AppSettings`
 - **Migration Engine**: `Alembic` + `asyncpg`
 
