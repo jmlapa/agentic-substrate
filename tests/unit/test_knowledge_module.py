@@ -31,6 +31,9 @@ from src.modules.knowledge.domain.ontology import (
     RelationshipTypeDefinition,
 )
 from src.modules.knowledge.domain.value_objects.document_status import DocumentStatus
+from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
+    InMemoryEmbeddingService,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
     InMemoryGraphAndVectorStore,
 )
@@ -146,7 +149,11 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
             ontology_repository=ontology_repo,
         )
         attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
-        query_use_case = QueryKnowledgeUseCase(graph_store)
+        embedding_service = InMemoryEmbeddingService()
+        query_use_case = QueryKnowledgeUseCase(
+            graph_store=graph_store,
+            embedding_service=embedding_service,
+        )
 
         # 1. Create Knowledge Base
         kb_res = await create_kb_use_case.execute(
@@ -193,7 +200,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
             QueryKnowledgeRequest(kb_id=kb_id, query="What databases are connected?")
         )
         assert isinstance(query_res, Ok)
-        assert len(query_res.value.nodes) >= 1
+        assert len(query_res.value.results) >= 1
 
 
 @pytest.mark.asyncio

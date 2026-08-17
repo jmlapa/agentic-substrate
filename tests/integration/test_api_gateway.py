@@ -92,4 +92,4 @@ async def test_api_e2e_flow() -> None:
         )
         assert query_resp.status_code == 200
         query_data = query_resp.json()
-        assert len(query_data["nodes"]) >= 1
+        assert len(query_data["results"]) >= 1

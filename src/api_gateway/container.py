@@ -193,7 +193,10 @@ def create_app_container(
         ontology_repository=ontology_repo,
     )
     attach_doc = AttachAndStoreDocumentUseCase(store, repo, storage)
-    query_kb = QueryKnowledgeUseCase(graph_store)
+    query_kb = QueryKnowledgeUseCase(
+        graph_store=graph_store,
+        embedding_service=embedding_service,
+    )
 
     create_ont = CreateOntologyTemplateUseCase(ontology_repo)
     get_ont = GetOntologyTemplateUseCase(ontology_repo)

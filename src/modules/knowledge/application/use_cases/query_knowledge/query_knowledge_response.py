@@ -1,7 +1,9 @@
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel
+from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
+    HybridSearchResult,
+)
 
 
 class QueryKnowledgeResponse(BaseModel):
-    nodes: list[dict[str, Any]]
+    results: list[HybridSearchResult] = Field(default_factory=list)
