@@ -1,79 +1,86 @@
-# Implementation Plan: PydanticAI Graph Extractor, Rate Limiter (RPM/TPM) & Entity Canonicalization
+# Implementation Plan: Frontend Console SPA & RAG Query Playground
 
 ## Overview
-Implementar o extrator ontológico de grafos de alta performance e baixo custo (`PydanticAiGraphExtractor`) baseado em `pydantic-ai` v2 e no modelo **Gemini Flash-Lite** (`gemini-2.5-flash-lite` / `gemini-3.1-flash-lite`), integrado a um **Rate Limiter Assíncrono com Sliding Window** (`AsyncTokenBucketLimiter`) para controle estrito de RPM (Requests por Minuto) e TPM (Tokens por Minuto), e a um catálogo cumulativo de **Canonização de Entidades** (`ExistingEntityRegistry`) que impede a criação de nós duplicados no FalkorDB.
+Construir uma interface SPA moderna, leve e funcional no diretório `/frontend` (Vite, React 18+, TypeScript, Tailwind CSS, TanStack Query) integrada ao Agentic Substrate. A aplicação permitirá a gestão visual completa de ontologias estruturadas, criação e listagem de Knowledge Bases, upload de arquivos, monitoramento em tempo real por etapas do pipeline de ingestão GraphRAG e um Playground interativo de consultas RAG com síntese via LLM e inspeção de subgrafos FalkorDB.
 
 ---
 
-## Architecture Decisions
+## Architecture Decisions (Decisões Fechadas)
 
-1. **Controle de Vazão Universal com Sliding Window (`AsyncTokenBucketLimiter`)**:
-   - Manter histórico deslizante de 60 segundos de requisições e tokens estimados (`len(text) // 4 + overhead_prompt`).
-   - Bloquear corotinas de forma não-bloqueante (`await asyncio.sleep(delta)`) quando `current_rpm >= max_rpm` ou `current_tpm >= max_tpm`.
-   - Localização no `kernel/infrastructure/` para que outros agentes e serviços possam reutilizar a mesma disciplina de rate limiting.
+1. **Monorepo SPA Leve (`/frontend`)**:
+   - **React 18.3.1 + Vite 5.4+ (TypeScript 5.5+)** para bundle estático SPA minificado e hot-reload instantâneo.
+   - **Tailwind CSS 3.4+** com paleta Dark-first baseada em Zinc (`zinc-950` fundo, `zinc-900` cards, `zinc-800` bordas, `indigo-500`/`emerald-500` acentos).
+   - **TanStack React Query v5.50+** para gerenciamento de cache de servidor, refetching automático e polling inteligente de status.
+   - **React Hook Form 7.52+ + Zod 3.23+** para validação tipada estrita em tempo de formulário.
+   - **Single Component per File** e tipagem estrita em TypeScript (sem `any`), alinhado com as diretrizes do repositório.
 
-2. **Resolução e Canonização de Entidades (`ExistingEntityRegistry`)**:
-   - `CanonicalEntity`: Value Object contendo `id` normalizado, `name`, `type` e lista de `aliases` conhecidos.
-   - `IEntityRegistry`: Protocolo de domínio para registro e consulta de entidades conhecidas por Knowledge Base.
-   - `ExistingEntityRegistry`: Implementação thread-safe / async-safe (com `asyncio.Lock`) que armazena entidades em memória e pode ser pré-populada a partir do grafo FalkorDB.
-   - Injeção dinâmica no System Prompt do PydanticAI para reutilização obrigatória de `id`s canônicos quando houver equivalência semântica.
+2. **Fechamento do Ciclo RAG no Backend (`api-gateway` e `knowledge`)**:
+   - `GET /api/v1/knowledge/bases`: Endpoint para listar todas as KBs existentes com métricas agregadas (número de documentos, partição de storage e status).
+   - `POST /api/v1/knowledge/bases/{kb_id}/query`: Atualização do endpoint de consulta para incorporar síntese de resposta com LLM via **Gemini 2.5 Flash-Lite** (`gemini-2.5-flash-lite`, temperatura `0.2`), retornando a resposta em Markdown formatado juntamente com as evidências (chunks e subgrafos FalkorDB recuperados).
 
-3. **Extração Ontológica Estruturada com PydanticAI v2**:
-   - Compilação dos modelos dinâmicos de nós e arestas a partir do `OntologySchema` da KB.
-   - Execução do agente `pydantic-ai` solicitando `result_type=ExtractedGraphModel` diretamente ao Gemini Flash-Lite.
-   - Resiliência com Exponential Backoff + Full Jitter para capturar eventuais respostas 429 da API do Google.
+3. **Estratégia de Monitoramento do Pipeline**:
+   - Hook `usePipelineMonitor` com polling fixo de **2000ms (2s)** via React Query (`refetchInterval: 2000`).
+   - Auto-stop condicional: o polling é pausado assim que 100% dos documentos da KB atingem estado terminal (`COMPLETED` ou `FAILED`).
+   - Visualização por etapas da Saga: `ENFILEIRADO` ➔ `PARSING` ➔ `CHUNKING` ➔ `EMBEDDING` ➔ `EXTRAÇÃO DE GRAFO` ➔ `INDEXAÇÃO` ➔ `CONCLUÍDO`.
 
-4. **Concorrência Assíncrona Controlada**:
-   - Pool de concorrência com `asyncio.Semaphore(max_concurrency)` (padrão: 10 a 15 tarefas simultâneas) para processar os `ParentChunk`s de forma paralela sem sobrecarregar conexões HTTP ou o event loop.
-
-5. **Aderência Rigorosa ao `AGENTS.md`**:
-   - 1 Classe / 1 Interface / 1 DTO por arquivo isolado.
-   - Mypy em modo estrito (`strict = true`) sem nenhum `Any` implícito.
-   - Facades em `__init__.py` atuando unicamente como re-exportadores.
+4. **Containerização & Servidor Web de Produção**:
+   - **Nginx Alpine (`nginx:1.27-alpine`)** via Dockerfile multi-stage (estágio 1: build Node 20 alpine; estágio 2: runtime Nginx alpine).
+   - Tamanho final da imagem < 25MB.
+   - Configuração de fallback `try_files $uri $uri/ /index.html;` e proxy transparente de `/api/v1/` para o container do backend FastAPI.
+   - Integração no `docker/docker-compose.yml` mapeando a porta 3000 para acesso direto ao console.
 
 ---
 
 ## Task List
 
-### Phase 1: Rate Limiting & Concurrency Control
-- [ ] **Task 1: Implementar `AsyncTokenBucketLimiter`**
-  - Sliding window de 60s para RPM e TPM com lock assíncrono.
-- [ ] **Task 2: Testes Unitários Abrangentes do `AsyncTokenBucketLimiter`**
-  - Validar limites de RPM, limites de TPM, expiração da janela e concorrência.
+### Phase 1: Backend Support Endpoints & Synthesis Service
+- [ ] **Task 1: List Knowledge Bases Use Case & Endpoint**
+  - Implementar caso de uso `ListKnowledgeBasesUseCase`, DTOs e rota `GET /api/v1/knowledge/bases`.
+- [ ] **Task 2: RAG Answer Synthesis & Enriched Query Endpoint**
+  - Implementar serviço/caso de uso de síntese com Gemini Flash-Lite e enriquecer `POST /api/v1/knowledge/bases/{kb_id}/query`.
+- [ ] **Task 3: Backend Tests & Quality Gate**
+  - Testes unitários para novos use cases e rotas. Validação com `make pre-commit`.
 
-### Checkpoint: Rate Limiting Foundation
-- [ ] Rate Limiter validado com 100% de cobertura e zero erros de concorrência.
+### Checkpoint: Backend Foundation
+- [ ] Todos os testes do backend passando, tipagem Mypy strict 100% limpa, endpoints testados.
 
-### Phase 2: Domain Entity Canonicalization & Registry
-- [ ] **Task 3: Value Object `CanonicalEntity` e Interface `IEntityRegistry`**
-  - Modelar entidade canônica e contrato do catálogo no domínio.
-- [ ] **Task 4: Implementar `ExistingEntityRegistry` e Testes Unitários**
-  - Implementação thread-safe com busca, registro e deduplicação de sinônimos.
+### Phase 2: Frontend Scaffolding & Core Design System
+- [ ] **Task 4: Setup do Projeto Frontend (Vite + React + TS + Tailwind)**
+  - Configurar `/frontend`, `package.json`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js`, `index.css` e cliente Axios/QueryClient.
+- [ ] **Task 5: Layout Base & Componentes Atômicos de UI**
+  - Criar `Sidebar`, `Header`, `PageContainer`, `Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Progress`, `EmptyState` e `Toast`.
 
-### Checkpoint: Entity Resolution Capabilities
-- [ ] Modelos de canonização e catálogo testados e exportados nas facades.
+### Checkpoint: Frontend Scaffolding
+- [ ] Frontend compila sem erros de TypeScript, layout renderiza e navegação funciona.
 
-### Phase 3: PydanticAI Agent Graph Extractor
-- [ ] **Task 5: Implementar `PydanticAiGraphExtractor`**
-  - Integração do agente PydanticAI v2 + Gemini Flash-Lite com Rate Limiter, Semaphore, Retry com Backoff e Catálogo de Entidades.
-- [ ] **Task 6: Testes Unitários e Mock do `PydanticAiGraphExtractor`**
-  - Testar extração estruturada, fallback gracioso, reuso de entidades e recuperação de erro 429.
+### Phase 3: Vertical Slice: Gestão de Ontologias
+- [ ] **Task 6: Ontologies API, Types e React Query Hooks**
+  - Criar contratos TypeScript, chamadas de API (`ontologies-api.ts`) e hooks (`useOntologies.ts`).
+- [ ] **Task 7: Páginas de Listagem, Criação Estruturada e Detalhe de Ontologia**
+  - `OntologiesListPage.tsx`, `CreateOntologyPage.tsx` (com adição dinâmica de entidades/relações) e `OntologyDetailPage.tsx`.
 
-### Checkpoint: Extractor Validation
-- [ ] Extrator com PydanticAI funcionando e testado com mocks e modelos reais.
+### Checkpoint: Ontologies Module
+- [ ] Usuário consegue criar ontologias estruturadas, listar e inspecionar detalhes via UI.
 
-### Phase 4: Configurações, Container IoC & Integração na Saga
-- [ ] **Task 7: Atualizar `AppSettings`, Container IoC e `DocumentIngestionSagaCoordinator`**
-  - Adicionar variáveis de configuração (`GEMINI_MAX_RPM`, `GEMINI_MAX_TPM`, `GEMINI_MAX_CONCURRENCY`), injetar `PydanticAiGraphExtractor` no container e conectar na Saga.
-- [ ] **Task 8: Testes de Integração End-to-End da Extração**
-  - Testar fluxo E2E com múltiplos Parent Chunks processados em paralelo.
+### Phase 4: Vertical Slice: Knowledge Bases, Upload & Monitor de Pipeline
+- [ ] **Task 8: Gestão de Knowledge Bases (Listagem, Criação e Detalhes)**
+  - `KnowledgeBasesListPage.tsx`, `CreateKnowledgeBasePage.tsx` (com seleção ou criação inline de ontologia) e `KnowledgeBaseDetailPage.tsx`.
+- [ ] **Task 9: Dropzone de Upload & Monitor Visual de Etapas do Pipeline**
+  - `DocumentUploadModal.tsx`, `PipelineStatusTracker.tsx` (stepper visual), `DocumentMetricsDrawer.tsx` e hook `usePipelineMonitor.ts`.
 
-### Phase 5: Quality Gates & Pre-Commit
-- [ ] **Task 9: Execução dos Gates de Qualidade (`make pre-commit`)**
-  - Pytest, Ruff linter, Ruff format e Mypy estrito.
+### Checkpoint: Knowledge Bases & Ingestion Flow
+- [ ] Criação de KB, upload de arquivos e acompanhamento das etapas do pipeline em tempo real validados na UI.
 
-### Checkpoint: Final
-- [ ] Extrator completo aprovado no gate oficial e pronto para uso com a CF/88.
+### Phase 5: Vertical Slice: RAG Query Playground & Containerização
+- [ ] **Task 10: Playground de Consulta RAG com Síntese e Inspetor de Evidências**
+  - `QueryPlaygroundView.tsx`, `AnswerView.tsx` (markdown renderer), `EvidenceInspector.tsx` (chunks e subgrafos) e `useRagQuery.ts`.
+- [ ] **Task 11: Multi-stage Dockerfile & Integração no Docker Compose**
+  - Criar `/frontend/Dockerfile`, `/frontend/nginx.conf` e adicionar serviço `frontend` na porta 3000 no `docker-compose.yml`.
+- [ ] **Task 12: Validação Integrada Ponta a Ponta & Pre-Commit Gate**
+  - Execução dos gates de qualidade (testes frontend Vitest, `npm run build`, `make pre-commit`).
+
+### Checkpoint: Final Review & Self-Hosted Ready
+- [ ] Stack completa sobe com `docker-compose up`, fluxo ponta a ponta (Ontologia ➔ KB ➔ Upload ➔ Monitor ➔ Playground) 100% funcional.
 
 ---
 
@@ -81,11 +88,7 @@ Implementar o extrator ontológico de grafos de alta performance e baixo custo (
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Estouro de cota da API do Gemini sob concorrência pesada | Alto | `AsyncTokenBucketLimiter` com sliding window estrito antes do disparo + retry exponencial com jitter |
-| Entidades com pequenas variações de grafia gerarem nós duplicados | Médio | Injeção do catálogo de entidades existentes no prompt do PydanticAI com instrução explícita de normalização |
-| Ausência de chave `GEMINI_API_KEY` em testes locais | Baixo | Fallback determinístico ou mock transparente quando a chave não estiver configurada |
-
----
-
-## Open Questions
-- Nenhuma. O modelo Gemini Flash-Lite oferece o balanço ideal de custo ($0.25/1M) e structured outputs via PydanticAI.
+| Bloqueio de CORS entre frontend e API FastAPI | Médio | Configurar middleware de CORS permissivo no FastAPI para ambiente local e Docker. |
+| Ingestão assíncrona longa em arquivos pesados | Médio | Implementar polling resiliente com backoff suave e indicadores visuais claros de status por fase. |
+| Latência na síntese do LLM no endpoint de query | Baixo | Utilizar o Gemini Flash-Lite (`gemini-2.5-flash-lite`), com timeout configurado e loading state dedicado no Playground. |
+| Payload de grafo muito grande para renderização | Baixo | Foco em visualização tabular/hierárquica estruturada de nós e arestas em vez de canvas 3D pesado na V1. |
