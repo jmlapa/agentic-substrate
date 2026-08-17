@@ -12,8 +12,12 @@
 ## Especificações Técnicas Ativas
 - `SPEC-knowledge-substrate.md` (Marco 1 & 1.5 - Substrato Base de Knowledge)
 - `SPEC-knowledge-chunking-and-embeddings.md` (Marco 1.6 - Markdown Parent-Child Chunking & Gemini Embedding 2)
+- `SPEC-unified-falkordb-hybrid-graphrag.md` (Marco 1.7 - FalkorDB Hybrid GraphRAG Unificado)
+- `SPEC-markdown-structure-tolerant-chunker.md` (Marco 1.8 - Universal Structure-Tolerant Markdown Chunker)
+- `SPEC-pydantic-ai-graph-extractor-and-rate-limiter.md` (Marco 1.9 - PydanticAI Graph Extractor, Rate Limiter RPM/TPM & Entity Canonicalization)
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres/pgvector, FalkorDB, Redis, Local Storage)
-2. **Marco 1.6 (Em Execução):** `knowledge:chunking-and-embeddings` (Recursive Markdown Chunker + Gemini Embedding 2 + PgVector Document Chunks + Saga Ingestion)
-3. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+2. **Marco 1.6 & 1.7 (Concluído):** `knowledge:chunking-and-embeddings` & `knowledge:falkordb-hybrid-graphrag`
+3. **Marco 1.8 & 1.9 (Próximo):** `knowledge:structure-tolerant-chunker` ──→ `knowledge:pydantic-ai-extractor-and-rate-limiter`
+4. **Marco 2 (Futuro):** `memory` ──→ `tool-registry` ──→ `execution`

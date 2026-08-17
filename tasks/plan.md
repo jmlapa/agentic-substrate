@@ -1,63 +1,70 @@
-# Implementation Plan: Unified FalkorDB Hybrid GraphRAG & Structural Node Ingestion
+# Implementation Plan: Universal Structure-Tolerant Markdown Parent-Child Chunker
 
 ## Overview
-Unify knowledge storage, indexing, and querying directly into **FalkorDB**, creating a single hybrid graph per Knowledge Base that houses both the **structural document backbone** (`Document` ➔ `ParentChunk` ➔ `ChildChunk`) and **ontological entities** (`Mentions`). Hybrid search (vector KNN + subgraph expansion) will execute in a single OpenCypher query (`db.idx.vector.queryNodes`), removing read coupling from PostgreSQL and enabling parallelized chunk-level LLM extraction for large documents.
+Implementar o particionador hierárquico determinístico universal de Markdown (`StructureTolerantMarkdownChunker`), dividindo o documento em blocos atômicos indivisíveis (tabelas, blocos cercados de código, parágrafos, listas) e empacotando-os de forma gulosa em **Parent Chunks** de tamanho uniforme (800 a 1.200 tokens) e **Child Chunks** de alta resolução (150 a 250 tokens com 30 tokens de overlap). O particionador é 100% agnóstico a domínio (leis, TI, finanças, manuais) e resiliente a inconsistências de conversão de PDFs.
 
 ---
 
 ## Architecture Decisions
 
-1. **One Graph per Knowledge Base (`kb_<kb_id>`)**:
-   - Each Knowledge Base maps to a single FalkorDB graph instance.
-   - Documents (`:Document`), parent chunks (`:ParentChunk`), child chunks (`:ChildChunk`), and ontology entities (`:Entity`) are all vertices/nodes inside this unified graph.
-   - Relationships:
-     - `(:Document)-[:HAS_PARENT]->(:ParentChunk)`
-     - `(:ParentChunk)-[:CONTAINS_CHILD]->(:ChildChunk)`
-     - `(:ParentChunk)-[:MENTIONS]->(:Entity)`
-     - `(:Entity)-[:RELATION]->(:Entity)`
+1. **Separação em Lexer Atômico e Empacotador Guloso (Single Responsibility)**:
+   - `AtomicBlockLexer`: Responsável exclusivo por transformar a string bruta do Markdown em uma lista sequencial de `AtomicBlock`s estruturados com identificação de tipo (`HEADING`, `PARAGRAPH`, `CODE_BLOCK`, `TABLE`, `LIST`, `BLOCKQUOTE`, `THEMATIC_BREAK`) e estimativa de tokens.
+   - `StructureTolerantMarkdownChunker`: Responsável exclusivo por acumular `AtomicBlock`s em `ParentChunk`s com sizing estrito, acionar divisão por sentenças apenas em blocos individuais anômalos e fatiar cada parent em `ChildChunk`s contextuais com overlap.
 
-2. **Native FalkorDB Vector Indexing**:
-   - Index vector embeddings directly on `(:ChildChunk)` nodes using `VECTOR INDEX FOR (c:ChildChunk) ON (c.embedding)` with dimension 768 (Gemini Embedding 2) and cosine similarity.
+2. **Indivisibilidade Sintática Determinística**:
+   - Nenhum bloco de código cercado (```` ```...``` ````) ou tabela Markdown (`|...|`) pode ser cortado no meio durante o empacotamento padrão.
+   - Cortes normais entre chunks ocorrem estritamente na fronteira entre blocos atômicos (ex: entre parágrafos ou após uma tabela).
 
-3. **Single Cypher Query Hybrid Search**:
-   - Query KNN on `ChildChunk.embedding`, traverse up to `ParentChunk`, optionally expand connected `:MENTIONS` entities, and return deduplicated parent context with aggregated entities and similarity scores in one trip.
+3. **Fallback de Emergência em Bloco Único Anômalo**:
+   - Caso um único parágrafo sem quebras exceda `max_parent_tokens`, aplica corte por sentenças (`(?<=[.!?])\s+`).
+   - Caso uma única tabela ou bloco de código exceda `max_parent_tokens`, aplica corte por linhas (`\n`).
 
-4. **Batch Extraction per `ParentChunk`**:
-   - The saga coordinates LLM ontological extraction per `ParentChunk` (~1.000 tokens) rather than dumping full 250-page documents to the LLM, connecting extracted entities to their respective parent node via `[:MENTIONS]`.
+4. **Rastreamento de Header Breadcrumb Best-Effort**:
+   - Constrói o `header_path` dinamicamente conforme encontra blocos `HEADING` (`#`, `##`, etc.).
+   - Se o documento não tiver nenhum cabeçalho (comum em PDFs convertidos), nomeia de forma limpa como `[Doc: {doc_name}] > Part {index}`.
 
-5. **Strict Single Class per File & Type Safety**:
-   - Every entity, value object, interface, adapter, and use case lives in its own dedicated file adhering to Mypy `strict = true` and the `Result[T, E]` pattern.
+5. **Conformidade Estrita com AGENTS.md**:
+   - 1 Classe / 1 Interface / 1 Enum por arquivo.
+   - Mypy `strict = true` em todos os módulos e testes.
+   - Compatibilidade total com `IMarkdownChunker` e a Saga de Ingestão.
 
 ---
 
 ## Task List
 
-### Phase 1: Domain Value Objects & Store Interface
-- [ ] **Task 1: Domain Value Objects (`HybridSearchResult` & `StructuralGraphDocument`)**
-- [ ] **Task 2: Interface Evolution (`IGraphStore` extensions)**
+### Phase 1: Domain Value Objects & Models
+- [ ] **Task 1: Value Object `AtomicBlock` e Enum `AtomicBlockType`**
+  - Modelar os blocos atômicos indivisíveis e seus tipos no domínio.
 
 ### Checkpoint: Domain Foundation
-- [ ] Domain models and interfaces strictly typed and tested.
+- [ ] VOs criados em arquivos isolados, tipados estritamente e exportados em facades.
 
-### Phase 2: FalkorDB & In-Memory Adapters
-- [ ] **Task 3: Structural Ingestion & Vector Indexing in Graph Adapters**
-- [ ] **Task 4: Unified Cypher Hybrid Query Implementation in Graph Adapters**
+### Phase 2: Lexer Sintático de Blocos Atômicos
+- [ ] **Task 2: Implementar `AtomicBlockLexer`**
+  - Criar lexer de máquina de estados para extração de tabelas, code blocks, cabeçalhos e parágrafos.
+- [ ] **Task 3: Testes Unitários do `AtomicBlockLexer`**
+  - Cobrir cenários de cercas de código, tabelas com colunas variadas, quebras duplas e cabeçalhos.
 
-### Checkpoint: Adapter Capabilities
-- [ ] Unit tests verify OpenCypher generation, vector index setup, and in-memory mock fidelity.
+### Checkpoint: Lexer Capabilities
+- [ ] `AtomicBlockLexer` isolado e validado com 100% de cobertura nos testes unitários.
 
-### Phase 3: Saga Coordination & Use Case Refactoring
-- [ ] **Task 5: Batch Parent-Level Graph Extraction in `DocumentIngestionSagaCoordinator`**
-- [ ] **Task 6: Refactor `QueryKnowledgeUseCase` for Single-Query Hybrid Search**
+### Phase 3: Empacotador Guloso & Structure-Tolerant Chunker
+- [ ] **Task 4: Implementar `StructureTolerantMarkdownChunker`**
+  - Implementar empacotamento guloso, divisão por sentenças em caso de overflow e geração de `ChildChunk`s com overlap.
+- [ ] **Task 5: Testes Unitários de Cenários e Edge Cases do Chunker**
+  - Testar integridade de tabelas, código, documentos sem cabeçalhos, textos legislativos e fallbacks.
 
-### Checkpoint: End-to-End Ingestion & Query Flow
-- [ ] Full saga pipeline and query use case functioning in memory and with mocked FalkorDB.
+### Checkpoint: Chunker Validation
+- [ ] `StructureTolerantMarkdownChunker` implementado e aprovado em todos os testes unitários.
 
-### Phase 4: Integration Verification & Quality Gates
-- [ ] **Task 7: Integration Tests, Pre-commit Gates & Documentation**
+### Phase 4: Integração, Facades & Quality Gates
+- [ ] **Task 6: Integração no Módulo Knowledge & Facades Públicas**
+  - Atualizar exports em `src/modules/knowledge/infrastructure/chunking/__init__.py` e garantir retrocompatibilidade com `MarkdownParentChildChunker`.
+- [ ] **Task 7: Execução Completa dos Gates de Qualidade (`make pre-commit`)**
+  - Executar Pytest, Ruff linter, Ruff format e Mypy estrito.
 
-### Checkpoint: Quality Gate Complete
-- [ ] `make pre-commit` passes with 0 errors (Ruff lint/format, Mypy strict, Pytest 100%).
+### Checkpoint: Final
+- [ ] 100% dos testes passando e zero erros no gate oficial pré-commit.
 
 ---
 
@@ -65,11 +72,11 @@ Unify knowledge storage, indexing, and querying directly into **FalkorDB**, crea
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| FalkorDB vector index syntax differences across versions | Medium | Wrap vector index creation in safe `CREATE VECTOR INDEX IF NOT EXISTS` or exception handling in adapter |
-| Large document parent extraction concurrency limits | High | Process parent chunks in bounded asynchronous batches (`asyncio.gather` with semaphore) |
-| Missing entities on chunks without ontological mentions | Low | Use `OPTIONAL MATCH (parent)-[:MENTIONS]->(entity)` in Cypher query to avoid dropping valid text chunks |
+| Tabela ou bloco de código único gigante (> 1.200 tokens) estourar o limite | Médio | Fallback recursivo que particiona a tabela por linhas ou código por quebra de linha preservando cercas |
+| Documentos sem cabeçalhos `#` gerarem títulos feios | Baixo | Geração automática de `header_path` estruturado `[Doc: {name}] > Part {N}` |
+| Regressão na Saga de Ingestão existente | Alto | Manter assinatura idêntica no protocolo `IMarkdownChunker` e manter alias/facade compatível |
 
 ---
 
 ## Open Questions
-- None. Graph granularity clarified: 1 Graph per Knowledge Base containing structural nodes + conceptual nodes.
+- Nenhuma. O modelo de empacotamento guloso e blocos atômicos resolve a consistência para qualquer tipo de documento.

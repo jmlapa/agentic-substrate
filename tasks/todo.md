@@ -1,149 +1,166 @@
-# Tasks: Unified FalkorDB Hybrid GraphRAG & Structural Ingestion
+# Task List: Universal Structure-Tolerant Markdown Parent-Child Chunker
 
-## Phase 1: Domain Foundation & Value Objects
+## Phase 1: Domain Value Objects & Models
 
-- [x] Task 1: Domain Value Objects (`HybridSearchResult` & `StructuralGraphDocument`)
-  - **Description:** Implement `HybridSearchResult` and `StructuralGraphDocument` value objects in the domain layer, following Single Class per File and strict typing.
-  - **Acceptance Criteria:**
-    - `HybridSearchResult` contains `parent_chunk_id`, `header_path`, `parent_content`, `relevance_score`, and `related_entities: list[dict[str, Any]]`.
-    - `StructuralGraphDocument` encapsulates document id, name, parent chunks, and child chunks with embeddings.
-    - Exported cleanly in `src/modules/knowledge/domain/value_objects/__init__.py`.
-  - **Verification:**
-    - Unit tests in `tests/unit/test_knowledge_value_objects.py` validate immutability and attributes.
-    - `uv run mypy src/modules/knowledge/domain` passes without errors.
-  - **Dependencies:** None
-  - **Files:**
-    - `src/modules/knowledge/domain/value_objects/hybrid_search_result.py`
-    - `src/modules/knowledge/domain/value_objects/structural_graph_document.py`
-    - `src/modules/knowledge/domain/value_objects/__init__.py`
-    - `tests/unit/test_knowledge_value_objects.py`
-  - **Scope:** S (3-4 files)
+### Task 1: Value Object `AtomicBlock` e Enum `AtomicBlockType`
+**Description:** Criar o enum `AtomicBlockType` e o dataclass imutável `AtomicBlock` no domínio do módulo Knowledge para representar sintaticamente cada elemento atômico extraído pelo lexer.
 
-- [x] Task 2: Interface Evolution (`IGraphStore` extensions)
-  - **Description:** Extend `IGraphStore` protocol with methods for vector index initialization, structural document storage, parent-entity mentions storage, and hybrid search.
-  - **Acceptance Criteria:**
-    - `IGraphStore` declares:
-      - `ensure_vector_index(kb_id: UUID, dimension: int, similarity_function: str) -> None`
-      - `store_structural_document(kb_id: UUID, document: StructuralGraphDocument) -> tuple[int, int]`
-      - `store_parent_mentions(kb_id: UUID, parent_chunk_id: str, graph: ExtractedGraph) -> tuple[int, int]`
-      - `query_hybrid(kb_id: UUID, query_embedding: list[float], top_k: int) -> list[HybridSearchResult]`
-    - Signatures conform to async/await and strict typing.
-  - **Verification:**
-    - `uv run mypy src/modules/knowledge/domain/interfaces` passes.
-  - **Dependencies:** Task 1
-  - **Files:**
-    - `src/modules/knowledge/domain/interfaces/i_graph_store.py`
-    - `src/modules/knowledge/domain/interfaces/__init__.py`
-  - **Scope:** S (2 files)
+**Acceptance criteria:**
+- [x] `AtomicBlockType` implementado como `StrEnum` com membros: `HEADING`, `PARAGRAPH`, `CODE_BLOCK`, `TABLE`, `LIST`, `BLOCKQUOTE`, `THEMATIC_BREAK`.
+- [x] `AtomicBlock` implementado como dataclass `frozen=True` contendo `content`, `block_type`, `estimated_tokens`, `header_level`, `header_title`.
+- [x] 1 Classe por arquivo isolado e exportado em `src/modules/knowledge/domain/value_objects/__init__.py`.
+
+**Verification:**
+- [x] Teste unitário de instanciação e imutabilidade dos value objects.
+- [x] `uv run mypy src/modules/knowledge/domain/value_objects/`
+
+**Dependencies:** None
+**Files touched:**
+- `src/modules/knowledge/domain/value_objects/atomic_block_type.py`
+- `src/modules/knowledge/domain/value_objects/atomic_block.py`
+- `src/modules/knowledge/domain/value_objects/__init__.py`
+- `tests/unit/test_chunk_value_objects.py`
+**Estimated scope:** Small (3-4 files)
 
 ---
 
-## Checkpoint 1: Domain Foundation Complete
-- [x] Value objects and store interfaces defined and verified with Mypy strict.
+## Checkpoint: Domain Foundation
+- [x] Value objects tipados com `strict = true` e testados unitariamente.
 
 ---
 
-## Phase 2: Graph Adapters Implementation
+## Phase 2: Lexer Sintático de Blocos Atômicos
 
-- [x] Task 3: Structural Ingestion & Vector Indexing in Graph Adapters
-  - **Description:** Implement `ensure_vector_index`, `store_structural_document`, and `store_parent_mentions` in `FalkorDbGraphStoreAdapter` and `InMemoryGraphAndVectorStore`.
-  - **Acceptance Criteria:**
-    - `FalkorDbGraphStoreAdapter` creates `(:ChildChunk)` vector index using OpenCypher vector index commands.
-    - Ingests `(:Document)`, `(:ParentChunk)`, and `(:ChildChunk)` with `[:HAS_PARENT]` and `[:CONTAINS_CHILD]` edges.
-    - Connects extracted entities to `ParentChunk` using `[:MENTIONS]` edges.
-    - `InMemoryGraphAndVectorStore` implements corresponding in-memory operations for testing.
-  - **Verification:**
-    - `tests/unit/test_falkordb_graph_store_adapter.py` passes.
-  - **Dependencies:** Task 2
-  - **Files:**
-    - `src/modules/knowledge/infrastructure/adapters/falkordb_graph_store_adapter.py`
-    - `src/modules/knowledge/infrastructure/adapters/in_memory_graph_and_vector_store.py`
-    - `tests/unit/test_falkordb_graph_store_adapter.py`
-  - **Scope:** M (3 files)
+### Task 2: Implementar `AtomicBlockLexer`
+**Description:** Implementar a máquina de estados `AtomicBlockLexer` que processa uma string de Markdown linha a linha e extrai a sequência de blocos atômicos sem cortar tabelas, blocos de código ou parágrafos.
 
-- [x] Task 4: Unified Cypher Hybrid Query Implementation
-  - **Description:** Implement `query_hybrid` in `FalkorDbGraphStoreAdapter` using `db.idx.vector.queryNodes`, traversing up to `ParentChunk` and expanding `[:MENTIONS]` entities.
-  - **Acceptance Criteria:**
-    - Executes single OpenCypher query yielding `HybridSearchResult` objects sorted by relevance score.
-    - Deduplicates parent chunks and aggregates related entities.
-    - Handles cases where chunks have zero entity mentions without failing or omitting text.
-    - `InMemoryGraphAndVectorStore` simulates cosine similarity and graph expansion.
-  - **Verification:**
-    - `tests/unit/test_falkordb_graph_store_adapter.py` validates Cypher query generation and row mapping.
-  - **Dependencies:** Task 3
-  - **Files:**
-    - `src/modules/knowledge/infrastructure/adapters/falkordb_graph_store_adapter.py`
-    - `src/modules/knowledge/infrastructure/adapters/in_memory_graph_and_vector_store.py`
-    - `tests/unit/test_falkordb_graph_store_adapter.py`
-  - **Scope:** S (3 files)
+**Acceptance criteria:**
+- [x] Detecta blocos cercados de código (```` ```...``` ````) e mantém todas as linhas contidas em um único bloco `CODE_BLOCK`.
+- [x] Detecta tabelas Markdown (`|...|`) completas como uma única unidade `TABLE`.
+- [x] Detecta cabeçalhos (`#` a `######`) extraindo o nível (1 a 6) e o título limpo como `HEADING`.
+- [x] Detecta parágrafos separados por quebras duplas `\n\n` como `PARAGRAPH`.
+- [x] Calcula `estimated_tokens` para cada bloco baseado em `chars_per_token` configurável (padrão: 4).
 
----
+**Verification:**
+- [x] `uv run pytest tests/unit/test_atomic_block_lexer.py -v`
+- [x] `uv run mypy src/modules/knowledge/infrastructure/chunking/atomic_block_lexer.py`
 
-## Checkpoint 2: Adapters Complete & Tested
-- [x] FalkorDB and InMemory adapters pass all unit tests with 100% coverage.
+**Dependencies:** Task 1
+**Files touched:**
+- `src/modules/knowledge/infrastructure/chunking/atomic_block_lexer.py`
+- `src/modules/knowledge/infrastructure/chunking/__init__.py`
+**Estimated scope:** Small (2 files)
 
----
+### Task 3: Testes Unitários Abrangentes do `AtomicBlockLexer`
+**Description:** Criar suíte de testes unitários para o `AtomicBlockLexer` cobrindo cenários com código Python/SQL, tabelas complexas, texto sem formatação, cabeçalhos aninhados e quebras de linha variadas.
 
-## Phase 3: Saga Pipeline & Use Case Integration
+**Acceptance criteria:**
+- [x] Teste de código multilinha cercado por crases triplas.
+- [x] Teste de tabela Markdown com cabeçalho e múltiplas linhas.
+- [x] Teste de cabeçalhos de níveis 1 a 6.
+- [x] Teste de parágrafos normais e texto vazio.
 
-- [x] Task 5: Batch Parent-Level Graph Extraction in `DocumentIngestionSagaCoordinator`
-  - **Description:** Refactor `DocumentIngestionSagaCoordinator` to generate child embeddings, store structural nodes in `IGraphStore`, and extract conceptual graph entities per `ParentChunk` with `[:MENTIONS]` links.
-  - **Acceptance Criteria:**
-    - Long documents are split into `ParentChunk` and `ChildChunk`.
-    - `IGraphStore.store_structural_document` is called to create the structural graph backbone.
-    - LLM extraction runs per `ParentChunk` in batches/concurrency and links entities via `store_parent_mentions`.
-    - No monolithic full-document prompt sent to LLM for long texts.
-  - **Verification:**
-    - `tests/unit/test_document_ingestion_saga_coordinator.py` passes with parent-level extraction asserts.
-  - **Dependencies:** Task 4
-  - **Files:**
-    - `src/modules/knowledge/application/sagas/document_ingestion_saga_coordinator.py`
-    - `tests/unit/test_document_ingestion_saga_coordinator.py`
-  - **Scope:** M (2 files)
+**Verification:**
+- [x] `uv run pytest tests/unit/test_atomic_block_lexer.py -v` com 100% de cobertura no lexer.
 
-- [x] Task 6: Refactor `QueryKnowledgeUseCase` for Single-Query Hybrid Search
-  - **Description:** Update `QueryKnowledgeUseCase`, Request, and Response to use `IEmbeddingService` for query embedding and `IGraphStore.query_hybrid` for retrieving unified results.
-  - **Acceptance Criteria:**
-    - `QueryKnowledgeUseCase` embeds search query via `IEmbeddingService`.
-    - Calls `IGraphStore.query_hybrid(kb_id, query_embedding, top_k)`.
-    - Returns `QueryKnowledgeResponse` containing list of `HybridSearchResult`.
-  - **Verification:**
-    - `tests/unit/test_query_knowledge_use_case.py` passes.
-  - **Dependencies:** Task 5
-  - **Files:**
-    - `src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_request.py`
-    - `src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_response.py`
-    - `src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_use_case.py`
-    - `tests/unit/test_query_knowledge_use_case.py`
-  - **Scope:** M (4 files)
+**Dependencies:** Task 2
+**Files touched:**
+- `tests/unit/test_atomic_block_lexer.py`
+**Estimated scope:** Small (1 file)
 
 ---
 
-## Checkpoint 3: End-to-End Flow Validated
-- [x] Saga ingestion and Hybrid Query Use Case execute end-to-end.
+## Checkpoint: Lexer Capabilities
+- [x] `AtomicBlockLexer` divide qualquer texto em blocos atômicos com 100% de precisão nos testes.
 
 ---
 
-## Phase 4: Integration Verification & Quality Gates
+## Phase 3: Empacotador Guloso & Structure-Tolerant Chunker
 
-- [x] Task 7: Integration Tests, Pre-commit Gates & Documentation
-  - **Description:** Add integration verification tests, update module facades/container wiring, update `CHANGELOG.md`, and execute full quality gate.
-  - **Acceptance Criteria:**
-    - `api_gateway/container.py` wires the updated `QueryKnowledgeUseCase` with embedding service and graph store.
-    - `CHANGELOG.md` updated with `Added` and `Changed` sections under `Unreleased`.
-    - `make pre-commit` passes with 0 errors (Ruff lint, Ruff format, Mypy strict, Pytest 100%).
-  - **Verification:**
-    - Run `make pre-commit`.
-  - **Dependencies:** Task 6
-  - **Files:**
-    - `src/api_gateway/container.py`
-    - `CHANGELOG.md`
-    - `tests/integration/test_falkordb_hybrid_search_integration.py`
-  - **Scope:** M (3-4 files)
+### Task 4: Implementar `StructureTolerantMarkdownChunker`
+**Description:** Implementar a classe `StructureTolerantMarkdownChunker` conforme o contrato `IMarkdownChunker`, consumindo os blocos atômicos do lexer, aplicando empacotamento guloso para gerar `ParentChunk`s e gerando `ChildChunk`s com overlap contextual de 30 tokens.
+
+**Acceptance criteria:**
+- [x] Empacota blocos atômicos em `ParentChunk`s respeitando o teto de `max_parent_tokens` (padrão: 1.200).
+- [x] Constrói `header_path` contextual atualizado dinamicamente por blocos `HEADING` ou fallback para `[Doc: {name}] > Part {N}`.
+- [x] Aplica divisão por sentenças `(?<=[.!?])\s+` apenas quando um único bloco atômico exceder `max_parent_tokens`.
+- [x] Gera `ChildChunk`s de 150 a 250 tokens com 30 tokens de overlap dentro de cada `ParentChunk`.
+- [x] Retorna um `DocumentChunkCollection` completo e imutável.
+
+**Verification:**
+- [x] `uv run pytest tests/unit/test_structure_tolerant_markdown_chunker.py -v`
+- [x] `uv run mypy src/modules/knowledge/infrastructure/chunking/structure_tolerant_markdown_chunker.py`
+
+**Dependencies:** Task 2, Task 3
+**Files touched:**
+- `src/modules/knowledge/infrastructure/chunking/structure_tolerant_markdown_chunker.py`
+- `src/modules/knowledge/infrastructure/chunking/__init__.py`
+**Estimated scope:** Small (2 files)
+
+### Task 5: Testes Unitários de Cenários e Edge Cases do Chunker
+**Description:** Escrever suíte de testes cobrindo documentos reais de diferentes domínios (Constituição/leis, relatórios com tabelas financeiras, manuais técnicos de TI com código, texto puro sem cabeçalhos e parágrafos anômalos gigantes).
+
+**Acceptance criteria:**
+- [x] Teste garantindo que tabelas e blocos de código não são quebrados em pedaços arbitrários.
+- [x] Teste de documento sem nenhum cabeçalho `#` gerando partes numeradas e ordenadas.
+- [x] Teste de documento legislativo com artigos e parágrafos curtos.
+- [x] Teste com parágrafo gigante único ativando o split por pontuação.
+- [x] Teste de validação de `ChildChunk` (índices, `parent_chunk_id`, overlap semântico).
+
+**Verification:**
+- [x] `uv run pytest tests/unit/test_structure_tolerant_markdown_chunker.py -v`
+
+**Dependencies:** Task 4
+**Files touched:**
+- `tests/unit/test_structure_tolerant_markdown_chunker.py`
+**Estimated scope:** Small (1 file)
 
 ---
 
-## Final Checkpoint
-- [x] 100% Quality Gates Passing (`make pre-commit`).
-- [x] Single Class per File strictly respected.
-- [x] Documentation and specs synchronized.
+## Checkpoint: Chunker Validation
+- [x] `StructureTolerantMarkdownChunker` cobre todos os requisitos funcionais e de edge cases com testes passando.
+
+---
+
+## Phase 4: Integração, Facades & Quality Gates
+
+### Task 6: Atualizar Exports, Facades e Compatibilidade com a Saga
+**Description:** Atualizar a facade `src/modules/knowledge/infrastructure/chunking/__init__.py`, injetar o `StructureTolerantMarkdownChunker` no `DocumentIngestionSagaCoordinator` e container IoC, mantendo alias com `MarkdownParentChildChunker` para retrocompatibilidade.
+
+**Acceptance criteria:**
+- [x] `DocumentIngestionSagaCoordinator` utiliza o `StructureTolerantMarkdownChunker` por padrão.
+- [x] Container IoC (`src/api_gateway/container.py`) inicializa o chunker atualizado.
+- [x] Todos os testes de integração existentes (`test_knowledge_module.py`, `test_markdown_parent_child_chunker.py`) continuam 100% verdes.
+
+**Verification:**
+- [x] `uv run pytest tests/ -v`
+
+**Dependencies:** Task 4, Task 5
+**Files touched:**
+- `src/modules/knowledge/infrastructure/chunking/__init__.py`
+- `src/modules/knowledge/application/sagas/document_ingestion_saga_coordinator.py`
+- `src/api_gateway/container.py`
+**Estimated scope:** Small (3 files)
+
+### Task 7: Execução Completa dos Gates de Qualidade (`make pre-commit`)
+**Description:** Executar a suíte completa de verificação de qualidade do projeto: Ruff linter, Ruff formatador, checagem estrita de tipos no Mypy e todos os testes automatizados com medição de cobertura.
+
+**Acceptance criteria:**
+- [x] `uv run ruff check .` com zero erros e zero warnings.
+- [x] `uv run ruff format --check .` 100% formatado.
+- [x] `uv run mypy src tests` com `Success: no issues found`.
+- [x] `uv run pytest --cov=src` com 100% dos testes passando.
+- [x] Execução com sucesso do comando `make pre-commit`.
+
+**Verification:**
+- [x] `make pre-commit`
+
+**Dependencies:** Task 6
+**Files touched:**
+- Todos os arquivos alterados
+**Estimated scope:** Small
+
+---
+
+## Checkpoint: Final
+- [x] Todo o particionador universal structure-tolerant integrado, testado e aprovado no gate oficial.
