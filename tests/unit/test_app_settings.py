@@ -7,8 +7,9 @@ from pydantic import SecretStr
 from src.kernel.infrastructure.app_settings import AppSettings
 
 
-def test_app_settings_defaults() -> None:
-    settings = AppSettings()
+def test_app_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(os, "environ", {})
+    settings = AppSettings(_env_file=None)
     assert settings.environment == "development"
     assert settings.debug is False
     assert settings.api_title == "Agentic Substrate API"
@@ -123,7 +124,10 @@ def test_app_settings_dsn_computation_with_database_url_override() -> None:
     )
 
 
-def test_app_settings_loads_from_custom_env_file(tmp_path: Path) -> None:
+def test_app_settings_loads_from_custom_env_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(os, "environ", {})
     env_file = tmp_path / ".env.test"
     env_file.write_text(
         "ENVIRONMENT=staging\n"

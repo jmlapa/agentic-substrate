@@ -4,6 +4,8 @@ from typing import Any, Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_UNSET: object = object()
+
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -68,11 +70,11 @@ class AppSettings(BaseSettings):
 
     def __init__(
         self,
-        _env_file: Path | str | None = None,
+        _env_file: Path | str | None | object = _UNSET,
         **values: Any,
     ) -> None:
-        if _env_file is not None:
-            super().__init__(_env_file=_env_file, **values)
+        if _env_file is not _UNSET:
+            super().__init__(_env_file=_env_file, **values)  # type: ignore[arg-type]
         else:
             super().__init__(**values)
 
