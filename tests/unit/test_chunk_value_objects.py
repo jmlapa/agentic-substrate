@@ -71,3 +71,28 @@ def test_document_chunk_collection() -> None:
     assert len(collection.children) == 1
     assert collection.parents[0].id == "parent-1"
     assert collection.children[0].parent_chunk_id == "parent-1"
+
+
+def test_atomic_block_instantiation_and_immutability() -> None:
+    from src.modules.knowledge.domain.value_objects.atomic_block import (
+        AtomicBlock,
+    )
+    from src.modules.knowledge.domain.value_objects.atomic_block_type import (
+        AtomicBlockType,
+    )
+
+    block = AtomicBlock(
+        content="# Title\nHello",
+        block_type=AtomicBlockType.HEADING,
+        estimated_tokens=4,
+        header_level=1,
+        header_title="Title",
+    )
+    assert block.content == "# Title\nHello"
+    assert block.block_type == AtomicBlockType.HEADING
+    assert block.estimated_tokens == 4
+    assert block.header_level == 1
+    assert block.header_title == "Title"
+
+    with pytest.raises(ValidationError):
+        block.estimated_tokens = 10
