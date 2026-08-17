@@ -43,7 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency injection container (`AppContainer`) supporting dynamic environment-based infrastructure selection.
 
 ### Removed
-- Deprecated legacy runtime DDL blocks (`initialize_schema()`) in `PostgresEventStore` and `PgVectorStoreAdapter` in favor of declarative Alembic migrations.
+- Removed legacy `IVectorStore` interface and `PgVectorStoreAdapter` following unification of vector and graph queries directly in FalkorDB.
+- Eliminated dual-write vector persistence overhead from `DocumentIngestionSagaCoordinator`.
+- Added Alembic migration `0004_drop_legacy_vector_tables.py` to drop redundant PostgreSQL tables `document_chunks` and `node_embeddings`.
+- Replaced `InMemoryGraphAndVectorStore` with focused `InMemoryGraphStore` implementing pure `IGraphStore`.
+- Removed deprecated `vector_store_type` setting from `AppSettings` and `AppContainer`.
+- Deprecated legacy runtime DDL blocks (`initialize_schema()`) in `PostgresEventStore` in favor of declarative Alembic migrations.
 - Obsolete `InMemoryObjectStorage` and `SimpleMarkdownParser` in favor of local production-grade adapters.
 - Unused dependencies `aioboto3` (and its sub-dependencies `botocore`, `aiobotocore`, `s3transfer`) and `sqlalchemy` in favor of direct native `asyncpg` connection pooling.
 
