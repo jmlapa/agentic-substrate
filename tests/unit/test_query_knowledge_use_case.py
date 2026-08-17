@@ -20,12 +20,16 @@ from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
     HybridSearchResult,
 )
+from src.modules.knowledge.infrastructure.adapters.in_memory_rag_synthesizer import (
+    InMemoryRagSynthesizer,
+)
 
 
 @pytest.mark.asyncio
 async def test_query_knowledge_use_case_success() -> None:
     mock_graph_store = AsyncMock(spec=IGraphStore)
     mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+    synthesizer = InMemoryRagSynthesizer()
 
     kb_id = uuid4()
     mock_embedding_service.embed_texts.return_value = [[0.1, 0.2, 0.3]]
@@ -44,6 +48,7 @@ async def test_query_knowledge_use_case_success() -> None:
     use_case = QueryKnowledgeUseCase(
         graph_store=mock_graph_store,
         embedding_service=mock_embedding_service,
+        synthesis_service=synthesizer,
     )
 
     request = QueryKnowledgeRequest(
@@ -59,6 +64,7 @@ async def test_query_knowledge_use_case_success() -> None:
     assert len(result.value.results) == 1
     assert result.value.results[0].parent_chunk_id == "parent-1"
     assert result.value.results[0].relevance_score == 0.94
+    assert "Relevant content about security." in result.value.answer
     mock_embedding_service.embed_texts.assert_awaited_once_with(
         ["What are the security guidelines?"]
     )

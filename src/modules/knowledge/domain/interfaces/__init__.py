@@ -14,6 +14,9 @@ from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
+from src.modules.knowledge.domain.interfaces.i_llm_synthesis_service import (
+    ILlmSynthesisService,
+)
 from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
     IMarkdownChunker,
 )
@@ -29,6 +32,7 @@ __all__ = [
     "IGraphExtractor",
     "IGraphStore",
     "IKnowledgeBaseRepository",
+    "ILlmSynthesisService",
     "IMarkdownChunker",
     "IObjectStorage",
     "IOntologyRepository",

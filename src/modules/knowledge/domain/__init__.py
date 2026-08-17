@@ -15,6 +15,7 @@ from src.modules.knowledge.domain.interfaces import (
     IGraphExtractor,
     IGraphStore,
     IKnowledgeBaseRepository,
+    ILlmSynthesisService,
     IObjectStorage,
 )
 from src.modules.knowledge.domain.ontology import (
@@ -47,6 +48,7 @@ __all__ = [
     "IGraphExtractor",
     "IGraphStore",
     "IKnowledgeBaseRepository",
+    "ILlmSynthesisService",
     "IObjectStorage",
     "KnowledgeBaseAggregate",
     "KnowledgeBaseCreatedEvent",
