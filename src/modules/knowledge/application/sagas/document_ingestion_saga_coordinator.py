@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from src.kernel.application.event_bus import EventBus
@@ -40,6 +41,7 @@ from src.modules.knowledge.domain.value_objects.extracted_graph import (
 )
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
 from src.modules.knowledge.domain.value_objects.structural_graph_document import (
     StructuralGraphDocument,
 )
@@ -226,16 +228,31 @@ class DocumentIngestionSagaCoordinator:
             await self._graph_store.ensure_vector_index(kb.id)
             await self._graph_store.store_structural_document(kb.id, structural_doc)
 
-            # 3. Extrair grafo ontológico em lote por Parent Chunk
+            # 3. Extrair grafo ontológico concorrentemente por Parent Chunk
+            assert kb.ontology is not None
+            current_ontology = kb.ontology
+            valid_parents = [p for p in chunk_collection.parents if p.content.strip()]
+
+            async def _extract_single_parent(
+                parent: ParentChunk,
+            ) -> tuple[str, ExtractedGraph]:
+                parent_graph = await self._extractor.extract_graph(
+                    markdown_text=parent.content,
+                    ontology=current_ontology,
+                    kb_id=kb.id,
+                )
+                return parent.id, parent_graph
+
+            extraction_results = await asyncio.gather(
+                *(_extract_single_parent(p) for p in valid_parents)
+            )
+
             all_nodes: dict[str, GraphNode] = {}
             all_edges: list[GraphEdge] = []
 
-            for parent in chunk_collection.parents:
-                if not parent.content.strip():
-                    continue
-                parent_graph = await self._extractor.extract_graph(parent.content, kb.ontology)
+            for parent_id, parent_graph in extraction_results:
                 if parent_graph.nodes or parent_graph.edges:
-                    await self._graph_store.store_parent_mentions(kb.id, parent.id, parent_graph)
+                    await self._graph_store.store_parent_mentions(kb.id, parent_id, parent_graph)
                     for n in parent_graph.nodes:
                         all_nodes[n.id] = n
                     all_edges.extend(parent_graph.edges)

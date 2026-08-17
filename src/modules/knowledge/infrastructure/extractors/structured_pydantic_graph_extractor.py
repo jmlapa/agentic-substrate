@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from src.modules.knowledge.domain.interfaces.i_graph_extractor import IGraphExtractor
 from src.modules.knowledge.domain.ontology.ontology_schema import OntologySchema
@@ -15,7 +16,12 @@ class StructuredPydanticGraphExtractor(IGraphExtractor):
     def __init__(self, llm_client: Any = None) -> None:
         self._llm_client = llm_client
 
-    async def extract_graph(self, markdown_text: str, ontology: OntologySchema) -> ExtractedGraph:
+    async def extract_graph(
+        self,
+        markdown_text: str,
+        ontology: OntologySchema,
+        kb_id: UUID | None = None,
+    ) -> ExtractedGraph:
         """
         Em produção: compila os modelos Pydantic dinâmicos e passa como schema para LLM.
         Fallback heurístico / mock determinístico para testes e execução local.
