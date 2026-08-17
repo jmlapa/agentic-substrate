@@ -91,3 +91,4 @@ Para que qualquer commit ou PR seja aprovado, todos os critérios abaixo devem s
 - [ ] **Single Class per File:** Nenhuma classe, DTO ou entidade agrupada em mono-arquivo.
 - [ ] **Mensagem de Commit:** No formato Conventional Commits no modo imperativo.
 - [ ] **Sem Segredos:** Nenhuma API key, senha ou credencial incluída no diff (`.env` ou código).
+- [ ] **Sincronização de Ambiente:** Todo novo setting/secret adicionado a `AppSettings` deve estar documentado em `.env.example` e presente em `.env`.

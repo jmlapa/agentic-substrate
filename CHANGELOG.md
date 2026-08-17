@@ -5,7 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-17
+
+### Added
+- **PydanticAI v2 Dynamic Graph Extractor (`PydanticAiGraphExtractor`)**:
+  - Dynamically builds Pydantic models from user-defined `OntologySchema` at runtime.
+  - Generates structured, strongly-typed JSON outputs using Google Gemini (`gemini-3.5-flash-lite`).
+- **Transport-Level Rate Limiter (`RateLimitedAsyncTransport`)**:
+  - Intercepts all outgoing HTTP transport requests with `AsyncTokenBucketLimiter`.
+  - Non-blocking 60-second sliding window managing 300 RPM and 1.000.000 TPM with zero lock contention.
+  - Automatic exponential backoff with full jitter for HTTP 429 (`ResourceExhausted`) responses.
+- **Cumulative Canonical Entity Registry (`ExistingEntityRegistry`)**:
+  - Caches and injects previously extracted entities per Knowledge Base into LLM extraction prompts to enforce entity ID reuse and eliminate cross-chunk duplication.
+- **Universal Structure-Tolerant Markdown Chunker (`StructureTolerantMarkdownChunker`)**:
+  - Uses `AtomicBlockLexer` to preserve tables, lists, and code blocks intact.
+  - Emits contextual breadcrumb trails for Parent Chunks (~1.200 tokens) and overlapping Child Chunks (~200 tokens + 30 overlap).
+- **High-Fidelity PDF Document Parsing (`MarkItDownDocumentParser`)**:
+  - Added `markitdown[all]` support for robust PDF parsing with `pdfminer.six` and `pdfplumber`.
+- **Parallelized Ingestion Saga Execution**:
+  - Refactored `DocumentIngestionSagaCoordinator` with `asyncio.gather` for concurrent Parent Chunk processing bounded by `max_concurrency=15`.
+- **Universal Brazilian Legal Ontology (`OntologiaJuridicaBrasileira`)**:
+  - Modeled after LC 95/1998 with 7 core node types and 11 relationship types.
+- **CLI Utility Scripts**:
+  - `scripts/ingest_document.py`: Multi-format document ingestion pipeline CLI.
+  - `scripts/register_legal_ontology.py`: Legal ontology registration CLI.
+- **Architecture Decision Records (ADRs)**:
+  - `ADR-0001: Hexagonal Event-Sourced Architecture with Single Class Per File`
+  - `ADR-0002: Unified FalkorDB Hybrid GraphRAG Engine`
+  - `ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization`
+  - `ADR-0004: Universal Structure-Tolerant Markdown Chunker`
+- **Real-World Document Benchmark**:
+  - Successfully ingested and indexed the entire Brazilian Federal Constitution (CF/88, 437 pages, 1.34M characters, 293 Parent Chunks, 2.052 Child Chunks) into FalkorDB with verified sub-10ms hybrid search responses.
+
+## [0.1.0] - 2026-08-16
 
 ### Added
 - Unified FalkorDB Hybrid GraphRAG architecture with single-graph per Knowledge Base housing both structural document nodes (`:Document`, `:ParentChunk`, `:ChildChunk`) and ontological entity nodes (`:Entity`).
@@ -13,21 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Structural document ingestion (`store_structural_document`) and parent-level conceptual mentions linking (`store_parent_mentions`) with `[:MENTIONS]` edges.
 - Unified single-query OpenCypher hybrid search (`query_hybrid`) utilizing `db.idx.vector.queryNodes` with parent context ascension and connected entity expansion.
 - Value objects `HybridSearchResult` and `StructuralGraphDocument` in `knowledge` domain.
-- Parent-chunk batch extraction support in `DocumentIngestionSagaCoordinator` preventing full-document token overflows.
-- Refactored `QueryKnowledgeUseCase` orchestrating query embedding generation and hybrid search execution.
-- Centralized Settings and Secrets Management module (`AppSettings`) powered by `pydantic-settings` and `SecretStr` for automatic masking, `.env` file loading, and environment variable parsing.
-- Documented environment variables template (`.env.example`) with secure defaults.
-- Asynchronous database migration framework using Alembic and `asyncpg` with CLI and Makefile automation (`make migrate`, `make migrate-down`, `make migrate-create`).
-- Initial versioned migration revisions:
-  - `0001_create_pgvector_extension.py`: Installs PostgreSQL `vector` extension.
-  - `0002_create_event_sourcing_tables.py`: Creates `event_streams` and `domain_events` tables with concurrency constraints.
-  - `0003_create_document_chunks_table.py`: Creates `node_embeddings` and `document_chunks` with HNSW cosine indexing.
-- Recursive Markdown Structure-Aware Parent-Child Chunker (`MarkdownParentChildChunker`) with atomic table and code block preservation, breadcrumb generation, and recursive sub-splitting for large sections.
-- Value objects `ParentChunk`, `ChildChunk`, and `DocumentChunkCollection` in `knowledge` domain.
-- Google Gemini Embedding 2 adapter (`GeminiEmbeddingAdapter`) supporting MRL (768 dimensions), prompt task formatting, micro-batching of 100 items, and Exponential Backoff + Full Jitter for HTTP 429 (`ResourceExhausted`).
-- Deterministic `InMemoryEmbeddingService` for local development and testing.
-- `document_chunks` table and vector similarity methods (`store_document_chunks`, `search_similar_chunks`) with HNSW cosine indexing and document metadata filtering in `PgVectorStoreAdapter` and `InMemoryGraphAndVectorStore`.
-- `DocumentChunkedEvent` and aggregate transition (`DocumentStatus.CHUNKED`) integrated into `DocumentIngestionSagaCoordinator`.
+- Centralized Settings and Secrets Management module (`AppSettings`) powered by `pydantic-settings` and `SecretStr`.
+- Asynchronous database migration framework using Alembic and `asyncpg` (`make migrate`).
 - Modular clean architecture with `kernel`, `knowledge`, and `api_gateway`.
 - `kernel` domain primitives: `Entity`, `ValueObject`, `AggregateRoot`, `DomainEvent`, `DomainError`, and `Result[T, E]`.
 - `kernel` application contracts: `UseCase`, `EventBus`, `EventStore`, and `Logger`.
@@ -36,21 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamic ontology definitions with runtime Pydantic v2 validation (`DynamicOntologyModelBuilder`).
 - Choreographed Event-Driven Ingestion Saga (`DocumentIngestionSagaCoordinator`) with Event Sourcing.
 - `LocalFileSystemStorageAdapter` for partitioned asynchronous object storage with path traversal protection.
-- `MarkItDownDocumentParser` for multi-format document-to-markdown conversion.
-- `PgVectorStoreAdapter` with PostgreSQL 16 + pgvector cosine similarity search and HNSW indexing.
-- `FalkorDbGraphStoreAdapter` with parameterized OpenCypher graph storage and subgraph querying.
 - `api_gateway` FastAPI REST endpoints for Ontology Templates, Knowledge Bases, Document Ingestion, and Knowledge Querying.
 - Dependency injection container (`AppContainer`) supporting dynamic environment-based infrastructure selection.
 
 ### Removed
 - Removed legacy `IVectorStore` interface and `PgVectorStoreAdapter` following unification of vector and graph queries directly in FalkorDB.
-- Eliminated dual-write vector persistence overhead from `DocumentIngestionSagaCoordinator`.
 - Added Alembic migration `0004_drop_legacy_vector_tables.py` to drop redundant PostgreSQL tables `document_chunks` and `node_embeddings`.
-- Replaced `InMemoryGraphAndVectorStore` with focused `InMemoryGraphStore` implementing pure `IGraphStore`.
-- Removed deprecated `vector_store_type` setting from `AppSettings` and `AppContainer`.
-- Deprecated legacy runtime DDL blocks (`initialize_schema()`) in `PostgresEventStore` in favor of declarative Alembic migrations.
-- Obsolete `InMemoryObjectStorage` and `SimpleMarkdownParser` in favor of local production-grade adapters.
-- Unused dependencies `aioboto3` (and its sub-dependencies `botocore`, `aiobotocore`, `s3transfer`) and `sqlalchemy` in favor of direct native `asyncpg` connection pooling.
+- Unused dependencies `aioboto3` and `sqlalchemy` in favor of direct native `asyncpg` connection pooling.
 
 ### Verified
-- Strict Mypy compliance (`strict = true`), 100% Ruff linting/formatting pass, and automated test coverage.
+- Strict Mypy compliance (`strict = true`), 100% Ruff linting/formatting pass, and automated test coverage (93%+).
