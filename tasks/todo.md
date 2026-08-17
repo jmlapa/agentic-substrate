@@ -1,16 +1,16 @@
-# Tasks: Centralized Settings and Secrets Management
+# Tasks: Local Infrastructure & Development Environment
 
-- [ ] Task 1: Create `AppSettings` class and `.env.example` template
-  - Acceptance: `AppSettings` class in `src/kernel/infrastructure/app_settings.py` with `pydantic-settings`, `SecretStr` fields, DSN properties, and `.env.example` in repo root.
-  - Verify: Mypy strict passes on `app_settings.py`.
-  - Files: `src/kernel/infrastructure/app_settings.py`, `src/kernel/infrastructure/__init__.py`, `.env.example`
+- [ ] Task 1: Harmonize `docker/docker-compose.yml`
+  - Acceptance: Pinned container image versions (`pgvector/pgvector:0.8.0-pg16`, `falkordb/falkordb:v0.4.0`, `redis:7.2.4-alpine`), service credentials match `AppSettings` defaults (`postgres`/`postgres`/`agentic_substrate`), volume directories point to `../data/*`, healthchecks configured.
+  - Verify: Validate yaml syntax and verify container declarations.
+  - Files: `docker/docker-compose.yml`
 
-- [ ] Task 2: Integrate `AppSettings` with `AppContainer` and `migrations/env.py`
-  - Acceptance: `AppContainer` and `migrations/env.py` use `AppSettings` instead of `os.getenv()`.
-  - Verify: Container creation and Alembic initialization load configuration without errors.
-  - Files: `src/api_gateway/container.py`, `src/api_gateway/main.py`, `migrations/env.py`
+- [ ] Task 2: Create Local `.env` and Directory Setup
+  - Acceptance: Local `.env` file generated with development configuration, `data/storage` directory exists, git ignores `.env` and `data/`.
+  - Verify: Run `git status` to ensure `.env` and `data/` are not tracked.
+  - Files: `.env`
 
-- [ ] Task 3: Implement unit tests for `AppSettings` and verify quality gates
-  - Acceptance: Comprehensive test suite in `tests/unit/test_app_settings.py` covering masking, defaults, environment overrides, and DSN parsing.
-  - Verify: `make pre-commit` passes with 100% tests green, 0 mypy issues, and 0 ruff errors.
-  - Files: `tests/unit/test_app_settings.py`, `CHANGELOG.md`
+- [ ] Task 3: Verification & Quality Gates
+  - Acceptance: `AppSettings` loads `.env` accurately; full test suite and quality gates pass.
+  - Verify: `make pre-commit` passes with 0 errors.
+  - Files: `tasks/todo.md`, `CHANGELOG.md`

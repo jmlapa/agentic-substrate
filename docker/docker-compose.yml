@@ -1,24 +1,24 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.0-pg16
     container_name: substrate_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: substrate
-      POSTGRES_PASSWORD: substrate_password
-      POSTGRES_DB: substrate_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentic_substrate
     ports:
       - "5432:5432"
     volumes:
       - ../data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U substrate -d substrate_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentic_substrate"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   falkordb:
-    image: falkordb/falkordb:latest
+    image: falkordb/falkordb:v0.4.0
     container_name: substrate_falkordb
     restart: unless-stopped
     ports:
@@ -32,7 +32,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2.4-alpine
     container_name: substrate_redis
     restart: unless-stopped
     ports:
