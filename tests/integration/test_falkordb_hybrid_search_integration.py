@@ -9,14 +9,14 @@ from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
 from src.modules.knowledge.domain.value_objects.structural_graph_document import (
     StructuralGraphDocument,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
-    InMemoryGraphAndVectorStore,
+from src.modules.knowledge.infrastructure.adapters.in_memory_graph_store import (
+    InMemoryGraphStore,
 )
 
 
 @pytest.mark.asyncio
 async def test_falkordb_hybrid_graph_integration_flow() -> None:
-    store = InMemoryGraphAndVectorStore()
+    store = InMemoryGraphStore()
     kb_id = uuid4()
     doc_id = uuid4()
 

@@ -34,8 +34,8 @@ from src.modules.knowledge.domain.value_objects.document_status import DocumentS
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
-    InMemoryGraphAndVectorStore,
+from src.modules.knowledge.infrastructure.adapters.in_memory_graph_store import (
+    InMemoryGraphStore,
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repository import (
     InMemoryKnowledgeBaseRepository,
@@ -129,7 +129,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = MarkItDownDocumentParser()
         extractor = StructuredPydanticGraphExtractor()
-        graph_store = InMemoryGraphAndVectorStore()
+        graph_store = InMemoryGraphStore()
 
         # Coordinator listens to bus
         _ = DocumentIngestionSagaCoordinator(
@@ -140,7 +140,6 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
             parser=parser,
             extractor=extractor,
             graph_store=graph_store,
-            vector_store=graph_store,
         )
 
         create_kb_use_case = CreateKnowledgeBaseUseCase(
@@ -187,13 +186,17 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         assert doc_info.get("total_parents", 0) >= 1
         assert doc_info.get("total_children", 0) >= 1
 
-        # 4. Verify vector chunks search
-        chunks_res = await graph_store.search_similar_chunks(
-            kb_id=kb_id, query_embedding=[0.1] * 768, top_k=5, document_ids=[doc_id]
+        # 4. Verify hybrid query use case
+        query_res = await query_use_case.execute(
+            QueryKnowledgeRequest(
+                kb_id=kb_id,
+                query="How does Microservice auth connect to Database?",
+                top_k=5,
+            )
         )
-        assert len(chunks_res) >= 1
-        assert chunks_res[0]["document_id"] == doc_id
-        assert "Microservice auth" in chunks_res[0]["content"]
+        assert isinstance(query_res, Ok)
+        assert len(query_res.value.results) >= 1
+        assert "Microservice auth" in query_res.value.results[0].parent_content
 
         # 5. Verify graph query
         query_res = await query_use_case.execute(

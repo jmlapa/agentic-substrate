@@ -16,7 +16,6 @@ from src.modules.knowledge.domain.interfaces import (
     IGraphStore,
     IKnowledgeBaseRepository,
     IObjectStorage,
-    IVectorStore,
 )
 from src.modules.knowledge.domain.ontology import (
     NodeTypeDefinition,
@@ -49,7 +48,6 @@ __all__ = [
     "IGraphStore",
     "IKnowledgeBaseRepository",
     "IObjectStorage",
-    "IVectorStore",
     "KnowledgeBaseAggregate",
     "KnowledgeBaseCreatedEvent",
     "KnowledgeBaseStatus",

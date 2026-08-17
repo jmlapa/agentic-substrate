@@ -46,7 +46,6 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
-from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
@@ -56,8 +55,8 @@ from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter impo
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
-    InMemoryGraphAndVectorStore,
+from src.modules.knowledge.infrastructure.adapters.in_memory_graph_store import (
+    InMemoryGraphStore,
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repository import (
     InMemoryKnowledgeBaseRepository,
@@ -70,9 +69,6 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 )
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
-)
-from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import (
-    PgVectorStoreAdapter,
 )
 from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
     MarkdownParentChildChunker,
@@ -94,7 +90,6 @@ class AppContainer:
     embedding_service: IEmbeddingService
     graph_extractor: IGraphExtractor
     graph_store: IGraphStore
-    vector_store: IVectorStore
     saga_coordinator: DocumentIngestionSagaCoordinator
     create_kb_use_case: CreateKnowledgeBaseUseCase
     attach_doc_use_case: AttachAndStoreDocumentUseCase
@@ -109,7 +104,6 @@ def create_app_container(
     settings: AppSettings | None = None,
     storage_base_dir: str | None = None,
     graph_store_type: str | None = None,
-    vector_store_type: str | None = None,
     event_store_type: str | None = None,
     embedding_service_type: str | None = None,
     postgres_pool: Any | None = None,
@@ -151,10 +145,7 @@ def create_app_container(
 
     extractor: IGraphExtractor = StructuredPydanticGraphExtractor()
 
-    # In-memory shared graph & vector fallback
-    in_memory_graph_vector = InMemoryGraphAndVectorStore()
-
-    # Graph Store
+    # Graph Store (FalkorDB or InMemory)
     grp_type = graph_store_type or cfg.graph_store_type
     graph_store: IGraphStore
     if grp_type == "falkordb":
@@ -164,15 +155,7 @@ def create_app_container(
             host=falkor_host, port=falkor_port, client=falkordb_client
         )
     else:
-        graph_store = in_memory_graph_vector
-
-    # Vector Store
-    vec_type = vector_store_type or cfg.vector_store_type
-    vector_store: IVectorStore
-    if vec_type == "pgvector" and postgres_pool:
-        vector_store = PgVectorStoreAdapter(pool=postgres_pool)
-    else:
-        vector_store = in_memory_graph_vector
+        graph_store = InMemoryGraphStore()
 
     saga = DocumentIngestionSagaCoordinator(
         event_bus=bus,
@@ -182,7 +165,6 @@ def create_app_container(
         parser=parser,
         extractor=extractor,
         graph_store=graph_store,
-        vector_store=vector_store,
         chunker=chunker,
         embedding_service=embedding_service,
     )
@@ -213,7 +195,6 @@ def create_app_container(
         embedding_service=embedding_service,
         graph_extractor=extractor,
         graph_store=graph_store,
-        vector_store=vector_store,
         saga_coordinator=saga,
         create_kb_use_case=create_kb,
         attach_doc_use_case=attach_doc,

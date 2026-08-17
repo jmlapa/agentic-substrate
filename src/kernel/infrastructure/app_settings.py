@@ -34,14 +34,10 @@ class AppSettings(BaseSettings):
     )
     embedding_dimension: int = Field(default=768, alias="EMBEDDING_DIMENSION")
 
-    # Database / Event Store / Vector Store
+    # Database / Event Store
     event_store_type: Literal["memory", "postgres"] = Field(
         default="memory",
         alias="EVENT_STORE_TYPE",
-    )
-    vector_store_type: Literal["memory", "pgvector"] = Field(
-        default="memory",
-        alias="VECTOR_STORE_TYPE",
     )
     database_url: SecretStr | None = Field(default=None, alias="DATABASE_URL")
     postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")

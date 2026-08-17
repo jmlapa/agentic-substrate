@@ -21,8 +21,8 @@ from src.modules.knowledge.domain.value_objects.document_status import DocumentS
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
-    InMemoryGraphAndVectorStore,
+from src.modules.knowledge.infrastructure.adapters.in_memory_graph_store import (
+    InMemoryGraphStore,
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repository import (
     InMemoryKnowledgeBaseRepository,
@@ -76,7 +76,7 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
         chunker = MarkdownParentChildChunker(max_parent_tokens=100)
         embedding_service = InMemoryEmbeddingService(dimension=768)
         extractor = StructuredPydanticGraphExtractor()
-        graph_and_vector = InMemoryGraphAndVectorStore()
+        graph_store = InMemoryGraphStore()
 
         _ = DocumentIngestionSagaCoordinator(
             event_bus=bus,
@@ -85,8 +85,7 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
             storage=storage,
             parser=parser,
             extractor=extractor,
-            graph_store=graph_and_vector,
-            vector_store=graph_and_vector,
+            graph_store=graph_store,
             chunker=chunker,
             embedding_service=embedding_service,
         )
@@ -137,15 +136,13 @@ Details about the deployment infrastructure and scaling policies.
         assert doc_state["total_parents"] >= 2
         assert doc_state["total_children"] >= 2
 
-        # 4. Verify vector search across chunks
-        chunks = await graph_and_vector.search_similar_chunks(
+        # 4. Verify hybrid graph search across chunks
+        results = await graph_store.query_hybrid(
             kb_id=kb.id,
             query_embedding=[0.0] * 768,
             top_k=5,
-            document_ids=[doc_id],
         )
-        assert len(chunks) >= 2
-        assert all(c["document_id"] == doc_id for c in chunks)
+        assert len(results) >= 2
 
 
 @pytest.mark.asyncio
@@ -165,7 +162,7 @@ async def test_saga_coordinator_handles_chunking_failure(
 
         embedding_service = InMemoryEmbeddingService(dimension=768)
         extractor = StructuredPydanticGraphExtractor()
-        graph_and_vector = InMemoryGraphAndVectorStore()
+        graph_store = InMemoryGraphStore()
 
         _ = DocumentIngestionSagaCoordinator(
             event_bus=bus,
@@ -174,8 +171,7 @@ async def test_saga_coordinator_handles_chunking_failure(
             storage=storage,
             parser=parser,
             extractor=extractor,
-            graph_store=graph_and_vector,
-            vector_store=graph_and_vector,
+            graph_store=graph_store,
             chunker=failing_chunker,
             embedding_service=embedding_service,
         )

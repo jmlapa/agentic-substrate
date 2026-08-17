@@ -1,11 +1,10 @@
 from src.modules.knowledge.infrastructure.adapters import (
     FalkorDbGraphStoreAdapter,
-    InMemoryGraphAndVectorStore,
+    InMemoryGraphStore,
     InMemoryKnowledgeBaseRepository,
     InMemoryOntologyRepository,
     LocalFileSystemStorageAdapter,
     MarkItDownDocumentParser,
-    PgVectorStoreAdapter,
 )
 from src.modules.knowledge.infrastructure.extractors import (
     DynamicOntologyModelBuilder,
@@ -15,11 +14,10 @@ from src.modules.knowledge.infrastructure.extractors import (
 __all__ = [
     "DynamicOntologyModelBuilder",
     "FalkorDbGraphStoreAdapter",
-    "InMemoryGraphAndVectorStore",
+    "InMemoryGraphStore",
     "InMemoryKnowledgeBaseRepository",
     "InMemoryOntologyRepository",
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
-    "PgVectorStoreAdapter",
     "StructuredPydanticGraphExtractor",
 ]

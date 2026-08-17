@@ -15,8 +15,8 @@ from src.modules.knowledge.domain.value_objects.structural_graph_document import
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
-from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
-    InMemoryGraphAndVectorStore,
+from src.modules.knowledge.infrastructure.adapters.in_memory_graph_store import (
+    InMemoryGraphStore,
 )
 
 
@@ -172,7 +172,7 @@ async def test_falkordb_graph_store_query_hybrid() -> None:
 
 @pytest.mark.asyncio
 async def test_in_memory_graph_store_hybrid_flow() -> None:
-    store = InMemoryGraphAndVectorStore()
+    store = InMemoryGraphStore()
     kb_id = uuid4()
     doc_id = uuid4()
 

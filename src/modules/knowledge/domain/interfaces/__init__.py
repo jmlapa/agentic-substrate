@@ -18,7 +18,6 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
-from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 
 __all__ = [
     "IDocumentParser",
@@ -29,5 +28,4 @@ __all__ = [
     "IMarkdownChunker",
     "IObjectStorage",
     "IOntologyRepository",
-    "IVectorStore",
 ]

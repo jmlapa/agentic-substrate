@@ -34,7 +34,6 @@ from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
     IMarkdownChunker,
 )
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
-from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.extracted_graph import (
     ExtractedGraph,
@@ -68,7 +67,6 @@ class DocumentIngestionSagaCoordinator:
         parser: IDocumentParser,
         extractor: IGraphExtractor,
         graph_store: IGraphStore,
-        vector_store: IVectorStore,
         chunker: IMarkdownChunker | None = None,
         embedding_service: IEmbeddingService | None = None,
         logger: Logger | None = None,
@@ -80,7 +78,6 @@ class DocumentIngestionSagaCoordinator:
         self._parser = parser
         self._extractor = extractor
         self._graph_store = graph_store
-        self._vector_store = vector_store
         self._chunker = chunker or MarkdownParentChildChunker()
         self._embedding_service = embedding_service or InMemoryEmbeddingService()
         self._logger = logger
@@ -229,15 +226,6 @@ class DocumentIngestionSagaCoordinator:
             await self._graph_store.ensure_vector_index(kb.id)
             await self._graph_store.store_structural_document(kb.id, structural_doc)
 
-            # Manter persistência no vector store secundário se aplicável
-            if embedded_children:
-                await self._vector_store.store_document_chunks(
-                    kb_id=kb.id,
-                    document_id=event.document_id,
-                    chunks=embedded_children,
-                    parent_chunks=chunk_collection.parents,
-                )
-
             # 3. Extrair grafo ontológico em lote por Parent Chunk
             all_nodes: dict[str, GraphNode] = {}
             all_edges: list[GraphEdge] = []
@@ -272,7 +260,6 @@ class DocumentIngestionSagaCoordinator:
             indexed_nodes, indexed_edges = await self._graph_store.store_graph(
                 kb.id, event.extracted_graph
             )
-            await self._vector_store.store_node_embeddings(kb.id, event.extracted_graph)
 
             kb.mark_knowledge_indexed(
                 document_id=event.document_id,

@@ -17,7 +17,6 @@ def test_app_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.embedding_service_type == "memory"
     assert settings.embedding_dimension == 768
     assert settings.event_store_type == "memory"
-    assert settings.vector_store_type == "memory"
     assert settings.graph_store_type == "memory"
     assert settings.storage_type == "local"
     assert settings.storage_local_base_dir == "./data/storage"
