@@ -46,8 +46,8 @@ from src.modules.knowledge.domain.value_objects.structural_graph_document import
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
-from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
-    MarkdownParentChildChunker,
+from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
+    StructureTolerantMarkdownChunker,
 )
 
 
@@ -78,7 +78,7 @@ class DocumentIngestionSagaCoordinator:
         self._parser = parser
         self._extractor = extractor
         self._graph_store = graph_store
-        self._chunker = chunker or MarkdownParentChildChunker()
+        self._chunker = chunker or StructureTolerantMarkdownChunker()
         self._embedding_service = embedding_service or InMemoryEmbeddingService()
         self._logger = logger
 

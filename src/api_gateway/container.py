@@ -70,8 +70,8 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
-from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
-    MarkdownParentChildChunker,
+from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
+    StructureTolerantMarkdownChunker,
 )
 from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
     StructuredPydanticGraphExtractor,
@@ -131,7 +131,7 @@ def create_app_container(
     parser: IDocumentParser = MarkItDownDocumentParser()
 
     # Markdown Chunker
-    chunker: IMarkdownChunker = MarkdownParentChildChunker()
+    chunker: IMarkdownChunker = StructureTolerantMarkdownChunker()
 
     # Embedding Service (Gemini or InMemory)
     emb_type = embedding_service_type or cfg.embedding_service_type
