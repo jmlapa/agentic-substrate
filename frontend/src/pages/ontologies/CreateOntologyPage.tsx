@@ -83,8 +83,8 @@ export const CreateOntologyPage: React.FC = () => {
       ...relationshipTypes,
       {
         name: '',
-        source_type: nodeTypes[0]?.name || '',
-        target_type: nodeTypes[0]?.name || '',
+        source_node_type: nodeTypes[0]?.name || '',
+        target_node_type: nodeTypes[0]?.name || '',
         description: '',
         properties: [],
       },
@@ -354,8 +354,8 @@ export const CreateOntologyPage: React.FC = () => {
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-2.5 w-full">
                   <Input
                     placeholder="Origem (ex: Processo)"
-                    value={rel.source_type}
-                    onChange={(e) => handleRelationshipChange(relIdx, 'source_type', e.target.value)}
+                    value={rel.source_node_type}
+                    onChange={(e) => handleRelationshipChange(relIdx, 'source_node_type', e.target.value)}
                     className="text-xs py-1.5"
                   />
                   <Input
@@ -366,8 +366,8 @@ export const CreateOntologyPage: React.FC = () => {
                   />
                   <Input
                     placeholder="Destino (ex: Tribunal)"
-                    value={rel.target_type}
-                    onChange={(e) => handleRelationshipChange(relIdx, 'target_type', e.target.value)}
+                    value={rel.target_node_type}
+                    onChange={(e) => handleRelationshipChange(relIdx, 'target_node_type', e.target.value)}
                     className="text-xs py-1.5"
                   />
                   <Input

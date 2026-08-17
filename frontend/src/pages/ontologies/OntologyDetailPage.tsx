@@ -190,11 +190,11 @@ export const OntologyDetailPage: React.FC = () => {
                       <Card key={i} className="space-y-2.5">
                         <div className="flex items-center gap-2 text-xs font-mono">
                           <span className="px-2 py-1 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-                            {rel.source_type}
+                            {rel.source_node_type}
                           </span>
                           <span className="text-zinc-500 font-bold">───[{rel.name}]───➔</span>
                           <span className="px-2 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-                            {rel.target_type}
+                            {rel.target_node_type}
                           </span>
                         </div>
 

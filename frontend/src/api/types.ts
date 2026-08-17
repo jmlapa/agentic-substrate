@@ -16,8 +16,8 @@ export interface NodeTypeDefinition {
 
 export interface RelationshipTypeDefinition {
   name: string;
-  source_type: string;
-  target_type: string;
+  source_node_type: string;
+  target_node_type: string;
   description: string;
   properties: PropertyDefinition[];
 }

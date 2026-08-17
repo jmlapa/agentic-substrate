@@ -160,21 +160,29 @@ async def main() -> None:
     print("🏛️  Registrando 'OntologiaJuridicaBrasileira' via API REST...")
     print("=================================================================")
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://localhost:8000") as client:
-        resp = await client.post("/api/v1/ontologies", json=LEGAL_ONTOLOGY_PAYLOAD)
-        if resp.status_code == 201:
-            data = resp.json()
-            print("✔ Registrado com sucesso via API Controller!")
-            print(f"ID da Ontologia: {data['id']}")
-            print(f"Nome: {data['name']} (v{data['version']})")
-            print(f"Nós ({len(data['node_types'])}): {[n['name'] for n in data['node_types']]}")
-            print(
-                f"Relações ({len(data['relationship_types'])}): "
-                f"{[r['name'] for r in data['relationship_types']]}"
-            )
-        else:
-            print(f"❌ Erro ao registrar ontologia (Status {resp.status_code}): {resp.text}")
+    try:
+        async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=10.0) as client:
+            resp = await client.post("/api/v1/ontologies", json=LEGAL_ONTOLOGY_PAYLOAD)
+    except Exception:
+        # Fallback para execução in-process se a API não estiver rodando no host
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://localhost:8000"
+        ) as client:
+            resp = await client.post("/api/v1/ontologies", json=LEGAL_ONTOLOGY_PAYLOAD)
+
+    if resp.status_code == 201:
+        data = resp.json()
+        print("✔ Registrado com sucesso via API Controller!")
+        print(f"ID da Ontologia: {data['id']}")
+        print(f"Nome: {data['name']} (v{data['version']})")
+        print(f"Nós ({len(data['node_types'])}): {[n['name'] for n in data['node_types']]}")
+        print(
+            f"Relações ({len(data['relationship_types'])}): "
+            f"{[r['name'] for r in data['relationship_types']]}"
+        )
+    else:
+        print(f"❌ Erro ao registrar ontologia (Status {resp.status_code}): {resp.text}")
 
 
 if __name__ == "__main__":
