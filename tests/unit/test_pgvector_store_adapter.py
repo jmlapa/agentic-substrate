@@ -5,8 +5,10 @@ from uuid import uuid4
 import pytest
 
 from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
+from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
 from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import (
     PgVectorStoreAdapter,
 )
@@ -36,12 +38,13 @@ async def test_pgvector_store_initialize_schema() -> None:
     mock_pool = MagicMock()
     mock_pool.acquire.return_value = MockAcquire(mock_conn)
 
-    adapter = PgVectorStoreAdapter(pool=mock_pool, embedding_dimension=1536)
+    adapter = PgVectorStoreAdapter(pool=mock_pool, embedding_dimension=768)
     await adapter.initialize_schema()
 
     mock_conn.execute.assert_called_once()
     assert "CREATE EXTENSION IF NOT EXISTS vector" in mock_conn.execute.call_args[0][0]
-    assert "vector(1536)" in mock_conn.execute.call_args[0][0]
+    assert "vector(768)" in mock_conn.execute.call_args[0][0]
+    assert "CREATE TABLE IF NOT EXISTS document_chunks" in mock_conn.execute.call_args[0][0]
 
 
 @pytest.mark.asyncio
@@ -99,3 +102,74 @@ async def test_pgvector_search_similar_nodes() -> None:
     assert results[0]["id"] == "node-1"
     assert results[0]["score"] == 0.88
     assert results[0]["properties"] == {"title": "Art 1"}
+
+
+@pytest.mark.asyncio
+async def test_pgvector_store_document_chunks() -> None:
+    mock_conn = AsyncMock()
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value = MockAcquire(mock_conn)
+
+    adapter = PgVectorStoreAdapter(pool=mock_pool, embedding_dimension=768)
+    kb_id = uuid4()
+    doc_id = uuid4()
+
+    parent = ParentChunk(
+        id="p-1",
+        header_path="# Section",
+        content="# Section\nFull parent content here.",
+    )
+    children = [
+        ChildChunk(
+            id="p-1-c1",
+            parent_chunk_id="p-1",
+            chunk_index=0,
+            header_path="# Section",
+            content="Child content",
+            embedding=[0.1] * 768,
+        )
+    ]
+
+    count = await adapter.store_document_chunks(
+        kb_id=kb_id,
+        document_id=doc_id,
+        chunks=children,
+        parent_chunks=[parent],
+    )
+    assert count == 1
+    mock_conn.executemany.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pgvector_search_similar_chunks_with_filters() -> None:
+    mock_conn = AsyncMock()
+    doc_id = uuid4()
+    mock_conn.fetch.return_value = [
+        {
+            "id": "p-1-c1",
+            "document_id": doc_id,
+            "parent_chunk_id": "p-1",
+            "chunk_index": 0,
+            "header_path": "# Section",
+            "content": "Child content",
+            "parent_content": "# Section\nFull parent content here.",
+            "metadata": '{"tag": "test"}',
+            "score": 0.94,
+        }
+    ]
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value = MockAcquire(mock_conn)
+
+    adapter = PgVectorStoreAdapter(pool=mock_pool)
+    results = await adapter.search_similar_chunks(
+        kb_id=uuid4(),
+        query_embedding=[0.1] * 768,
+        top_k=2,
+        document_ids=[doc_id],
+    )
+
+    assert len(results) == 1
+    assert results[0]["id"] == "p-1-c1"
+    assert results[0]["score"] == 0.94
+    assert results[0]["metadata"] == {"tag": "test"}
+    assert results[0]["parent_content"] == "# Section\nFull parent content here."

@@ -1,6 +1,12 @@
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
+from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
+    GeminiEmbeddingAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
+    InMemoryEmbeddingService,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
     InMemoryGraphAndVectorStore,
 )
@@ -22,6 +28,8 @@ from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import
 
 __all__ = [
     "FalkorDbGraphStoreAdapter",
+    "GeminiEmbeddingAdapter",
+    "InMemoryEmbeddingService",
     "InMemoryGraphAndVectorStore",
     "InMemoryKnowledgeBaseRepository",
     "InMemoryOntologyRepository",
