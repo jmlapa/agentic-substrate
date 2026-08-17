@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Obsolete `InMemoryObjectStorage` and `SimpleMarkdownParser` in favor of local production-grade adapters.
+- Unused dependencies `aioboto3` (and its sub-dependencies `botocore`, `aiobotocore`, `s3transfer`) and `sqlalchemy` in favor of direct native `asyncpg` connection pooling.
 
 ### Verified
 - Strict Mypy compliance (`strict = true`), 100% Ruff linting/formatting pass, and automated test coverage.
