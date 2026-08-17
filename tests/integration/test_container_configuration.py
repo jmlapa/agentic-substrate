@@ -2,10 +2,15 @@ import tempfile
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import SecretStr
 
 from src.api_gateway.container import create_app_container
+from src.kernel.infrastructure.app_settings import AppSettings
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
+    GeminiEmbeddingAdapter,
 )
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
@@ -31,3 +36,18 @@ async def test_container_creates_falkordb_adapter() -> None:
         falkordb_client=mock_client,
     )
     assert isinstance(container.graph_store, FalkorDbGraphStoreAdapter)
+
+
+@pytest.mark.asyncio
+async def test_container_with_custom_app_settings() -> None:
+    settings = AppSettings(
+        ENVIRONMENT="test",
+        STORAGE_LOCAL_BASE_DIR="/tmp/agentic-test-storage",
+        GEMINI_API_KEY=SecretStr("mock-key-12345"),
+        EMBEDDING_SERVICE_TYPE="gemini",
+        EMBEDDING_DIMENSION=768,
+    )
+    container = create_app_container(settings=settings)
+    assert container.settings is not None
+    assert container.settings.environment == "test"
+    assert isinstance(container.embedding_service, GeminiEmbeddingAdapter)

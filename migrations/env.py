@@ -1,11 +1,12 @@
 import asyncio
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from src.kernel.infrastructure.app_settings import AppSettings
 
 # Config object initialized by Alembic runner
 config = getattr(context, "config", None)
@@ -17,20 +18,20 @@ target_metadata = None
 
 
 def get_database_url() -> str:
-    """Retrieve and normalize database URL from environment or configuration."""
+    """Retrieve and normalize database URL from AppSettings or Alembic configuration."""
     config_url = config.get_main_option("sqlalchemy.url") if config is not None else None
-    raw_url = (
-        os.getenv("DATABASE_URL")
-        or os.getenv("POSTGRES_URL")
-        or os.getenv("POSTGRES_DSN")
-        or config_url
-        or "postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_substrate"
-    )
-    if raw_url.startswith("postgres://"):
-        raw_url = raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif raw_url.startswith("postgresql://") and not raw_url.startswith("postgresql+asyncpg://"):
-        raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return raw_url
+    if config_url and not config_url.startswith("driver://"):
+        raw_url = config_url
+        if raw_url.startswith("postgres://"):
+            return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif raw_url.startswith("postgresql://") and not raw_url.startswith(
+            "postgresql+asyncpg://"
+        ):
+            return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return raw_url
+
+    settings = AppSettings()
+    return settings.postgres_sqlalchemy_alembic_dsn
 
 
 def run_migrations_offline() -> None:

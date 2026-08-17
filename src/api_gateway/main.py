@@ -8,11 +8,13 @@ from src.api_gateway.controllers.knowledge_controller import (
 from src.api_gateway.controllers.ontology_controller import ontology_router
 
 container: AppContainer = create_app_container()
+settings = container.settings
 
 app = FastAPI(
-    title="Agentic Substrate API",
+    title=settings.api_title if settings else "Agentic Substrate API",
     description="Substrato modular para desenvolvimento agêntico com GraphRAG",
-    version="0.1.0",
+    version=settings.api_version if settings else "0.1.0",
+    debug=settings.debug if settings else False,
 )
 
 app.add_middleware(

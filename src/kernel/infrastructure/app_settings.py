@@ -1,0 +1,99 @@
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    # General Environment
+    environment: Literal["development", "test", "staging", "production"] = Field(
+        default="development",
+        alias="ENVIRONMENT",
+    )
+    debug: bool = Field(default=False, alias="DEBUG")
+
+    # API & Service
+    api_title: str = Field(default="Agentic Substrate API", alias="API_TITLE")
+    api_version: str = Field(default="0.1.0", alias="API_VERSION")
+
+    # LLM & Embeddings
+    gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
+    embedding_service_type: Literal["memory", "gemini"] = Field(
+        default="memory",
+        alias="EMBEDDING_SERVICE_TYPE",
+    )
+    embedding_dimension: int = Field(default=768, alias="EMBEDDING_DIMENSION")
+
+    # Database / Event Store / Vector Store
+    event_store_type: Literal["memory", "postgres"] = Field(
+        default="memory",
+        alias="EVENT_STORE_TYPE",
+    )
+    vector_store_type: Literal["memory", "pgvector"] = Field(
+        default="memory",
+        alias="VECTOR_STORE_TYPE",
+    )
+    database_url: SecretStr | None = Field(default=None, alias="DATABASE_URL")
+    postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+    postgres_user: str = Field(default="postgres", alias="POSTGRES_USER")
+    postgres_password: SecretStr = Field(default=SecretStr("postgres"), alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="agentic_substrate", alias="POSTGRES_DB")
+
+    # Graph Store (FalkorDB / RedisGraph)
+    graph_store_type: Literal["memory", "falkordb"] = Field(
+        default="memory",
+        alias="GRAPH_STORE_TYPE",
+    )
+    falkordb_host: str = Field(default="localhost", alias="FALKORDB_HOST")
+    falkordb_port: int = Field(default=6380, alias="FALKORDB_PORT")
+    falkordb_password: SecretStr | None = Field(default=None, alias="FALKORDB_PASSWORD")
+
+    # Object Storage
+    storage_type: Literal["local", "s3"] = Field(default="local", alias="STORAGE_TYPE")
+    storage_local_base_dir: str = Field(default="./data/storage", alias="STORAGE_LOCAL_BASE_DIR")
+    s3_bucket_name: str | None = Field(default=None, alias="S3_BUCKET_NAME")
+    s3_access_key_id: SecretStr | None = Field(default=None, alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: SecretStr | None = Field(default=None, alias="S3_SECRET_ACCESS_KEY")
+    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
+    s3_endpoint_url: str | None = Field(default=None, alias="S3_ENDPOINT_URL")
+
+    def __init__(
+        self,
+        _env_file: Path | str | None = None,
+        **values: Any,
+    ) -> None:
+        if _env_file is not None:
+            super().__init__(_env_file=_env_file, **values)
+        else:
+            super().__init__(**values)
+
+    @property
+    def postgres_asyncpg_dsn(self) -> str:
+        if self.database_url:
+            raw = self.database_url.get_secret_value()
+            if raw.startswith("postgresql+asyncpg://"):
+                return raw.replace("postgresql+asyncpg://", "postgresql://", 1)
+            return raw
+        pwd = self.postgres_password.get_secret_value()
+        return (
+            f"postgresql://{self.postgres_user}:{pwd}@"
+            f"{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def postgres_sqlalchemy_alembic_dsn(self) -> str:
+        dsn = self.postgres_asyncpg_dsn
+        if dsn.startswith("postgres://"):
+            dsn = dsn.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif dsn.startswith("postgresql://") and not dsn.startswith("postgresql+asyncpg://"):
+            dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return dsn

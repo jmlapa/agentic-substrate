@@ -1,9 +1,9 @@
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from src.kernel.application.event_bus import EventBus
 from src.kernel.application.event_store import EventStore
+from src.kernel.infrastructure.app_settings import AppSettings
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.kernel.infrastructure.postgres_event_store import PostgresEventStore
@@ -102,9 +102,11 @@ class AppContainer:
     create_ontology_use_case: CreateOntologyTemplateUseCase
     get_ontology_use_case: GetOntologyTemplateUseCase
     list_ontologies_use_case: ListOntologyTemplatesUseCase
+    settings: AppSettings | None = None
 
 
 def create_app_container(
+    settings: AppSettings | None = None,
     storage_base_dir: str | None = None,
     graph_store_type: str | None = None,
     vector_store_type: str | None = None,
@@ -113,10 +115,11 @@ def create_app_container(
     postgres_pool: Any | None = None,
     falkordb_client: Any | None = None,
 ) -> AppContainer:
+    cfg = settings or AppSettings()
     bus: EventBus = InMemoryEventBus()
 
     # Event Store
-    evt_type = event_store_type or os.getenv("EVENT_STORE_TYPE", "memory")
+    evt_type = event_store_type or cfg.event_store_type
     store: EventStore
     if evt_type == "postgres" and postgres_pool:
         store = PostgresEventStore(pool=postgres_pool, event_bus=bus)
@@ -127,7 +130,7 @@ def create_app_container(
     ontology_repo: IOntologyRepository = InMemoryOntologyRepository()
 
     # Object Storage (Local File System)
-    base_dir = storage_base_dir or os.getenv("STORAGE_LOCAL_BASE_DIR") or "./data/storage"
+    base_dir = storage_base_dir or cfg.storage_local_base_dir
     storage: IObjectStorage = LocalFileSystemStorageAdapter(base_directory=base_dir)
 
     # Document Parser (MarkItDown)
@@ -137,11 +140,11 @@ def create_app_container(
     chunker: IMarkdownChunker = MarkdownParentChildChunker()
 
     # Embedding Service (Gemini or InMemory)
-    emb_type = embedding_service_type or os.getenv("EMBEDDING_SERVICE_TYPE", "memory")
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    emb_type = embedding_service_type or cfg.embedding_service_type
+    gemini_key = cfg.gemini_api_key.get_secret_value() if cfg.gemini_api_key else None
     embedding_service: IEmbeddingService
     if (emb_type == "gemini" or gemini_key) and gemini_key:
-        dim = int(os.getenv("EMBEDDING_DIMENSION", "768"))
+        dim = cfg.embedding_dimension
         embedding_service = GeminiEmbeddingAdapter(api_key=gemini_key, dimension=dim)
     else:
         embedding_service = InMemoryEmbeddingService()
@@ -152,11 +155,11 @@ def create_app_container(
     in_memory_graph_vector = InMemoryGraphAndVectorStore()
 
     # Graph Store
-    grp_type = graph_store_type or os.getenv("GRAPH_STORE_TYPE", "memory")
+    grp_type = graph_store_type or cfg.graph_store_type
     graph_store: IGraphStore
     if grp_type == "falkordb":
-        falkor_host = os.getenv("FALKORDB_HOST", "localhost")
-        falkor_port = int(os.getenv("FALKORDB_PORT", "6380"))
+        falkor_host = cfg.falkordb_host
+        falkor_port = cfg.falkordb_port
         graph_store = FalkorDbGraphStoreAdapter(
             host=falkor_host, port=falkor_port, client=falkordb_client
         )
@@ -164,7 +167,7 @@ def create_app_container(
         graph_store = in_memory_graph_vector
 
     # Vector Store
-    vec_type = vector_store_type or os.getenv("VECTOR_STORE_TYPE", "memory")
+    vec_type = vector_store_type or cfg.vector_store_type
     vector_store: IVectorStore
     if vec_type == "pgvector" and postgres_pool:
         vector_store = PgVectorStoreAdapter(pool=postgres_pool)
@@ -215,4 +218,5 @@ def create_app_container(
         create_ontology_use_case=create_ont,
         get_ontology_use_case=get_ont,
         list_ontologies_use_case=list_ont,
+        settings=cfg,
     )

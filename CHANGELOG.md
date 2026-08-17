@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Centralized Settings and Secrets Management module (`AppSettings`) powered by `pydantic-settings` and `SecretStr` for automatic masking, `.env` file loading, and environment variable parsing.
+- Documented environment variables template (`.env.example`) with secure defaults.
 - Asynchronous database migration framework using Alembic and `asyncpg` with CLI and Makefile automation (`make migrate`, `make migrate-down`, `make migrate-create`).
 - Initial versioned migration revisions:
   - `0001_create_pgvector_extension.py`: Installs PostgreSQL `vector` extension.
