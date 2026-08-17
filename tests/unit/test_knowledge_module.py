@@ -177,8 +177,18 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         assert updated_kb is not None
         doc_info = updated_kb.documents[doc_id]
         assert doc_info["status"] == DocumentStatus.INDEXED
+        assert doc_info.get("total_parents", 0) >= 1
+        assert doc_info.get("total_children", 0) >= 1
 
-        # 4. Verify graph query
+        # 4. Verify vector chunks search
+        chunks_res = await graph_store.search_similar_chunks(
+            kb_id=kb_id, query_embedding=[0.1] * 768, top_k=5, document_ids=[doc_id]
+        )
+        assert len(chunks_res) >= 1
+        assert chunks_res[0]["document_id"] == doc_id
+        assert "Microservice auth" in chunks_res[0]["content"]
+
+        # 5. Verify graph query
         query_res = await query_use_case.execute(
             QueryKnowledgeRequest(kb_id=kb_id, query="What databases are connected?")
         )

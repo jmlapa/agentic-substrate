@@ -29,10 +29,18 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeUseCase,
 )
 from src.modules.knowledge.domain.interfaces.i_document_parser import IDocumentParser
-from src.modules.knowledge.domain.interfaces.i_graph_extractor import IGraphExtractor
+from src.modules.knowledge.domain.interfaces.i_embedding_service import (
+    IEmbeddingService,
+)
+from src.modules.knowledge.domain.interfaces.i_graph_extractor import (
+    IGraphExtractor,
+)
 from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
+)
+from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
+    IMarkdownChunker,
 )
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
@@ -41,6 +49,12 @@ from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
 from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
+    GeminiEmbeddingAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
+    InMemoryEmbeddingService,
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_graph_and_vector_store import (
     InMemoryGraphAndVectorStore,
@@ -60,6 +74,9 @@ from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser im
 from src.modules.knowledge.infrastructure.adapters.pgvector_store_adapter import (
     PgVectorStoreAdapter,
 )
+from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
+    MarkdownParentChildChunker,
+)
 from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
     StructuredPydanticGraphExtractor,
 )
@@ -73,6 +90,8 @@ class AppContainer:
     ontology_repository: IOntologyRepository
     object_storage: IObjectStorage
     parser: IDocumentParser
+    chunker: IMarkdownChunker
+    embedding_service: IEmbeddingService
     graph_extractor: IGraphExtractor
     graph_store: IGraphStore
     vector_store: IVectorStore
@@ -90,6 +109,7 @@ def create_app_container(
     graph_store_type: str | None = None,
     vector_store_type: str | None = None,
     event_store_type: str | None = None,
+    embedding_service_type: str | None = None,
     postgres_pool: Any | None = None,
     falkordb_client: Any | None = None,
 ) -> AppContainer:
@@ -112,6 +132,19 @@ def create_app_container(
 
     # Document Parser (MarkItDown)
     parser: IDocumentParser = MarkItDownDocumentParser()
+
+    # Markdown Chunker
+    chunker: IMarkdownChunker = MarkdownParentChildChunker()
+
+    # Embedding Service (Gemini or InMemory)
+    emb_type = embedding_service_type or os.getenv("EMBEDDING_SERVICE_TYPE", "memory")
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    embedding_service: IEmbeddingService
+    if (emb_type == "gemini" or gemini_key) and gemini_key:
+        dim = int(os.getenv("EMBEDDING_DIMENSION", "768"))
+        embedding_service = GeminiEmbeddingAdapter(api_key=gemini_key, dimension=dim)
+    else:
+        embedding_service = InMemoryEmbeddingService()
 
     extractor: IGraphExtractor = StructuredPydanticGraphExtractor()
 
@@ -147,6 +180,8 @@ def create_app_container(
         extractor=extractor,
         graph_store=graph_store,
         vector_store=vector_store,
+        chunker=chunker,
+        embedding_service=embedding_service,
     )
 
     create_kb = CreateKnowledgeBaseUseCase(
@@ -168,6 +203,8 @@ def create_app_container(
         ontology_repository=ontology_repo,
         object_storage=storage,
         parser=parser,
+        chunker=chunker,
+        embedding_service=embedding_service,
         graph_extractor=extractor,
         graph_store=graph_store,
         vector_store=vector_store,

@@ -7,6 +7,9 @@ from src.kernel.domain.domain_event import DomainEvent
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
 )
+from src.modules.knowledge.domain.events.document_chunked_event import (
+    DocumentChunkedEvent,
+)
 from src.modules.knowledge.domain.events.document_parsed_to_markdown_event import (
     DocumentParsedToMarkdownEvent,
 )
@@ -17,6 +20,9 @@ from src.modules.knowledge.domain.events.graph_extracted_from_document_event imp
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
+from src.modules.knowledge.domain.interfaces.i_embedding_service import (
+    IEmbeddingService,
+)
 from src.modules.knowledge.domain.interfaces.i_graph_extractor import (
     IGraphExtractor,
 )
@@ -24,14 +30,25 @@ from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
+from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
+    IMarkdownChunker,
+)
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
 from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
+from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
+from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
+    InMemoryEmbeddingService,
+)
+from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
+    MarkdownParentChildChunker,
+)
 
 
 class DocumentIngestionSagaCoordinator:
     """
     Saga Coreografada / Event-Driven Pipeline para Ingestão e Processamento GraphRAG.
-    Escuta eventos do EventBus e executa os passos transicionando o estado do agregado.
+    Escuta eventos do EventBus e transiciona o agregado através do pipeline:
+    Stored ➔ ParsedToMarkdown ➔ Chunked ➔ GraphExtracted ➔ KnowledgeIndexed.
     """
 
     def __init__(
@@ -44,6 +61,8 @@ class DocumentIngestionSagaCoordinator:
         extractor: IGraphExtractor,
         graph_store: IGraphStore,
         vector_store: IVectorStore,
+        chunker: IMarkdownChunker | None = None,
+        embedding_service: IEmbeddingService | None = None,
         logger: Logger | None = None,
     ) -> None:
         self._bus = event_bus
@@ -54,6 +73,8 @@ class DocumentIngestionSagaCoordinator:
         self._extractor = extractor
         self._graph_store = graph_store
         self._vector_store = vector_store
+        self._chunker = chunker or MarkdownParentChildChunker()
+        self._embedding_service = embedding_service or InMemoryEmbeddingService()
         self._logger = logger
 
         self._register_listeners()
@@ -61,6 +82,7 @@ class DocumentIngestionSagaCoordinator:
     def _register_listeners(self) -> None:
         self._bus.subscribe(DocumentStoredEvent, self.handle_document_stored)
         self._bus.subscribe(DocumentParsedToMarkdownEvent, self.handle_document_parsed)
+        self._bus.subscribe(DocumentChunkedEvent, self.handle_document_chunked)
         self._bus.subscribe(GraphExtractedFromDocumentEvent, self.handle_graph_extracted)
 
     async def _load_aggregate(self, kb_id: UUID) -> KnowledgeBaseAggregate:
@@ -112,12 +134,92 @@ class DocumentIngestionSagaCoordinator:
             return
         kb = await self._load_aggregate(event.aggregate_id)
         try:
+            md_bytes = await self._storage.get_object(event.markdown_storage_path)
+            md_text = md_bytes.decode("utf-8")
+            doc_info = kb.documents.get(event.document_id, {})
+            file_name = doc_info.get("file_name", "document.md")
+
+            chunk_collection = await self._chunker.chunk(
+                document_id=event.document_id,
+                document_name=file_name,
+                markdown_text=md_text,
+            )
+
+            summary = [
+                {
+                    "parent_id": p.id,
+                    "header_path": p.header_path,
+                    "token_count": p.token_count,
+                }
+                for p in chunk_collection.parents
+            ]
+
+            kb.mark_document_chunked(
+                document_id=event.document_id,
+                total_parents=len(chunk_collection.parents),
+                total_children=len(chunk_collection.children),
+                chunks_summary=summary,
+            )
+            await self._save_aggregate(kb)
+        except Exception as e:
+            kb.mark_processing_failed(
+                event.document_id, step="MARKDOWN_CHUNKING", error_message=str(e)
+            )
+            await self._save_aggregate(kb)
+
+    async def handle_document_chunked(self, event: DomainEvent) -> None:
+        if not isinstance(event, DocumentChunkedEvent):
+            return
+        kb = await self._load_aggregate(event.aggregate_id)
+        try:
             if not kb.ontology:
                 raise ValueError("Ontology is missing in Knowledge Base")
 
-            md_bytes = await self._storage.get_object(event.markdown_storage_path)
+            doc_info = kb.documents.get(event.document_id, {})
+            md_path = doc_info.get(
+                "markdown_path", f"{kb.storage_partition}/markdown/{event.document_id}.md"
+            )
+            file_name = doc_info.get("file_name", "document.md")
+
+            md_bytes = await self._storage.get_object(md_path)
             md_text = md_bytes.decode("utf-8")
 
+            # 1. Obter chunks e gerar embeddings para os Child Chunks
+            chunk_collection = await self._chunker.chunk(
+                document_id=event.document_id,
+                document_name=file_name,
+                markdown_text=md_text,
+            )
+
+            if chunk_collection.children:
+                child_texts = [c.content for c in chunk_collection.children]
+                child_titles = [f"{file_name} > {c.header_path}" for c in chunk_collection.children]
+                embeddings = await self._embedding_service.embed_texts(child_texts, child_titles)
+
+                embedded_children: list[ChildChunk] = []
+                for idx, child in enumerate(chunk_collection.children):
+                    emb = embeddings[idx] if idx < len(embeddings) else None
+                    embedded_children.append(
+                        ChildChunk(
+                            id=child.id,
+                            parent_chunk_id=child.parent_chunk_id,
+                            chunk_index=child.chunk_index,
+                            header_path=child.header_path,
+                            content=child.content,
+                            embedding=emb,
+                            metadata=child.metadata,
+                        )
+                    )
+
+                # Persistir chunks vetoriais
+                await self._vector_store.store_document_chunks(
+                    kb_id=kb.id,
+                    document_id=event.document_id,
+                    chunks=embedded_children,
+                    parent_chunks=chunk_collection.parents,
+                )
+
+            # 2. Extrair grafo ontológico a partir do documento
             extracted_graph = await self._extractor.extract_graph(md_text, kb.ontology)
             kb.mark_graph_extracted(event.document_id, extracted_graph)
             await self._save_aggregate(kb)

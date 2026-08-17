@@ -3,6 +3,9 @@ from uuid import UUID, uuid4
 
 from src.kernel.domain.aggregate_root import AggregateRoot
 from src.modules.knowledge.domain.events.document_attached_event import DocumentAttachedEvent
+from src.modules.knowledge.domain.events.document_chunked_event import (
+    DocumentChunkedEvent,
+)
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -97,6 +100,24 @@ class KnowledgeBaseAggregate(AggregateRoot):
             )
         )
 
+    def mark_document_chunked(
+        self,
+        document_id: UUID,
+        total_parents: int,
+        total_children: int,
+        chunks_summary: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self.record_event(
+            DocumentChunkedEvent(
+                aggregate_id=self.id,
+                aggregate_type="KnowledgeBaseAggregate",
+                document_id=document_id,
+                total_parents=total_parents,
+                total_children=total_children,
+                chunks_summary=chunks_summary or [],
+            )
+        )
+
     def mark_graph_extracted(self, document_id: UUID, extracted_graph: ExtractedGraph) -> None:
         self.record_event(
             GraphExtractedFromDocumentEvent(
@@ -161,6 +182,12 @@ class KnowledgeBaseAggregate(AggregateRoot):
         if event.document_id in self.documents:
             self.documents[event.document_id]["status"] = DocumentStatus.PARSED
             self.documents[event.document_id]["markdown_path"] = event.markdown_storage_path
+
+    def _apply_document_chunked_event(self, event: DocumentChunkedEvent) -> None:
+        if event.document_id in self.documents:
+            self.documents[event.document_id]["status"] = DocumentStatus.CHUNKED
+            self.documents[event.document_id]["total_parents"] = event.total_parents
+            self.documents[event.document_id]["total_children"] = event.total_children
 
     def _apply_graph_extracted_from_document_event(
         self, event: GraphExtractedFromDocumentEvent
