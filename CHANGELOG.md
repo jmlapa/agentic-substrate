@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-08-17
+
+### Added
+- **Frontend Console SPA (`/frontend`)**:
+  - Modern, responsive SPA built with **React 18.3.1 + Vite 5.4 + TypeScript 5.5 + Tailwind CSS 3.4** and TanStack React Query v5.
+  - **Ontologies Hub**: Visual form to create and inspect domain schemas (entities, properties, relationships) and export JSON schemas.
+  - **Knowledge Bases Hub**: Provisioning of KBs with ontology dropdown selector and inline creation modal.
+  - **Document Ingestion & Live Pipeline Tracker**: Multi-file dropzone (PDF, TXT, MD, DOCX, JSON) with live visual Saga stage tracking (`Upload` ➔ `Parsing` ➔ `Chunking` ➔ `Grafo LLM` ➔ `Indexado`) and smart polling with auto-stop.
+  - **RAG Query Playground**: Interactive query interface providing synthesized LLM answers via Gemini Flash-Lite paired with deep evidence inspection (retrieved chunks, relevance scores, and FalkorDB subgraphs/entities).
+- **Backend RAG Synthesis & Listing Endpoints**:
+  - `GET /api/v1/knowledge/bases`: Endpoint to list all Knowledge Bases with document metrics.
+  - `POST /api/v1/knowledge/bases/{kb_id}/query`: Enriched with `ILlmSynthesisService` protocol (`GeminiRagSynthesizer` / `InMemoryRagSynthesizer`) generating grounded Markdown answers with factual citations.
+- **Production Containerization**:
+  - Multi-stage Dockerfile (`node:20-alpine` build + `nginx:1.27-alpine` runtime, image size < 25MB).
+  - Added `frontend` service on port 3000 to `docker/docker-compose.yml` with SPA fallback and API reverse proxy.
+
 ## [0.2.0] - 2026-08-17
 
 ### Added
