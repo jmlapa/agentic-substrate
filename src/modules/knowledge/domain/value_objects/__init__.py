@@ -6,10 +6,16 @@ from src.modules.knowledge.domain.value_objects.document_status import DocumentS
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
+    HybridSearchResult,
+)
 from src.modules.knowledge.domain.value_objects.knowledge_base_status import (
     KnowledgeBaseStatus,
 )
 from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
+from src.modules.knowledge.domain.value_objects.structural_graph_document import (
+    StructuralGraphDocument,
+)
 
 __all__ = [
     "ChildChunk",
@@ -18,6 +24,8 @@ __all__ = [
     "ExtractedGraph",
     "GraphEdge",
     "GraphNode",
+    "HybridSearchResult",
     "KnowledgeBaseStatus",
     "ParentChunk",
+    "StructuralGraphDocument",
 ]
