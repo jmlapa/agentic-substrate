@@ -8,19 +8,19 @@ install: ## Instala dependências do projeto com suporte a dev
 	pip install -e ".[dev]"
 
 lint: ## Executa o linter Ruff com auto-fix
-	ruff check --fix .
+	uv run ruff check --fix .
 
 format: ## Formata o código usando Ruff
-	ruff format .
+	uv run ruff format .
 
 typecheck: ## Executa checagem estrita de tipos com Mypy
-	mypy src tests
+	uv run mypy src tests
 
 test: ## Executa todos os testes com Pytest
-	pytest -v
+	uv run pytest -v
 
 test-cov: ## Executa testes gerando relatório de cobertura
-	pytest --cov=src --cov-report=term-missing -v
+	uv run pytest --cov=src --cov-report=term-missing -v
 
 check: lint format typecheck test-cov ## Executa todos os linters, checagem de tipos e testes
 

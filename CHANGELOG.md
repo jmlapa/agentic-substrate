@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Recursive Markdown Structure-Aware Parent-Child Chunker (`MarkdownParentChildChunker`) with atomic table and code block preservation, breadcrumb generation, and recursive sub-splitting for large sections.
+- Value objects `ParentChunk`, `ChildChunk`, and `DocumentChunkCollection` in `knowledge` domain.
+- Google Gemini Embedding 2 adapter (`GeminiEmbeddingAdapter`) supporting MRL (768 dimensions), prompt task formatting, micro-batching of 100 items, and Exponential Backoff + Full Jitter for HTTP 429 (`ResourceExhausted`).
+- Deterministic `InMemoryEmbeddingService` for local development and testing.
+- `document_chunks` table and vector similarity methods (`store_document_chunks`, `search_similar_chunks`) with HNSW cosine indexing and document metadata filtering in `PgVectorStoreAdapter` and `InMemoryGraphAndVectorStore`.
+- `DocumentChunkedEvent` and aggregate transition (`DocumentStatus.CHUNKED`) integrated into `DocumentIngestionSagaCoordinator`.
 - Modular clean architecture with `kernel`, `knowledge`, and `api_gateway`.
 - `kernel` domain primitives: `Entity`, `ValueObject`, `AggregateRoot`, `DomainEvent`, `DomainError`, and `Result[T, E]`.
 - `kernel` application contracts: `UseCase`, `EventBus`, `EventStore`, and `Logger`.
