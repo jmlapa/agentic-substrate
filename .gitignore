@@ -52,3 +52,14 @@ data/
 postgres_data/
 minio_data/
 falkordb_data/
+
+# Frontend / Node.js
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
