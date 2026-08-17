@@ -53,6 +53,7 @@ src/
 ├── kernel/
 │   └── infrastructure/
 │       ├── async_token_bucket_limiter.py          # Rate limiter genérico por RPM e TPM com sliding window
+│       ├── rate_limited_async_transport.py        # Transporte HTTPX assíncrono com rate limiting e retry 429
 │       └── __init__.py
 └── modules/
     └── knowledge/
@@ -99,14 +100,12 @@ class AsyncTokenBucketLimiter:
         async with self._lock:
             while True:
                 now = time.monotonic()
-                # 1. Purge timestamps fora da janela de 60s
                 while self._requests and now - self._requests[0] >= self._window:
                     self._requests.popleft()
                 while self._token_events and now - self._token_events[0][0] >= self._window:
                     _, old_tokens = self._token_events.popleft()
                     self._current_tokens -= old_tokens
 
-                # 2. Verificar se cabe na janela
                 if (
                     len(self._requests) < self._max_rpm
                     and self._current_tokens + estimated_tokens <= self._max_tpm
@@ -116,7 +115,6 @@ class AsyncTokenBucketLimiter:
                     self._current_tokens += estimated_tokens
                     return
 
-                # 3. Calcular tempo de espera até o próximo slot liberar
                 oldest_req = self._requests[0] if self._requests else now
                 oldest_tok = self._token_events[0][0] if self._token_events else now
                 sleep_time = max(
@@ -125,7 +123,29 @@ class AsyncTokenBucketLimiter:
                 await asyncio.sleep(sleep_time)
 ```
 
-### 2. Extrator com PydanticAI e Resolução de Entidades
+### 2. Transporte HTTPX Customizado com Rate Limiting
+```python
+# src/kernel/infrastructure/rate_limited_async_transport.py
+import httpx
+from src.kernel.infrastructure.async_token_bucket_limiter import AsyncTokenBucketLimiter
+
+
+class RateLimitedAsyncTransport(httpx.AsyncBaseTransport):
+    def __init__(
+        self,
+        rate_limiter: AsyncTokenBucketLimiter,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._limiter = rate_limiter
+        self._transport = transport or httpx.AsyncHTTPTransport()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        estimated_tokens = max(1, len(request.content) // 4) if request.content else 100
+        await self._limiter.acquire(estimated_tokens)
+        return await self._transport.handle_async_request(request)
+```
+
+### 3. Extrator com PydanticAI e Resolução de Entidades
 ```python
 # Trecho de execução no pydantic_ai_graph_extractor.py
 class PydanticAiGraphExtractor(IGraphExtractor):
@@ -133,11 +153,13 @@ class PydanticAiGraphExtractor(IGraphExtractor):
         self,
         rate_limiter: AsyncTokenBucketLimiter,
         entity_registry: IEntityRegistry | None = None,
-        model_name: str = "google-gla:gemini-2.5-flash-lite",
-        max_concurrency: int = 15,
+        model_name: str = "gemini-2.5-flash-lite",
+        api_key: str | None = None,
     ) -> None:
         self._limiter = rate_limiter
         self._registry = entity_registry or ExistingEntityRegistry()
+        self._model_name = model_name
+        self._api_key = api_key
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._model_name = model_name
 
