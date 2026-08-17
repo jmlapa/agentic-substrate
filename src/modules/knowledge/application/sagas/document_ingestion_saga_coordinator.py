@@ -36,6 +36,14 @@ from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
 from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
+from src.modules.knowledge.domain.value_objects.extracted_graph import (
+    ExtractedGraph,
+)
+from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
+from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.domain.value_objects.structural_graph_document import (
+    StructuralGraphDocument,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
@@ -191,12 +199,12 @@ class DocumentIngestionSagaCoordinator:
                 markdown_text=md_text,
             )
 
+            embedded_children: list[ChildChunk] = []
             if chunk_collection.children:
                 child_texts = [c.content for c in chunk_collection.children]
                 child_titles = [f"{file_name} > {c.header_path}" for c in chunk_collection.children]
                 embeddings = await self._embedding_service.embed_texts(child_texts, child_titles)
 
-                embedded_children: list[ChildChunk] = []
                 for idx, child in enumerate(chunk_collection.children):
                     emb = embeddings[idx] if idx < len(embeddings) else None
                     embedded_children.append(
@@ -211,7 +219,18 @@ class DocumentIngestionSagaCoordinator:
                         )
                     )
 
-                # Persistir chunks vetoriais
+            # 2. Ingestão Estrutural no FalkorDB Graph Store (Document -> Parent -> Child)
+            structural_doc = StructuralGraphDocument(
+                document_id=event.document_id,
+                document_name=file_name,
+                parents=chunk_collection.parents,
+                children=embedded_children,
+            )
+            await self._graph_store.ensure_vector_index(kb.id)
+            await self._graph_store.store_structural_document(kb.id, structural_doc)
+
+            # Manter persistência no vector store secundário se aplicável
+            if embedded_children:
                 await self._vector_store.store_document_chunks(
                     kb_id=kb.id,
                     document_id=event.document_id,
@@ -219,9 +238,25 @@ class DocumentIngestionSagaCoordinator:
                     parent_chunks=chunk_collection.parents,
                 )
 
-            # 2. Extrair grafo ontológico a partir do documento
-            extracted_graph = await self._extractor.extract_graph(md_text, kb.ontology)
-            kb.mark_graph_extracted(event.document_id, extracted_graph)
+            # 3. Extrair grafo ontológico em lote por Parent Chunk
+            all_nodes: dict[str, GraphNode] = {}
+            all_edges: list[GraphEdge] = []
+
+            for parent in chunk_collection.parents:
+                if not parent.content.strip():
+                    continue
+                parent_graph = await self._extractor.extract_graph(parent.content, kb.ontology)
+                if parent_graph.nodes or parent_graph.edges:
+                    await self._graph_store.store_parent_mentions(kb.id, parent.id, parent_graph)
+                    for n in parent_graph.nodes:
+                        all_nodes[n.id] = n
+                    all_edges.extend(parent_graph.edges)
+
+            combined_graph = ExtractedGraph(
+                nodes=list(all_nodes.values()),
+                edges=all_edges,
+            )
+            kb.mark_graph_extracted(event.document_id, combined_graph)
             await self._save_aggregate(kb)
         except Exception as e:
             kb.mark_processing_failed(
