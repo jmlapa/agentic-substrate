@@ -14,6 +14,10 @@ def test_app_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.debug is False
     assert settings.api_title == "Agentic Substrate API"
     assert settings.api_version == "0.1.0"
+    assert settings.gemini_model_name == "gemini-3.5-flash-lite"
+    assert settings.gemini_max_rpm == 300
+    assert settings.gemini_max_tpm == 1_000_000
+    assert settings.gemini_max_concurrency == 15
     assert settings.embedding_service_type == "memory"
     assert settings.embedding_dimension == 768
     assert settings.event_store_type == "memory"

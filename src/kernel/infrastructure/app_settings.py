@@ -28,6 +28,13 @@ class AppSettings(BaseSettings):
 
     # LLM & Embeddings
     gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_model_name: str = Field(
+        default="gemini-3.5-flash-lite",
+        alias="GEMINI_MODEL_NAME",
+    )
+    gemini_max_rpm: int = Field(default=300, alias="GEMINI_MAX_RPM")
+    gemini_max_tpm: int = Field(default=1_000_000, alias="GEMINI_MAX_TPM")
+    gemini_max_concurrency: int = Field(default=15, alias="GEMINI_MAX_CONCURRENCY")
     embedding_service_type: Literal["memory", "gemini"] = Field(
         default="memory",
         alias="EMBEDDING_SERVICE_TYPE",

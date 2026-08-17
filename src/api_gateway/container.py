@@ -4,6 +4,9 @@ from typing import Any
 from src.kernel.application.event_bus import EventBus
 from src.kernel.application.event_store import EventStore
 from src.kernel.infrastructure.app_settings import AppSettings
+from src.kernel.infrastructure.async_token_bucket_limiter import (
+    AsyncTokenBucketLimiter,
+)
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.kernel.infrastructure.postgres_event_store import PostgresEventStore
@@ -73,8 +76,11 @@ from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser im
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
 )
-from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
-    StructuredPydanticGraphExtractor,
+from src.modules.knowledge.infrastructure.extractors.existing_entity_registry import (
+    ExistingEntityRegistry,
+)
+from src.modules.knowledge.infrastructure.extractors.pydantic_ai_graph_extractor import (
+    PydanticAiGraphExtractor,
 )
 
 
@@ -143,7 +149,21 @@ def create_app_container(
     else:
         embedding_service = InMemoryEmbeddingService()
 
-    extractor: IGraphExtractor = StructuredPydanticGraphExtractor()
+    # Rate Limiter & Entity Registry
+    limiter = AsyncTokenBucketLimiter(
+        max_rpm=cfg.gemini_max_rpm,
+        max_tpm=cfg.gemini_max_tpm,
+    )
+    entity_registry = ExistingEntityRegistry()
+
+    # Graph Extractor (PydanticAI)
+    extractor: IGraphExtractor = PydanticAiGraphExtractor(
+        rate_limiter=limiter,
+        entity_registry=entity_registry,
+        model_name=cfg.gemini_model_name,
+        api_key=gemini_key,
+        max_concurrency=cfg.gemini_max_concurrency,
+    )
 
     # Graph Store (FalkorDB or InMemory)
     grp_type = graph_store_type or cfg.graph_store_type
