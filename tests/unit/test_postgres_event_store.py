@@ -42,19 +42,6 @@ async def test_postgres_event_store_implements_protocol() -> None:
 
 
 @pytest.mark.asyncio
-async def test_postgres_event_store_initialize_schema() -> None:
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value = MockAcquire(mock_conn)
-
-    store = PostgresEventStore(pool=mock_pool)
-    await store.initialize_schema()
-
-    mock_conn.execute.assert_called_once()
-    assert "CREATE TABLE IF NOT EXISTS event_streams" in mock_conn.execute.call_args[0][0]
-
-
-@pytest.mark.asyncio
 async def test_postgres_event_store_append_and_get_events() -> None:
     mock_conn = AsyncMock()
     mock_conn.transaction = MagicMock(return_value=MockTransaction())

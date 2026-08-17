@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency injection container (`AppContainer`) supporting dynamic environment-based infrastructure selection.
 
 ### Removed
+- Deprecated legacy runtime DDL blocks (`initialize_schema()`) in `PostgresEventStore` and `PgVectorStoreAdapter` in favor of declarative Alembic migrations.
 - Obsolete `InMemoryObjectStorage` and `SimpleMarkdownParser` in favor of local production-grade adapters.
 - Unused dependencies `aioboto3` (and its sub-dependencies `botocore`, `aiobotocore`, `s3transfer`) and `sqlalchemy` in favor of direct native `asyncpg` connection pooling.
 

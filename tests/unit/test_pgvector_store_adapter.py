@@ -33,21 +33,6 @@ async def test_pgvector_store_implements_protocol() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pgvector_store_initialize_schema() -> None:
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value = MockAcquire(mock_conn)
-
-    adapter = PgVectorStoreAdapter(pool=mock_pool, embedding_dimension=768)
-    await adapter.initialize_schema()
-
-    mock_conn.execute.assert_called_once()
-    assert "CREATE EXTENSION IF NOT EXISTS vector" in mock_conn.execute.call_args[0][0]
-    assert "vector(768)" in mock_conn.execute.call_args[0][0]
-    assert "CREATE TABLE IF NOT EXISTS document_chunks" in mock_conn.execute.call_args[0][0]
-
-
-@pytest.mark.asyncio
 async def test_pgvector_store_node_embeddings() -> None:
     mock_conn = AsyncMock()
     mock_pool = MagicMock()

@@ -29,32 +29,6 @@ class PostgresEventStore(EventStore):
     def register_event_type(self, event_type: type[DomainEvent]) -> None:
         self._event_types[event_type.__name__] = event_type
 
-    async def initialize_schema(self) -> None:
-        query = """
-        CREATE TABLE IF NOT EXISTS event_streams (
-            aggregate_id UUID PRIMARY KEY,
-            aggregate_type VARCHAR(255) NOT NULL,
-            version INT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS domain_events (
-            event_id UUID PRIMARY KEY,
-            aggregate_id UUID NOT NULL,
-            aggregate_type VARCHAR(255) NOT NULL,
-            event_type VARCHAR(255) NOT NULL,
-            event_version INT NOT NULL,
-            payload JSONB NOT NULL,
-            occurred_at TIMESTAMPTZ NOT NULL,
-            metadata JSONB NOT NULL,
-            UNIQUE (aggregate_id, event_version)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_domain_events_aggregate_id 
-        ON domain_events (aggregate_id, event_version ASC);
-        """
-        async with self._pool.acquire() as conn:
-            await conn.execute(query)
-
     async def append_events(
         self,
         aggregate_id: UUID,

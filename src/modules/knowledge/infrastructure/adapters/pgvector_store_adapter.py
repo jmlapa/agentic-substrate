@@ -19,47 +19,6 @@ class PgVectorStoreAdapter(IVectorStore):
         self._pool = pool
         self._embedding_dimension = embedding_dimension
 
-    async def initialize_schema(self) -> None:
-        query = f"""
-        CREATE EXTENSION IF NOT EXISTS vector;
-
-        CREATE TABLE IF NOT EXISTS node_embeddings (
-            id VARCHAR(255) NOT NULL,
-            kb_id UUID NOT NULL,
-            node_type VARCHAR(255) NOT NULL,
-            properties JSONB NOT NULL,
-            embedding vector({self._embedding_dimension}),
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            PRIMARY KEY (kb_id, id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_node_embeddings_kb_id 
-        ON node_embeddings (kb_id);
-
-        CREATE TABLE IF NOT EXISTS document_chunks (
-            id VARCHAR(255) NOT NULL,
-            kb_id UUID NOT NULL,
-            document_id UUID NOT NULL,
-            parent_chunk_id VARCHAR(255) NOT NULL,
-            chunk_index INT NOT NULL,
-            header_path VARCHAR(500) NOT NULL,
-            content TEXT NOT NULL,
-            parent_content TEXT NOT NULL,
-            embedding vector({self._embedding_dimension}),
-            metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            PRIMARY KEY (kb_id, id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_document_chunks_kb_doc 
-        ON document_chunks (kb_id, document_id);
-
-        CREATE INDEX IF NOT EXISTS idx_document_chunks_hnsw 
-        ON document_chunks USING hnsw (embedding vector_cosine_ops);
-        """
-        async with self._pool.acquire() as conn:
-            await conn.execute(query)
-
     async def store_node_embeddings(self, kb_id: UUID, graph: ExtractedGraph) -> int:
         if not graph.nodes:
             return 0
