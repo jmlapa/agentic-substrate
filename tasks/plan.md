@@ -1,90 +1,101 @@
-# Plano de Implementação: Infraestrutura Local e Adaptadores de Produção (Marco 1.5)
+# Plano de Implementação: Markdown Parent-Child Chunking & Gemini Embedding 2 (Marco 1.6)
 
 ## Visão Geral
-Estruturar e implementar a camada de infraestrutura real e adaptadores locais para validação ágil do ecossistema do **Agentic Substrate** via `docker-compose.yml`. O ambiente local utilizará imagens oficiais do Docker Hub, persistência em PostgreSQL (`pgvector`), grafo em **FalkorDB**, armazenamento em **Local FileSystem** (com bind mount para o host) e parser baseado em **MarkItDown** (Microsoft).
+Implementar no módulo `knowledge` do **Agentic Substrate** a capacidade completa de particionamento hierárquico e estrutural de Markdowns (`MarkdownParentChildChunker`), geração assíncrona de embeddings via Google Gemini (`gemini-embedding-2`), persistência particionada com índice HNSW no PostgreSQL (`pgvector`) na tabela `document_chunks` e orquestração integrada na Saga coreografada de ingestão (`DocumentIngestionSagaCoordinator`) com o novo evento `DocumentChunkedEvent`.
 
 ---
 
 ## Decisões Arquiteturais e Escolhas Técnicas
 
-1. **Object Storage -> LocalFileSystemStorageAdapter:**
-   - Implementa `IObjectStorage` operando diretamente no diretório montado do host (`./data/storage`), garantindo I/O assíncrono com `aiofiles`.
-   - Permite inspecionar diretamente os arquivos brutos e processados no disco local sem overhead de MinIO/S3.
+1. **Recursive Markdown Structure-Aware + Parent-Child Chunker:**
+   - **Abordagem:** Análise estrutural de Markdown baseada em blocos. Identifica cabeçalhos (H1 a H6), preserva tabelas completas e blocos de código com cercas (```) sem quebras intermediárias.
+   - **Parent Chunks:** Delimitados por seções de cabeçalhos. Se uma seção exceder o orçamento (1.200 tokens), é subdividida recursivamente por limites naturais (`\n\n` parágrafos, listas e blocos atômicos). Cada Parent Chunk recebe um `header_path` contextual (ex: `[Doc: Nome] > # Seção > ## Subseção (Parte N)`).
+   - **Child Chunks:** Subdivisão do Parent em blocos menores (150 a 250 tokens) com overlap semântico (frases completas). Apenas os Child Chunks são vetorizados.
+   - **Recuperação:** O match semântico no Child Chunk resgata o Parent Chunk completo para compor o contexto do LLM.
 
-2. **Parser de Documentos -> MarkItDownDocumentParser:**
-   - Implementa `IDocumentParser` utilizando `markitdown` da Microsoft.
-   - **Por que MarkItDown vs Docling agora:** `markitdown` é extremamente leve, inicializa instantaneamente, converte PDF, DOCX, XLSX, PPTX e HTML para Markdown limpo sem necessidade de carregar modelos pesados de Deep Learning em CPU/GPU. O `Docling` fica como candidato futuro para cenários de tabelas científicas ultra-complexas.
+2. **Substrato de Embeddings Gemini 2 (`IEmbeddingService`):**
+   - **Modelo:** `gemini-embedding-2` via API oficial (Google GenAI / REST assíncrono).
+   - **Instruções de Tarefa no Prompt:**
+     - Indexação de Chunks: `title: {doc_title} | text: {breadcrumb}\n\n{content}`
+     - Consulta (Query): `task: search result | query: {query}`
+   - **MRL (Matryoshka Representation Learning):** `output_dimensionality = 768` (ou 512), aproveitando a auto-normalização nativa do modelo para distância de cosseno (`<=>`).
+   - **Micro-Batching:** Divisão assíncrona de lotes em até 100 itens por chamada HTTP.
+   - **Resiliência a 429:** Async Token Bucket Rate Limiter + Exponential Backoff com Full Jitter para tolerância a `ResourceExhausted` (HTTP 429).
 
-3. **Graph Store -> FalkorDbGraphStoreAdapter:**
-   - Implementa `IGraphStore` conectando ao container oficial `falkordb/falkordb`.
-   - Executa queries OpenCypher para inserção de nós/arestas com tipagem estrita da ontologia e consultas de subgrafos.
+3. **Armazenamento Vetorial no PostgreSQL (`document_chunks`):**
+   - **Tabela:** `document_chunks` com colunas `id`, `kb_id`, `document_id`, `parent_chunk_id`, `chunk_index`, `header_path`, `content`, `parent_content`, `embedding vector(768)`, `metadata jsonb`.
+   - **Índices:** Índice HNSW sobre o vetor (`vector_cosine_ops`) e índice B-Tree composto `(kb_id, document_id)` para permitir buscas filtradas ultra-rápidas durante o roteamento pelo grafo ontológico.
 
-4. **Vector Store -> PgVectorStoreAdapter:**
-   - Implementa `IVectorStore` conectando à extensão `pgvector` no PostgreSQL 16.
-   - Criação automática da tabela de embeddings particionada por `kb_id` e busca por similaridade de cosseno com índice HNSW.
-
-5. **Event Store -> PostgresEventStore:**
-   - Implementa `EventStore` do Kernel gravando fluxos de eventos append-only na tabela `events` com concorrência otimista baseada em versão.
-
-6. **Ambiente Local via Docker Compose:**
-   - Serviços: `postgres` (`pgvector/pgvector:pg16`), `falkordb` (`falkordb/falkordb:latest`), `redis` (`redis:7-alpine`).
-   - Volumes mapeados no host sob pasta `./data/`.
+4. **Saga Coreografada com 6 Passos:**
+   - Fluxo: `DocumentAttachedEvent` ➔ `DocumentStoredEvent` ➔ `DocumentParsedToMarkdownEvent` ➔ `DocumentChunkedEvent` ➔ `GraphExtractedFromDocumentEvent` ➔ `DocumentKnowledgeIndexedEvent`.
 
 ---
 
 ## Estrutura do Grafo de Dependências
 
 ```
-docker-compose.yml (Postgres + pgvector, FalkorDB, Redis)
+Domain Value Objects (ParentChunk, ChildChunk, DocumentChunkCollection)
     │
-    ├── Kernel Infrastructure: PostgresEventStore (asyncpg / sqlalchemy async)
-    │
-    ├── Knowledge Infrastructure: LocalFileSystemStorageAdapter (aiofiles)
-    │
-    ├── Knowledge Infrastructure: MarkItDownDocumentParser (markitdown)
-    │
-    ├── Knowledge Infrastructure: FalkorDbGraphStoreAdapter (falkordb async/client)
-    │
-    ├── Knowledge Infrastructure: PgVectorStoreAdapter (pgvector / asyncpg)
-    │
-    └── API Gateway & DI Container: Injeção dos adaptadores reais configuráveis por ambiente
+    ├── Domain Protocols & Events (IMarkdownChunker, IEmbeddingService, DocumentChunkedEvent)
+    │       │
+    │       ├── Infrastructure Chunker: MarkdownParentChildChunker
+    │       │
+    │       ├── Infrastructure Embeddings: GeminiEmbeddingAdapter & InMemoryEmbeddingService
+    │       │
+    │       └── Infrastructure Vector Store: PgVectorStoreAdapter (document_chunks table)
+    │               │
+    │               └── Application Saga: DocumentIngestionSagaCoordinator & Container IoC
 ```
 
 ---
 
 ## Fases de Implementação
 
-### Fase 1: Docker Compose e Armazenamento Local
-- Configurar `docker/docker-compose.yml` com Postgres+pgvector, FalkorDB, Redis e volumes no host.
-- Implementar `LocalFileSystemStorageAdapter` com suporte assíncrono.
-- Implementar `MarkItDownDocumentParser`.
+### Fase 1: Primitivas de Domínio, Value Objects, Protocolos e Eventos
+- Criar `ParentChunk`, `ChildChunk`, `DocumentChunkCollection` em `domain/value_objects/`.
+- Criar `IMarkdownChunker` e `IEmbeddingService` em `domain/interfaces/`.
+- Criar `DocumentChunkedEvent` em `domain/events/`.
 
-### Ponto de Verificação 1: Storage Local & Parser
-- [ ] Subida dos containers com `docker compose up -d`.
-- [ ] Testes unitários e de integração do `LocalFileSystemStorageAdapter` e `MarkItDownDocumentParser`.
+### Checkpoint 1: Domínio Puro & Eventos
+- [ ] Testes unitários de Value Objects e Eventos passando (`uv run pytest tests/unit/test_chunk_value_objects.py tests/unit/test_document_chunked_event.py`).
+- [ ] Validação com `uv run mypy src tests`.
 
-### Fase 2: Persistência Real (Postgres Event Store & PgVector)
-- Implementar `PostgresEventStore` no `src/kernel/infrastructure/postgres_event_store.py`.
-- Implementar `PgVectorStoreAdapter` no `src/modules/knowledge/infrastructure/adapters/pgvector_store_adapter.py`.
-- Scripts de inicialização DDL e migrações das tabelas.
+### Fase 2: Chunker Estrutural Recursivo de Markdown
+- Implementar `MarkdownParentChildChunker` em `infrastructure/chunking/`.
+- Cobrir casos de teste: seções normais, seções gigantes (> 1200 tokens), documentos sem headers, isolamento de tabelas Markdown e blocos de código.
 
-### Ponto de Verificação 2: Event Sourcing & Vetores no Postgres
-- [ ] Testes de integração gravando eventos reais e recuperando histórico por `aggregate_id`.
-- [ ] Testes de indexação e busca por similaridade vetorial no `pgvector`.
+### Checkpoint 2: Chunker Estrutural
+- [ ] Testes unitários do chunker passando com 100% de cobertura (`uv run pytest tests/unit/test_markdown_parent_child_chunker.py`).
 
-### Fase 3: Grafo Real (FalkorDB) e Composição de Injeção de Dependências
-- Implementar `FalkorDbGraphStoreAdapter` no `src/modules/knowledge/infrastructure/adapters/falkordb_graph_store_adapter.py`.
-- Atualizar o container de Injeção de Dependências (`src/api_gateway/container.py`) para alternar entre adaptadores em memória e adaptadores de infraestrutura real via variáveis de ambiente (`ENVIRONMENT=local|dev|test|prod`).
+### Fase 3: Substrato de Embeddings Gemini 2 & InMemory Adapter
+- Implementar `InMemoryEmbeddingService` para execução determinística em testes.
+- Implementar `GeminiEmbeddingAdapter` com formatação por prompt, MRL, micro-batches de 100 e retry policy com jitter para HTTP 429.
 
-### Ponto de Verificação 3: Integração Completa Ponta a Ponta
-- [ ] Pipeline completo executando com infraestrutura local real (Upload -> Storage Local -> Parser MarkItDown -> Extração Ontológica -> PgVector + FalkorDB).
-- [ ] `make pre-commit` executado com 100% de sucesso.
+### Checkpoint 3: Adaptadores de Embeddings
+- [ ] Testes unitários do adaptador Gemini e InMemory passando (`uv run pytest tests/unit/test_gemini_embedding_adapter.py tests/unit/test_in_memory_embedding_service.py`).
+
+### Fase 4: Persistência de Chunks no PgVector & Extensão do IVectorStore
+- Estender `IVectorStore`, `PgVectorStoreAdapter` e `InMemoryVectorStoreAdapter` com `store_document_chunks` e `search_similar_chunks` (com filtros por `document_ids`).
+- Adicionar DDL da tabela `document_chunks` e índice HNSW no Postgres.
+
+### Checkpoint 4: Persistência Vetorial de Chunks
+- [ ] Testes unitários e de integração de persistência vetorial de chunks passando (`uv run pytest tests/unit/test_pgvector_store_adapter.py tests/integration/test_pgvector_chunk_storage.py`).
+
+### Fase 5: Evolução da Saga de Ingestão e Container IoC
+- Atualizar `KnowledgeBaseAggregate` com o método `mark_document_chunked(...)`.
+- Atualizar `DocumentIngestionSagaCoordinator` para orquestrar o evento `DocumentChunkedEvent`, geração de embeddings e extração de grafos com rastreabilidade de chunks.
+- Atualizar `src/api_gateway/container.py` para injetar o chunker e embedding service.
+
+### Checkpoint Final: Validação Ponta a Ponta
+- [ ] Teste de integração da Saga completa (`tests/unit/test_knowledge_module.py` e `tests/integration/test_document_ingestion_saga_coordinator.py`).
+- [ ] Execução com sucesso do gate oficial `make pre-commit`.
 
 ---
 
 ## Riscos e Mitigações
+
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Latência de inicialização de conexões nos adaptadores | Médio | Gerenciar pools de conexão (`asyncpg.create_pool` e FalkorDB client) no ciclo de vida da aplicação FastAPI (`lifespan`). |
-| Incompatibilidade de tipos vetoriais no pgvector | Médio | Criar extensão `vector` no bootstrap do banco e registrar tipos no pool do `asyncpg`. |
-| Concorrência no FileSystem local | Baixo | Utilizar diretórios particionados deterministicamente por `kb_id` e identificador do documento. |
+| Rate limit da API Gemini (HTTP 429) em cargas de ingestão pesadas | Alto | Implementar Token Bucket limiter e retry exponencial assíncrono com Full Jitter no adaptador, fatiando em micro-batches de no máximo 100 chunks. |
+| Quebra de formatação de tabelas Markdown durante o particionamento | Alto | Implementar parser que trata blocos de tabelas (`\| col \|`) e blocos cercados de código (```) como nós indivisíveis no AST/regex do chunker. |
+| Incompatibilidade de versão em eventos anteriores da Saga | Médio | Manter os eventos existentes retrocompatíveis e encadear o novo evento `DocumentChunkedEvent` de forma fluida. |
