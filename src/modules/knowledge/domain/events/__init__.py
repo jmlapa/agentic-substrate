@@ -1,4 +1,7 @@
 from src.modules.knowledge.domain.events.document_attached_event import DocumentAttachedEvent
+from src.modules.knowledge.domain.events.document_chunked_event import (
+    DocumentChunkedEvent,
+)
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -18,6 +21,7 @@ from src.modules.knowledge.domain.events.knowledge_base_created_event import (
 
 __all__ = [
     "DocumentAttachedEvent",
+    "DocumentChunkedEvent",
     "DocumentKnowledgeIndexedEvent",
     "DocumentParsedToMarkdownEvent",
     "DocumentProcessingFailedEvent",
