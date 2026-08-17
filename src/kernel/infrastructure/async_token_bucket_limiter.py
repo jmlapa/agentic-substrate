@@ -47,8 +47,9 @@ class AsyncTokenBucketLimiter:
         Se a cota de RPM ou TPM estiver cheia, aguarda não-bloqueante até liberar slot.
         """
         tokens = max(1, estimated_tokens)
-        async with self._lock:
-            while True:
+        while True:
+            sleep_time = 0.0
+            async with self._lock:
                 now = time.monotonic()
 
                 # 1. Purga requisições fora da janela deslizante
@@ -76,5 +77,5 @@ class AsyncTokenBucketLimiter:
                 earliest_event = min(oldest_req, oldest_tok)
                 sleep_time = max(0.01, (earliest_event + self._window) - now)
 
-                # Libera o lock momentaneamente para permitir que outras corrotinas rodem
-                await asyncio.sleep(sleep_time)
+            # Aguarda fora do lock para liberar outras corrotinas
+            await asyncio.sleep(sleep_time)
