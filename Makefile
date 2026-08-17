@@ -1,4 +1,4 @@
-.PHONY: help install lint format typecheck test test-cov check pre-commit clean dev run
+.PHONY: help install lint format typecheck test test-cov check pre-commit clean dev run migrate migrate-down migrate-create
 
 help: ## Exibe os comandos disponíveis
 	@echo "Agentic Substrate - Available Commands:"
@@ -26,6 +26,15 @@ check: lint format typecheck test-cov ## Executa todos os linters, checagem de t
 
 pre-commit: check ## Gate de validação obrigatório antes de qualquer commit ou PR
 	@echo "\033[32m✔ Todos os gates de qualidade passaram com sucesso. Pronto para commit!\033[0m"
+
+migrate: ## Executa todas as migrações pendentes até a versão mais recente
+	uv run alembic upgrade head
+
+migrate-down: ## Desfaz a última revisão de migração aplicada
+	uv run alembic downgrade -1
+
+migrate-create: ## Cria uma nova revisão de migração (uso: make migrate-create name="minha_migracao")
+	uv run alembic revision -m "$(name)"
 
 dev: ## Sobe a infraestrutura local (Docker Compose)
 	docker compose -f docker/docker-compose.yml up -d
