@@ -11,6 +11,12 @@ from src.modules.knowledge.application.use_cases.create_knowledge_base import (
     CreateKnowledgeBaseResponse,
     CreateKnowledgeBaseUseCase,
 )
+from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
+    KnowledgeBaseSummaryDTO,
+    ListKnowledgeBasesRequest,
+    ListKnowledgeBasesResponse,
+    ListKnowledgeBasesUseCase,
+)
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
@@ -48,6 +54,10 @@ __all__ = [
     "GraphNode",
     "KnowledgeBaseAggregate",
     "KnowledgeBaseStatus",
+    "KnowledgeBaseSummaryDTO",
+    "ListKnowledgeBasesRequest",
+    "ListKnowledgeBasesResponse",
+    "ListKnowledgeBasesUseCase",
     "NodeTypeDefinition",
     "OntologySchema",
     "PropertyDefinition",

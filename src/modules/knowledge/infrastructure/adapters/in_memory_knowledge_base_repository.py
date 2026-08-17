@@ -17,3 +17,6 @@ class InMemoryKnowledgeBaseRepository(IKnowledgeBaseRepository):
 
     async def get_by_id(self, id: UUID) -> KnowledgeBaseAggregate | None:
         return self._kbs.get(id)
+
+    async def list_all(self) -> list[KnowledgeBaseAggregate]:
+        return list(self._kbs.values())
