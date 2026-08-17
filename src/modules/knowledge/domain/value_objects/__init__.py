@@ -2,6 +2,9 @@ from src.modules.knowledge.domain.value_objects.atomic_block import AtomicBlock
 from src.modules.knowledge.domain.value_objects.atomic_block_type import (
     AtomicBlockType,
 )
+from src.modules.knowledge.domain.value_objects.canonical_entity import (
+    CanonicalEntity,
+)
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.document_chunk_collection import (
     DocumentChunkCollection,
@@ -24,6 +27,7 @@ from src.modules.knowledge.domain.value_objects.structural_graph_document import
 __all__ = [
     "AtomicBlock",
     "AtomicBlockType",
+    "CanonicalEntity",
     "ChildChunk",
     "DocumentChunkCollection",
     "DocumentStatus",
