@@ -85,7 +85,14 @@ async def test_api_e2e_flow() -> None:
         assert len(kb_details["documents"]) == 1
         assert kb_details["documents"][0]["status"] == "INDEXED"
 
-        # 6. Query Knowledge Base
+        # List all Knowledge Bases
+        list_kbs_resp = await client.get("/api/v1/knowledge/bases")
+        assert list_kbs_resp.status_code == 200
+        kbs_data = list_kbs_resp.json()
+        assert len(kbs_data["knowledge_bases"]) >= 1
+        assert any(k["id"] == kb_id for k in kbs_data["knowledge_bases"])
+
+        # 6. Query Knowledge Base (RAG with synthesized answer)
         query_resp = await client.post(
             f"/api/v1/knowledge/bases/{kb_id}/query",
             json={"query": "Tell me about Microservice", "top_k": 3},
@@ -93,3 +100,5 @@ async def test_api_e2e_flow() -> None:
         assert query_resp.status_code == 200
         query_data = query_resp.json()
         assert len(query_data["results"]) >= 1
+        assert "answer" in query_data
+        assert len(query_data["answer"]) > 0

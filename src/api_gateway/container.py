@@ -25,6 +25,9 @@ from src.modules.knowledge.application.use_cases.create_ontology_template import
 from src.modules.knowledge.application.use_cases.get_ontology_template import (
     GetOntologyTemplateUseCase,
 )
+from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
+    ListKnowledgeBasesUseCase,
+)
 from src.modules.knowledge.application.use_cases.list_ontology_templates import (
     ListOntologyTemplatesUseCase,
 )
@@ -42,6 +45,9 @@ from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
+from src.modules.knowledge.domain.interfaces.i_llm_synthesis_service import (
+    ILlmSynthesisService,
+)
 from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
     IMarkdownChunker,
 )
@@ -55,6 +61,9 @@ from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter 
 from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
     GeminiEmbeddingAdapter,
 )
+from src.modules.knowledge.infrastructure.adapters.gemini_rag_synthesizer import (
+    GeminiRagSynthesizer,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
@@ -66,6 +75,9 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repo
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository import (
     InMemoryOntologyRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_rag_synthesizer import (
+    InMemoryRagSynthesizer,
 )
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
@@ -96,8 +108,10 @@ class AppContainer:
     embedding_service: IEmbeddingService
     graph_extractor: IGraphExtractor
     graph_store: IGraphStore
+    synthesis_service: ILlmSynthesisService
     saga_coordinator: DocumentIngestionSagaCoordinator
     create_kb_use_case: CreateKnowledgeBaseUseCase
+    list_kbs_use_case: ListKnowledgeBasesUseCase
     attach_doc_use_case: AttachAndStoreDocumentUseCase
     query_knowledge_use_case: QueryKnowledgeUseCase
     create_ontology_use_case: CreateOntologyTemplateUseCase
@@ -177,6 +191,16 @@ def create_app_container(
     else:
         graph_store = InMemoryGraphStore()
 
+    # RAG Synthesis Service
+    synthesis_service: ILlmSynthesisService
+    if gemini_key:
+        synthesis_service = GeminiRagSynthesizer(
+            api_key=gemini_key,
+            model_name=cfg.gemini_model_name,
+        )
+    else:
+        synthesis_service = InMemoryRagSynthesizer()
+
     saga = DocumentIngestionSagaCoordinator(
         event_bus=bus,
         event_store=store,
@@ -194,10 +218,12 @@ def create_app_container(
         repository=repo,
         ontology_repository=ontology_repo,
     )
+    list_kbs = ListKnowledgeBasesUseCase(repo)
     attach_doc = AttachAndStoreDocumentUseCase(store, repo, storage)
     query_kb = QueryKnowledgeUseCase(
         graph_store=graph_store,
         embedding_service=embedding_service,
+        synthesis_service=synthesis_service,
     )
 
     create_ont = CreateOntologyTemplateUseCase(ontology_repo)
@@ -215,8 +241,10 @@ def create_app_container(
         embedding_service=embedding_service,
         graph_extractor=extractor,
         graph_store=graph_store,
+        synthesis_service=synthesis_service,
         saga_coordinator=saga,
         create_kb_use_case=create_kb,
+        list_kbs_use_case=list_kbs,
         attach_doc_use_case=attach_doc,
         query_knowledge_use_case=query_kb,
         create_ontology_use_case=create_ont,

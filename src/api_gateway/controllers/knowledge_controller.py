@@ -16,6 +16,10 @@ from src.modules.knowledge.application.use_cases.create_knowledge_base import (
     CreateKnowledgeBaseRequest,
     CreateKnowledgeBaseResponse,
 )
+from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
+    ListKnowledgeBasesRequest,
+    ListKnowledgeBasesResponse,
+)
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
@@ -47,6 +51,23 @@ async def create_knowledge_base(
             ontology=payload.ontology,
         )
     )
+    if isinstance(res, Err):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value
+
+
+@router.get(
+    "/bases",
+    response_model=ListKnowledgeBasesResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_knowledge_bases(
+    container: AppContainer = Depends(get_container),
+) -> ListKnowledgeBasesResponse:
+    res = await container.list_kbs_use_case.execute(ListKnowledgeBasesRequest())
     if isinstance(res, Err):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
