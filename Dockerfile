@@ -13,11 +13,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.5 /uv /uvx /bin/
 WORKDIR /app
 
 # Install project dependencies
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
 RUN uv pip install --system --no-cache -e .
 
-# Copy source code and scripts
-COPY src/ ./src/
+# Copy scripts and migrations
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
