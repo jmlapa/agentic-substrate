@@ -7,29 +7,23 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
-config = context.config
+# Config object initialized by Alembic runner
+config = getattr(context, "config", None)
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
+if config is not None and config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support, e.g.
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = None
 
 
 def get_database_url() -> str:
     """Retrieve and normalize database URL from environment or configuration."""
+    config_url = config.get_main_option("sqlalchemy.url") if config is not None else None
     raw_url = (
         os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRES_DSN")
-        or config.get_main_option("sqlalchemy.url")
+        or config_url
         or "postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_substrate"
     )
     if raw_url.startswith("postgres://"):
@@ -40,16 +34,7 @@ def get_database_url() -> str:
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-    """
+    """Run migrations in 'offline' mode."""
     url = get_database_url()
     context.configure(
         url=url,
@@ -70,10 +55,8 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-    """
-    configuration = config.get_section(config.config_ini_section, {})
+    """Run migrations in 'online' mode with asyncpg async engine."""
+    configuration = config.get_section(config.config_ini_section, {}) if config is not None else {}
     configuration["sqlalchemy.url"] = get_database_url()
 
     connectable = async_engine_from_config(
@@ -93,7 +76,8 @@ def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+if config is not None:
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()

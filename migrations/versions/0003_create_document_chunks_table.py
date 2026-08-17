@@ -5,11 +5,12 @@ Revises: 0002
 Create Date: 2026-08-16 00:02:00.000000
 
 """
+
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 from pgvector.sqlalchemy import Vector
-import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 # revision identifiers, used by Alembic.

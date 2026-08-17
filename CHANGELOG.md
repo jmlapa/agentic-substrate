@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Asynchronous database migration framework using Alembic and `asyncpg` with CLI and Makefile automation (`make migrate`, `make migrate-down`, `make migrate-create`).
+- Initial versioned migration revisions:
+  - `0001_create_pgvector_extension.py`: Installs PostgreSQL `vector` extension.
+  - `0002_create_event_sourcing_tables.py`: Creates `event_streams` and `domain_events` tables with concurrency constraints.
+  - `0003_create_document_chunks_table.py`: Creates `node_embeddings` and `document_chunks` with HNSW cosine indexing.
 - Recursive Markdown Structure-Aware Parent-Child Chunker (`MarkdownParentChildChunker`) with atomic table and code block preservation, breadcrumb generation, and recursive sub-splitting for large sections.
 - Value objects `ParentChunk`, `ChildChunk`, and `DocumentChunkCollection` in `knowledge` domain.
 - Google Gemini Embedding 2 adapter (`GeminiEmbeddingAdapter`) supporting MRL (768 dimensions), prompt task formatting, micro-batching of 100 items, and Exponential Backoff + Full Jitter for HTTP 429 (`ResourceExhausted`).
