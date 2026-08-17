@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Unified FalkorDB Hybrid GraphRAG architecture with single-graph per Knowledge Base housing both structural document nodes (`:Document`, `:ParentChunk`, `:ChildChunk`) and ontological entity nodes (`:Entity`).
+- Native FalkorDB HNSW vector index initialization (`ensure_vector_index`) on `(:ChildChunk.embedding)`.
+- Structural document ingestion (`store_structural_document`) and parent-level conceptual mentions linking (`store_parent_mentions`) with `[:MENTIONS]` edges.
+- Unified single-query OpenCypher hybrid search (`query_hybrid`) utilizing `db.idx.vector.queryNodes` with parent context ascension and connected entity expansion.
+- Value objects `HybridSearchResult` and `StructuralGraphDocument` in `knowledge` domain.
+- Parent-chunk batch extraction support in `DocumentIngestionSagaCoordinator` preventing full-document token overflows.
+- Refactored `QueryKnowledgeUseCase` orchestrating query embedding generation and hybrid search execution.
 - Centralized Settings and Secrets Management module (`AppSettings`) powered by `pydantic-settings` and `SecretStr` for automatic masking, `.env` file loading, and environment variable parsing.
 - Documented environment variables template (`.env.example`) with secure defaults.
 - Asynchronous database migration framework using Alembic and `asyncpg` with CLI and Makefile automation (`make migrate`, `make migrate-down`, `make migrate-create`).
