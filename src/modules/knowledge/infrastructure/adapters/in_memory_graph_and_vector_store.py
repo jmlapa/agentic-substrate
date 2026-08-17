@@ -6,7 +6,13 @@ from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_vector_store import IVectorStore
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
+from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
+    HybridSearchResult,
+)
 from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
+from src.modules.knowledge.domain.value_objects.structural_graph_document import (
+    StructuralGraphDocument,
+)
 
 
 class InMemoryGraphAndVectorStore(IGraphStore, IVectorStore):
@@ -15,6 +21,18 @@ class InMemoryGraphAndVectorStore(IGraphStore, IVectorStore):
             lambda: ExtractedGraph(nodes=[], edges=[])
         )
         self._chunks: dict[UUID, list[dict[str, Any]]] = defaultdict(list)
+        self._structural_docs: dict[UUID, list[StructuralGraphDocument]] = defaultdict(list)
+        self._parent_mentions: dict[UUID, dict[str, list[dict[str, Any]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+
+    async def ensure_vector_index(
+        self,
+        kb_id: UUID,
+        dimension: int = 768,
+        similarity_function: str = "cosine",
+    ) -> None:
+        pass
 
     async def store_graph(self, kb_id: UUID, graph: ExtractedGraph) -> tuple[int, int]:
         current = self._graphs[kb_id]
@@ -23,6 +41,24 @@ class InMemoryGraphAndVectorStore(IGraphStore, IVectorStore):
             edges=current.edges + graph.edges,
         )
         return len(graph.nodes), len(graph.edges)
+
+    async def store_structural_document(
+        self, kb_id: UUID, document: StructuralGraphDocument
+    ) -> tuple[int, int]:
+        self._structural_docs[kb_id].append(document)
+        nodes_count = 1 + len(document.parents) + len(document.children)
+        edges_count = len(document.parents) + len(document.children)
+        return nodes_count, edges_count
+
+    async def store_parent_mentions(
+        self, kb_id: UUID, parent_chunk_id: str, graph: ExtractedGraph
+    ) -> tuple[int, int]:
+        for node in graph.nodes:
+            self._parent_mentions[kb_id][parent_chunk_id].append(
+                {"type": node.node_type, "properties": node.properties}
+            )
+        await self.store_graph(kb_id, graph)
+        return len(graph.nodes), len(graph.edges) + len(graph.nodes)
 
     async def store_node_embeddings(self, kb_id: UUID, graph: ExtractedGraph) -> int:
         return len(graph.nodes)
@@ -37,6 +73,25 @@ class InMemoryGraphAndVectorStore(IGraphStore, IVectorStore):
             }
             for node in graph.nodes[:top_k]
         ]
+
+    async def query_hybrid(
+        self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
+    ) -> list[HybridSearchResult]:
+        results: list[HybridSearchResult] = []
+        docs = self._structural_docs.get(kb_id, [])
+        for doc in docs:
+            for parent in doc.parents:
+                entities = self._parent_mentions[kb_id].get(parent.id, [])
+                results.append(
+                    HybridSearchResult(
+                        parent_chunk_id=parent.id,
+                        header_path=parent.header_path,
+                        parent_content=parent.content,
+                        relevance_score=0.92,
+                        related_entities=entities,
+                    )
+                )
+        return results[:top_k]
 
     async def search_similar_nodes(
         self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
