@@ -30,6 +30,23 @@ class LocalFileSystemStorageAdapter(IObjectStorage):
         async with aiofiles.open(target_path, "rb") as f:
             return await f.read()
 
+    async def exists(self, path: str) -> bool:
+        target_path = self._resolve_path(path)
+        return target_path.exists()
+
+    async def list_objects(self, prefix: str) -> list[str]:
+        target_dir = self._resolve_path(prefix)
+        if not target_dir.exists():
+            return []
+        if target_dir.is_file():
+            rel = target_dir.relative_to(self._base_directory).as_posix()
+            return [rel]
+        results: list[str] = []
+        for p in target_dir.rglob("*"):
+            if p.is_file():
+                results.append(p.relative_to(self._base_directory).as_posix())
+        return results
+
     async def generate_upload_url(self, path: str) -> str:
         target_path = self._resolve_path(path)
         return target_path.as_uri()

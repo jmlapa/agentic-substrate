@@ -24,6 +24,10 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
 )
+from src.modules.knowledge.application.use_cases.reprocess_document import (
+    ReprocessDocumentRequest,
+    ReprocessDocumentResponse,
+)
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
 )
@@ -146,6 +150,34 @@ async def query_knowledge_base(
     return res.value
 
 
+@router.post(
+    "/bases/{kb_id}/documents/{doc_id}/reprocess",
+    response_model=ReprocessDocumentResponse,
+)
+async def reprocess_document(
+    kb_id: UUID,
+    doc_id: UUID,
+    container: AppContainer = Depends(get_container),
+) -> ReprocessDocumentResponse:
+    res = await container.reprocess_document_use_case.execute(
+        ReprocessDocumentRequest(
+            kb_id=kb_id,
+            document_id=doc_id,
+        )
+    )
+    if isinstance(res, Err):
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value
+
+
 @router.get("/bases/{kb_id}")
 async def get_knowledge_base(
     kb_id: UUID,
@@ -199,6 +231,11 @@ async def get_knowledge_base(
                 "total_children": doc.get("total_children"),
                 "indexed_nodes_count": doc.get("indexed_nodes_count", 0),
                 "indexed_edges_count": doc.get("indexed_edges_count", 0),
+                "progress_step": doc.get("progress_step"),
+                "progress_current": doc.get("progress_current", 0),
+                "progress_total": doc.get("progress_total", 0),
+                "progress_percentage": doc.get("progress_percentage", 0),
+                "progress_message": doc.get("progress_message"),
                 "error": doc.get("error"),
             }
             for doc in kb.documents.values()
