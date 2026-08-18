@@ -19,17 +19,6 @@ target_metadata = None
 
 def get_database_url() -> str:
     """Retrieve and normalize database URL from AppSettings or Alembic configuration."""
-    config_url = config.get_main_option("sqlalchemy.url") if config is not None else None
-    if config_url and not config_url.startswith("driver://"):
-        raw_url = config_url
-        if raw_url.startswith("postgres://"):
-            return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif raw_url.startswith("postgresql://") and not raw_url.startswith(
-            "postgresql+asyncpg://"
-        ):
-            return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return raw_url
-
     settings = AppSettings()
     return settings.postgres_sqlalchemy_alembic_dsn
 

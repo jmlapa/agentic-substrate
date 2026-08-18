@@ -28,6 +28,12 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
+    PostgresKnowledgeBaseRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_ontology_repository import (
+    PostgresOntologyRepository,
+)
 
 __all__ = [
     "FalkorDbGraphStoreAdapter",
@@ -40,4 +46,6 @@ __all__ = [
     "InMemoryRagSynthesizer",
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
+    "PostgresKnowledgeBaseRepository",
+    "PostgresOntologyRepository",
 ]
