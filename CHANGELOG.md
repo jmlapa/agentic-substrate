@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-08-18
+
+### Added
+- **Rich Markdown Renderer for RAG Playground & Evidence Inspector (Marco 1.18)**:
+  - **Componente `MarkdownRenderer`**:
+    - Suporte a GitHub Flavored Markdown (GFM) completo via `react-markdown` e `remark-gfm`.
+    - Mapeamento estilizado de títulos `h1`-`h4`, parágrafos, listas numeradas e com marcadores, blockquotes estilizados e links com segurança (`target="_blank"`).
+  - **Componente `CodeBlock`**:
+    - Bloco de código com tema escuro elegante, badge de identificação de linguagem (ex: `PYTHON`, `SQL`, `CYPHER`) e botão de cópia rápida com feedback tátil de 2s.
+  - **Tabelas GFM Ricas**:
+    - Mapeamento de tabelas responsivas com scroll horizontal, linhas zebradas e cabeçalhos em negrito.
+  - **Integração no Playground RAG**:
+    - Substituição da `div` estática com `whitespace-pre-wrap` em `AnswerView.tsx` e snippets de chunks em `EvidenceInspector.tsx` pela renderização rica do `MarkdownRenderer`.
+
 ## [0.3.6] - 2026-08-18
 
 ### Added

@@ -1,75 +1,54 @@
-# Task List: Marco 1.17 — Real-Time Telemetry Precision, Continuous Pipeline Transitions & Frontend Progress Polish
+# Task List: Marco 1.18 — Rich Markdown Renderer for RAG Playground
 
-## Phase 1: Backend Telemetry Precision & Message Cleansing
-
-- [x] **Task 1: Sanitize OCR Progress Message & Strict Ceiling Percentage**
-  - **Description:** No `ParallelVlmDocumentParser`, substituir a interpolação de `page_num` pela contagem acumulada. No `DocumentIngestionSagaCoordinator` e extratores, aplicar a fórmula estrita de percentual com teto de $99\%$ para itens incompletos.
+## Phase 1: Package Dependencies & Tailwind Setup
+- [x] **Task 1: Install Markdown Dependencies & Configure Tailwind**
+  - **Description:** Instalar `react-markdown`, `remark-gfm` e `@tailwindcss/typography` no frontend e registrar o plugin no `tailwind.config.js`.
   - **Acceptance criteria:**
-    - [x] Mensagem de OCR formatada como: `"Processando OCR: {cur}/{total_pages} páginas concluídas"`.
-    - [x] Percentual nunca é $100\%$ enquanto $cur < tot$.
-    - [x] 0 referências a `page_num` individual na mensagem de progresso do OCR.
-  - **Verification:** `uv run pytest tests/unit/test_parallel_vlm_document_parser.py -v`
-  - **Files:** `src/modules/knowledge/infrastructure/adapters/parallel_vlm_document_parser.py`, `src/modules/knowledge/application/sagas/document_ingestion_saga_coordinator.py`
-
-### Checkpoint: Phase 1
-- [x] OCR unit tests passing with sanitized messages and strict percentage ceiling
-- [x] Mypy strict & Ruff clean
+    - [x] `react-markdown`, `remark-gfm` e `@tailwindcss/typography` presentes em `frontend/package.json`.
+    - [x] `plugins: [typography]` adicionado a `frontend/tailwind.config.js`.
+  - **Verify:** `cd frontend && npm list react-markdown remark-gfm @tailwindcss/typography`
+  - **Files:** `frontend/package.json`, `frontend/tailwind.config.js`
 
 ---
 
-## Phase 2: Continuous Pipeline Transitions & Read Model Projections
-
-- [x] **Task 2: Emit Instant Telemetry Events on Saga Transitions**
-  - **Description:** Emitir eventos de progresso imediatos nos inícios das etapas de Chunking, Extração de Grafo e Embeddings no coordenador da Saga.
+## Phase 2: Core Components Implementation
+- [x] **Task 2: Create CodeBlock Component**
+  - **Description:** Implementar `frontend/src/components/ui/CodeBlock.tsx` com visualizador escuro de código, header com badge de linguagem e botão de cópia individual.
   - **Acceptance criteria:**
-    - [x] Ao entrar em `handle_document_parsed`, emite progresso da etapa `CHUNKING` (`current=0`, `total=1`, `percentage=0`, `message="Fatiando documento em Chunks Hierárquicos (Pai/Filho)..."`).
-    - [x] Ao entrar em `handle_document_chunked`, emite progresso inicial `0/{total_parents}` da etapa `GRAPH_EXTRACTION`.
-    - [x] Ao entrar em `handle_graph_extracted`, emite progresso inicial `0/{total_children}` da etapa `EMBEDDINGS`.
-  - **Verification:** `uv run pytest tests/integration/test_document_ingestion_saga_coordinator.py -v`
-  - **Files:** `src/modules/knowledge/application/sagas/document_ingestion_saga_coordinator.py`
+    - [x] Exibe a linguagem detectada (ex: `python`, `sql`, `json`, `text`).
+    - [x] Botão de copiar copia o conteúdo do bloco para o clipboard e exibe check visual por 2s.
+    - [x] Formatação mono com quebras de linha e scroll horizontal preservados.
+  - **Verify:** `cd frontend && npm run type-check`
+  - **Files:** `frontend/src/components/ui/CodeBlock.tsx`
 
-- [x] **Task 3: Update Read Model Projections for Clean Transitional State**
-  - **Description:** Atualizar o `KnowledgeBaseProjector` para sincronizar `progress_step`, `progress_percentage` e `progress_message` nos handlers de ciclo de vida (`handle_document_parsed`, `handle_document_chunked` e `handle_knowledge_indexed`).
+- [x] **Task 3: Create Reusable MarkdownRenderer Component**
+  - **Description:** Implementar `frontend/src/components/ui/MarkdownRenderer.tsx` integrando `ReactMarkdown`, `remarkGfm` e mapeando tags semânticas para componentes Tailwind ricos.
   - **Acceptance criteria:**
-    - [x] Transição para `PARSED` zera percentual e atualiza mensagem para `"Documento convertido em Markdown"`.
-    - [x] Transição para `CHUNKED` exibe resumo `"Chunks hierárquicos gerados: {parents} pais, {children} filhos"`.
-    - [x] Transição para `INDEXED` define percentual em $100\%$ e mensagem `"Processamento concluído com sucesso"`.
-  - **Verification:** `uv run pytest tests/unit/test_projector_progress_telemetry.py -v`
-  - **Files:** `src/modules/knowledge/infrastructure/projections/knowledge_base_projector.py`
-
-### Checkpoint: Phase 2
-- [x] Integration and projection tests passing
-- [x] Mypy strict & Ruff clean
+    - [x] Mapeia títulos `h1`-`h4`, parágrafos, listas `ul`/`ol`, citações `blockquote`, links `a`.
+    - [x] Mapeia tabelas `table`, `thead`, `th`, `td` dentro de container responsivo `overflow-x-auto`.
+    - [x] Diferencia inline code (`code`) de bloco de código (`CodeBlock`).
+  - **Verify:** `cd frontend && npm run type-check`
+  - **Files:** `frontend/src/components/ui/MarkdownRenderer.tsx`
 
 ---
 
-## Phase 3: Frontend Progress & Lifecycle Polish
-
-- [x] **Task 4: Frontend PipelineStatusTracker Telemetry Polish**
-  - **Description:** Refinar o componente `PipelineStatusTracker.tsx` para apresentar mensagens limpas, badge numérico condicional e transições suaves de layout.
+## Phase 3: Integration in Playground
+- [x] **Task 4: Integrate MarkdownRenderer into AnswerView**
+  - **Description:** Substituir a `div` com `whitespace-pre-wrap` em `AnswerView.tsx` pelo `MarkdownRenderer`.
   - **Acceptance criteria:**
-    - [x] Texto descritivo principal limpo com ícone de spinner animado.
-    - [x] Badge de contagem `{pct}% ({cur}/{tot})` visível somente quando `tot > 0`.
-    - [x] Ocultação suave da barra granular quando o documento atinge status `INDEXED`.
-  - **Verification:** `npm run build` na pasta `frontend/`
-  - **Files:** `frontend/src/pages/ingestion/PipelineStatusTracker.tsx`
-
-### Checkpoint: Phase 3
-- [x] Frontend builds cleanly with zero TypeScript / Vite errors
+    - [x] `AnswerView` renderiza markdown estruturado com títulos, listas, tabelas e blocos de código.
+    - [x] Botão global de copiar a resposta inteira preservado no topo.
+  - **Verify:** `cd frontend && npm run build`
+  - **Files:** `frontend/src/pages/playground/AnswerView.tsx`
 
 ---
 
-## Phase 4: Quality Gates & End-to-End Verification
-
-- [x] **Task 5: Execute Quality Gates & Update Specifications**
-  - **Description:** Executar `make pre-commit`, verificar zero erros e atualizar `SPEC-frontend-console.md`, `SPEC-resilient-saga-reprocessing-and-job-queues.md` e `CHANGELOG.md`.
+## Phase 4: Quality Gates & Verification
+- [x] **Task 5: Execute Quality Gates & E2E Validation**
+  - **Description:** Executar `npm run build` e `make pre-commit`, atualizar changelog e reiniciar contêineres de desenvolvimento.
   - **Acceptance criteria:**
-    - [x] `make pre-commit` com 100% de aprovação (Ruff, Mypy strict, Pytest).
-    - [x] `npm run build` do frontend bem-sucedido.
-    - [x] Documentações de especificações e changelog atualizados.
-  - **Verification:** `make pre-commit`
-  - **Files:** `SPEC-frontend-console.md`, `SPEC-resilient-saga-reprocessing-and-job-queues.md`, `CHANGELOG.md`
-
-### Checkpoint: Complete
-- [x] All 5 tasks completed and verified
-- [x] Ready for review
+    - [x] `npm run build` no frontend com 0 erros TypeScript / Vite.
+    - [x] `make pre-commit` com 100% de sucesso.
+    - [x] `CHANGELOG.md` atualizado com o Marco 1.18.
+  - **Verify:** `make pre-commit`
+  - **Files:** `CHANGELOG.md`, `tasks/todo.md`
