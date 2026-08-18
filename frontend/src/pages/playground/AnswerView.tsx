@@ -26,9 +26,9 @@ export const AnswerView: React.FC<AnswerViewProps> = ({ answer }) => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-              Resposta Sintetizada pelo LLM
+              Síntese Fact-Dense Grounded
             </h3>
-            <p className="text-[11px] text-zinc-400 font-mono">Gemini 2.5 Flash-Lite • Temperatura 0.2</p>
+            <p className="text-[11px] text-zinc-400 font-mono">DeepSeek-V4-Flash (OpenRouter) • Temperatura 0.1 • Proveniência Estrita</p>
           </div>
         </div>
 

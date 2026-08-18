@@ -137,6 +137,7 @@ export interface HybridSearchResult {
 export interface QueryKnowledgeRequest {
   query: string;
   top_k?: number;
+  mode?: 'synthesis' | 'retrieve';
 }
 
 export interface QueryKnowledgeResponse {

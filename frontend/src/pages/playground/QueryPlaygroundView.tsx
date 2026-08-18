@@ -24,6 +24,7 @@ export const QueryPlaygroundView: React.FC = () => {
   const [selectedKbId, setSelectedKbId] = useState(urlKbId);
   const [query, setQuery] = useState('');
   const [topK, setTopK] = useState(3);
+  const [mode, setMode] = useState<'synthesis' | 'retrieve'>('synthesis');
   const [queryResponse, setQueryResponse] = useState<QueryKnowledgeResponse | null>(null);
   const [lastSubmittedQuery, setLastSubmittedQuery] = useState('');
 
@@ -54,6 +55,7 @@ export const QueryPlaygroundView: React.FC = () => {
         payload: {
           query,
           top_k: Number(topK) || 3,
+          mode,
         },
       });
       setQueryResponse(res);
@@ -100,7 +102,22 @@ export const QueryPlaygroundView: React.FC = () => {
               )}
             </div>
 
-            <div className="w-full sm:w-44">
+            <div className="w-full sm:w-56">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                Modo de Execução
+              </label>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as 'synthesis' | 'retrieve')}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              >
+                <option value="synthesis">Síntese Fact-Dense (DeepSeek v4)</option>
+                <option value="retrieve">Apenas Recuperação (Raw Fast-Path)</option>
+              </select>
+            </div>
+
+            <div className="w-full sm:w-40">
               <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-400" />
                 Top-K Evidências
@@ -141,7 +158,7 @@ export const QueryPlaygroundView: React.FC = () => {
                 isLoading={ragMutation.isPending}
                 leftIcon={<Sparkles className="w-4 h-4" />}
               >
-                Consultar RAG
+                {mode === 'retrieve' ? 'Recuperar Evidências' : 'Consultar RAG'}
               </Button>
             </div>
           </form>
@@ -149,7 +166,13 @@ export const QueryPlaygroundView: React.FC = () => {
 
         {/* Query Loading */}
         {ragMutation.isPending && (
-          <LoadingSpinner message="Buscando no FalkorDB e sintetizando resposta com Gemini Flash..." />
+          <LoadingSpinner
+            message={
+              mode === 'retrieve'
+                ? 'Recuperando subgrafos e chunks estruturados no FalkorDB...'
+                : 'Buscando no FalkorDB e sintetizando resposta factual com DeepSeek Flash v4...'
+            }
+          />
         )}
 
         {/* Error Banner */}
