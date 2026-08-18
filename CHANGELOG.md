@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-18
+
+### Added
+- **DeepSeek-V4-Flash Fact-Dense RAG Synthesizer (`DeepSeekRagSynthesizer`)**:
+  - Novo adaptador de síntese RAG consumindo a API do OpenRouter (`deepseek/deepseek-v4-flash`) com temperatura determinística 0.1 e headers de governança.
+  - Prompt estrito para Fact-Dense Markdown eliminando introduções/conclusões prolixas e exigindo citações diretas de nós e chunks (`[^chunk:<uuid>]`, `[^entidade:<tipo>:<nome>]`).
+- **Arquitetura Dual-Mode de Consulta (`mode: "synthesis" | "retrieve"`)**:
+  - Parâmetro `mode` em `QueryKnowledgeRequest` e `QueryKnowledgeDTO`.
+  - Fast-Path `< 30ms` no `QueryKnowledgeUseCase` quando `mode == "retrieve"`, retornando imediatamente subgrafos e evidências para consumo por Tools de Agentes sem custo de LLM.
+- **Frontend Query Playground Updates (`QueryPlaygroundView.tsx` & `AnswerView.tsx`)**:
+  - Seletor interativo de modo de execução (`Síntese Fact-Dense (DeepSeek v4)` vs `Apenas Recuperação (Raw Fast-Path)`).
+  - Atualização visual e tipográfica destacando o modelo DeepSeek-V4-Flash e proveniência estrita.
+
 ## [0.3.1] - 2026-08-18
 
 ### Added
