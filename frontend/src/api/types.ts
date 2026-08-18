@@ -102,6 +102,11 @@ export interface CreateKnowledgeBaseResponse {
   storage_partition: string;
 }
 
+export interface UploadDocumentOptions {
+  enableOcr?: boolean;
+  ocrInstructions?: string;
+}
+
 export interface DocumentUploadResponse {
   document_id: string;
   storage_path: string;

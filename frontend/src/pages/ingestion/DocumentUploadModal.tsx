@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, X } from 'lucide-react';
+import { UploadCloud, FileText, X, Eye, Sparkles, Sliders } from 'lucide-react';
 import { useUploadDocument } from '../../hooks/useKnowledgeBases';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
@@ -21,6 +21,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [enableOcr, setEnableOcr] = useState(false);
+  const [ocrInstructions, setOcrInstructions] = useState('');
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -52,7 +54,13 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
     try {
       for (let i = 0; i < selectedFiles.length; i++) {
-        await uploadMutation.mutateAsync(selectedFiles[i]);
+        await uploadMutation.mutateAsync({
+          file: selectedFiles[i],
+          options: {
+            enableOcr,
+            ocrInstructions: enableOcr && ocrInstructions.trim() ? ocrInstructions.trim() : undefined,
+          },
+        });
         setUploadProgress(Math.round(((i + 1) / selectedFiles.length) * 100));
       }
       setSelectedFiles([]);
@@ -131,6 +139,61 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             ))}
           </div>
         )}
+
+        {/* OCR & Visual Processing Configuration */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`p-2 rounded-lg transition-colors ${
+                  enableOcr ? 'bg-indigo-500/20 text-indigo-400' : 'bg-zinc-800 text-zinc-400'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-zinc-200">
+                  OCR & Análise Visual Multimodal
+                </p>
+                <p className="text-[11px] text-zinc-400">
+                  Extrai texto de imagens, diagramas e tabelas complexas via Qwen3-VL.
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enableOcr}
+                onChange={(e) => setEnableOcr(e.target.checked)}
+                disabled={uploading}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+
+          {!enableOcr ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400/90 bg-emerald-950/30 border border-emerald-900/40 rounded-lg px-2.5 py-1.5">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>Modo Fast-Path ativo: parsing nativo instantâneo em CPU com custo zero de tokens.</span>
+            </div>
+          ) : (
+            <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-300 font-medium">
+                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Instruções de Estrutura Markdown (Opcional)</span>
+              </div>
+              <textarea
+                value={ocrInstructions}
+                onChange={(e) => setOcrInstructions(e.target.value)}
+                disabled={uploading}
+                rows={2}
+                placeholder="Ex: Transcreva tabelas em formato GFM, forneça descrição de gráficos com tags '> [Figura X: ...]' e preserve equações..."
+                className="w-full text-xs bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
+              />
+            </div>
+          )}
+        </div>
 
         {/* Upload progress */}
         {uploading && (

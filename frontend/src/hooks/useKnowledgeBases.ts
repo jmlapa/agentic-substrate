@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { knowledgeApi } from '../api/knowledge-api';
-import { CreateKnowledgeBaseDTO } from '../api/types';
+import { CreateKnowledgeBaseDTO, UploadDocumentOptions } from '../api/types';
+
+export interface UploadDocumentParams {
+  file: File;
+  options?: UploadDocumentOptions;
+}
 
 export const useKnowledgeBases = () => {
   return useQuery({
@@ -32,7 +37,12 @@ export const useUploadDocument = (kbId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (file: File) => knowledgeApi.uploadDocument(kbId, file),
+    mutationFn: (param: File | UploadDocumentParams) => {
+      if ('file' in param) {
+        return knowledgeApi.uploadDocument(kbId, param.file, param.options);
+      }
+      return knowledgeApi.uploadDocument(kbId, param);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge-bases', kbId] });
       queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });

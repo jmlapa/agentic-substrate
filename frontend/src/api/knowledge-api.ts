@@ -7,6 +7,7 @@ import {
   ListKnowledgeBasesResponse,
   QueryKnowledgeRequest,
   QueryKnowledgeResponse,
+  UploadDocumentOptions,
 } from './types';
 
 export const knowledgeApi = {
@@ -36,10 +37,17 @@ export const knowledgeApi = {
 
   async uploadDocument(
     kbId: string,
-    file: File
+    file: File,
+    options?: UploadDocumentOptions
   ): Promise<DocumentUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (options?.enableOcr !== undefined) {
+      formData.append('enable_ocr', String(options.enableOcr));
+    }
+    if (options?.ocrInstructions) {
+      formData.append('ocr_instructions', options.ocrInstructions);
+    }
 
     const response = await apiClient.post<DocumentUploadResponse>(
       `/api/v1/knowledge/bases/${kbId}/documents`,
