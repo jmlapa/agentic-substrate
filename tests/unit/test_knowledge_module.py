@@ -207,6 +207,68 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
 
 
 @pytest.mark.asyncio
+async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: OntologySchema) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bus = InMemoryEventBus()
+        store = InMemoryEventStore(event_bus=bus)
+        repo = InMemoryKnowledgeBaseRepository()
+        ontology_repo = InMemoryOntologyRepository()
+        storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
+        parser = MarkItDownDocumentParser()
+        extractor = StructuredPydanticGraphExtractor()
+        graph_store = InMemoryGraphStore()
+
+        _ = DocumentIngestionSagaCoordinator(
+            event_bus=bus,
+            event_store=store,
+            kb_repository=repo,
+            storage=storage,
+            parser=parser,
+            extractor=extractor,
+            graph_store=graph_store,
+        )
+
+        create_kb_use_case = CreateKnowledgeBaseUseCase(
+            event_store=store,
+            repository=repo,
+            ontology_repository=ontology_repo,
+        )
+        attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
+
+        kb_res = await create_kb_use_case.execute(
+            CreateKnowledgeBaseRequest(
+                name="OcrKB",
+                description="KB com OCR",
+                ontology=sample_ontology,
+            )
+        )
+        assert isinstance(kb_res, Ok)
+        kb_id = kb_res.value.id
+
+        raw_doc = b"# Architecture Overview\nMicroservice auth connects to Database postgres."
+        custom_instructions = "Preserve tables and annotate figures."
+        doc_res = await attach_doc_use_case.execute(
+            AttachAndStoreDocumentRequest(
+                kb_id=kb_id,
+                file_name="diagram.png",
+                content_type="image/png",
+                file_content=raw_doc,
+                enable_ocr=True,
+                ocr_instructions=custom_instructions,
+            )
+        )
+        assert isinstance(doc_res, Ok)
+        doc_id = doc_res.value.document_id
+
+        updated_kb = await repo.get_by_id(kb_id)
+        assert updated_kb is not None
+        doc_info = updated_kb.documents[doc_id]
+        assert doc_info["enable_ocr"] is True
+        assert doc_info["ocr_instructions"] == custom_instructions
+        assert doc_info["status"] == DocumentStatus.INDEXED
+
+
+@pytest.mark.asyncio
 async def test_create_knowledge_base_with_ontology_template_id(
     sample_ontology: OntologySchema,
 ) -> None:

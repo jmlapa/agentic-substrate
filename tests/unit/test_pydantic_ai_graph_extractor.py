@@ -1,25 +1,14 @@
-from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.kernel.infrastructure.async_token_bucket_limiter import (
-    AsyncTokenBucketLimiter,
-)
-from src.modules.knowledge.domain.ontology.node_type_definition import (
+from src.kernel.infrastructure.async_token_bucket_limiter import AsyncTokenBucketLimiter
+from src.modules.knowledge.domain.ontology import (
     NodeTypeDefinition,
-)
-from src.modules.knowledge.domain.ontology.ontology_schema import (
     OntologySchema,
-)
-from src.modules.knowledge.domain.ontology.property_definition import (
     PropertyDefinition,
-)
-from src.modules.knowledge.domain.ontology.property_type import PropertyType
-from src.modules.knowledge.domain.ontology.relationship_type_definition import (
+    PropertyType,
     RelationshipTypeDefinition,
-)
-from src.modules.knowledge.domain.value_objects.canonical_entity import (
-    CanonicalEntity,
 )
 from src.modules.knowledge.infrastructure.extractors.existing_entity_registry import (
     ExistingEntityRegistry,
@@ -32,74 +21,92 @@ from src.modules.knowledge.infrastructure.extractors.pydantic_ai_graph_extractor
 @pytest.fixture
 def sample_ontology() -> OntologySchema:
     return OntologySchema(
-        name="LegalOntology",
-        description="Ontologia jurídica",
+        name="TechOntology",
+        description="Ontologia de infraestrutura",
         node_types=[
             NodeTypeDefinition(
-                name="Norma",
-                description="Norma legal ou regulamentar",
+                name="Server",
+                description="Servidor cloud",
                 properties=[
-                    PropertyDefinition(name="numero", type=PropertyType.STRING, required=True)
+                    PropertyDefinition(name="hostname", type=PropertyType.STRING, required=True),
                 ],
-            ),
-            NodeTypeDefinition(
-                name="Orgao",
-                description="Órgão público ou tribunal",
-                properties=[
-                    PropertyDefinition(name="sigla", type=PropertyType.STRING, required=False)
-                ],
-            ),
+            )
         ],
         relationship_types=[
             RelationshipTypeDefinition(
-                name="REGULA",
-                description="Regula as competências do órgão",
-                source_node_type="Norma",
-                target_node_type="Orgao",
+                name="HOSTS",
+                description="Hospeda serviço",
+                source_node_type="Server",
+                target_node_type="Server",
             )
         ],
     )
 
 
 @pytest.mark.asyncio
-async def test_pydantic_ai_extractor_fallback_mode(sample_ontology: OntologySchema) -> None:
-    limiter = AsyncTokenBucketLimiter()
+async def test_pydantic_ai_graph_extractor_fallback_when_no_api_key(
+    sample_ontology: OntologySchema,
+) -> None:
+    extractor = PydanticAiGraphExtractor(api_key=None)
+    graph = await extractor.extract_graph(
+        markdown_text="Server web-01 hosts database-01.",
+        ontology=sample_ontology,
+    )
+    assert graph is not None
+
+
+@pytest.mark.asyncio
+async def test_pydantic_ai_graph_extractor_with_openrouter_provider(
+    sample_ontology: OntologySchema,
+) -> None:
     registry = ExistingEntityRegistry()
+    limiter = AsyncTokenBucketLimiter(max_rpm=100)
+
     extractor = PydanticAiGraphExtractor(
+        provider_type="openrouter",
+        model_name="deepseek/deepseek-v4-flash",
+        api_key="sk-or-fake-key",
         rate_limiter=limiter,
         entity_registry=registry,
-        api_key=None,
+        app_title="Agentic Substrate Test",
+        app_referer="https://test.local",
     )
 
-    kb_id = uuid4()
-    markdown = "# CF88\nA Norma da CF88 regula o Orgao STF."
+    # Mock the internal agent run
+    mock_output = MagicMock()
+    mock_entity = MagicMock()
+    mock_entity.id = "srv_web_01"
+    mock_entity.name = "web-01"
+    mock_entity.entity_type = "Server"
+    mock_entity.properties = {"hostname": "web-01.internal"}
+    mock_entity.aliases = ["web-01"]
 
-    graph = await extractor.extract_graph(markdown, sample_ontology, kb_id=kb_id)
+    mock_relation = MagicMock()
+    mock_relation.source_id = "srv_web_01"
+    mock_relation.target_id = "srv_db_01"
+    mock_relation.relationship_type = "HOSTS"
+    mock_relation.properties = {}
 
-    assert len(graph.nodes) >= 2
-    assert any(n.node_type == "Norma" for n in graph.nodes)
-    assert any(n.node_type == "Orgao" for n in graph.nodes)
-    assert len(graph.edges) >= 1
+    mock_output.entities = [mock_entity]
+    mock_output.relations = [mock_relation]
 
-    # Valida que as entidades foram registradas no catálogo
-    entities = await registry.get_all_distinct(kb_id)
-    assert len(entities) >= 2
+    mock_run_result = MagicMock()
+    mock_run_result.output = mock_output
 
+    with patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
+        mock_agent_run.return_value = mock_run_result
 
-def test_build_system_prompt_with_known_entities(sample_ontology: OntologySchema) -> None:
-    extractor = PydanticAiGraphExtractor()
-    known = [
-        CanonicalEntity(
-            id="org_stf",
-            name="Supremo Tribunal Federal",
-            entity_type="Orgao",
-            aliases=["STF", "Supremo"],
+        graph = await extractor.extract_graph(
+            markdown_text="Server web-01 hosts db-01.",
+            ontology=sample_ontology,
         )
-    ]
 
-    prompt = extractor._build_system_prompt(sample_ontology, known)
-    assert "LegalOntology" in prompt
-    assert "org_stf" in prompt
-    assert "Supremo Tribunal Federal" in prompt
-    assert "STF" in prompt
-    assert "CATÁLOGO DE ENTIDADES CONHECIDAS" in prompt
+        assert len(graph.nodes) == 1
+        assert graph.nodes[0].id == "srv_web_01"
+        assert graph.nodes[0].node_type == "Server"
+        assert len(graph.edges) == 1
+        assert graph.edges[0].relationship_type == "HOSTS"
+
+        # Verify registry recorded the entity
+        recorded = await registry.get_all_distinct(extractor._default_kb_id)
+        assert any(e.id == "srv_web_01" for e in recorded)

@@ -62,7 +62,7 @@ async def test_api_e2e_flow() -> None:
         assert kb_data["name"] == "E2E Knowledge Base"
         assert "storage_partition" in kb_data
 
-        # 4. Upload Document
+        # 4. Upload Document (Fast-path default)
         files = {
             "file": (
                 "service_doc.txt",
@@ -78,12 +78,29 @@ async def test_api_e2e_flow() -> None:
         upload_data = upload_resp.json()
         assert "document_id" in upload_data
 
-        # 5. Check KB status and processed document
+        # 4.1 Upload Document with OCR Options enabled
+        ocr_files = {
+            "file": (
+                "diagram_doc.png",
+                b"# Diagram Overview\nMicroservice billing connects to Database postgres",
+                "image/png",
+            )
+        }
+        upload_ocr_resp = await client.post(
+            f"/api/v1/knowledge/bases/{kb_id}/documents",
+            files=ocr_files,
+            data={"enable_ocr": "true", "ocr_instructions": "Preserve tables in GFM"},
+        )
+        assert upload_ocr_resp.status_code == 202
+        upload_ocr_data = upload_ocr_resp.json()
+        assert "document_id" in upload_ocr_data
+
+        # 5. Check KB status and processed documents
         get_kb_resp = await client.get(f"/api/v1/knowledge/bases/{kb_id}")
         assert get_kb_resp.status_code == 200
         kb_details = get_kb_resp.json()
-        assert len(kb_details["documents"]) == 1
-        assert kb_details["documents"][0]["status"] == "INDEXED"
+        assert len(kb_details["documents"]) == 2
+        assert all(doc["status"] == "INDEXED" for doc in kb_details["documents"])
 
         # List all Knowledge Bases
         list_kbs_resp = await client.get("/api/v1/knowledge/bases")
