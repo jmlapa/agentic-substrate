@@ -65,7 +65,6 @@ services:
       - POSTGRES_DB=agentic_substrate
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
-      - FALKORDB_PASSWORD=
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - STORAGE_TYPE=local
