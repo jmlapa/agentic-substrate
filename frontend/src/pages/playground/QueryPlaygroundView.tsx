@@ -112,7 +112,7 @@ export const QueryPlaygroundView: React.FC = () => {
                 onChange={(e) => setMode(e.target.value as 'synthesis' | 'retrieve')}
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
-                <option value="synthesis">Síntese Fact-Dense (DeepSeek v4)</option>
+                <option value="synthesis">Síntese Fact-Dense (Gemma 4 / OpenRouter)</option>
                 <option value="retrieve">Apenas Recuperação (Raw Fast-Path)</option>
               </select>
             </div>
@@ -170,7 +170,7 @@ export const QueryPlaygroundView: React.FC = () => {
             message={
               mode === 'retrieve'
                 ? 'Recuperando subgrafos e chunks estruturados no FalkorDB...'
-                : 'Buscando no FalkorDB e sintetizando resposta factual com DeepSeek Flash v4...'
+                : 'Buscando no FalkorDB e sintetizando resposta factual com Gemma 4 (OpenRouter)...'
             }
           />
         )}

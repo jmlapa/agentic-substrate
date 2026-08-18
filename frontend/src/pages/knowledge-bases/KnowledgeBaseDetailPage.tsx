@@ -16,6 +16,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { usePipelineMonitor } from '../../hooks/usePipelineMonitor';
+import { knowledgeApi } from '../../api/knowledge-api';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -32,6 +33,20 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
   const { data: kb, isLoading, isError, error, refetch, isFetching } = usePipelineMonitor(kbId);
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [reprocessingDocId, setReprocessingDocId] = useState<string | null>(null);
+
+  const handleReprocess = async (docId: string) => {
+    if (!kbId) return;
+    setReprocessingDocId(docId);
+    try {
+      await knowledgeApi.reprocessDocument(kbId, docId);
+      await refetch();
+    } catch (err) {
+      console.error('Falha ao reiniciar saga', err);
+    } finally {
+      setReprocessingDocId(null);
+    }
+  };
 
   const docs = kb?.documents || [];
   const indexedDocsCount = docs.filter((d) => d.status === 'INDEXED').length;
@@ -281,6 +296,18 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
                         >
                           {doc.status}
                         </Badge>
+                        {doc.status !== 'INDEXED' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleReprocess(doc.id)}
+                            isLoading={reprocessingDocId === doc.id}
+                            leftIcon={<RefreshCw className="w-3 h-3" />}
+                            title="Reinicia a saga reaproveitando páginas e chunks já gravados em cache ($0.00)"
+                          >
+                            Retomar Ingestão
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -329,6 +356,11 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
                         totalChildren={doc.total_children}
                         indexedNodesCount={doc.indexed_nodes_count}
                         indexedEdgesCount={doc.indexed_edges_count}
+                        progressStep={doc.progress_step}
+                        progressCurrent={doc.progress_current}
+                        progressTotal={doc.progress_total}
+                        progressPercentage={doc.progress_percentage}
+                        progressMessage={doc.progress_message}
                         errorStep={doc.error?.step}
                         errorMessage={doc.error?.message}
                       />

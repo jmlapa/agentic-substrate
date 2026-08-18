@@ -146,7 +146,7 @@ export const CreateOntologyPage: React.FC = () => {
   return (
     <PageContainer
       title="Nova Ontologia"
-      description="Modele as entidades e relacionamentos que o Gemini Flash-Lite extrairá dos documentos."
+      description="Modele as entidades e relacionamentos que a IA (Gemma 4 / OpenRouter) extrairá dos documentos."
       actions={
         <Button
           variant="outline"

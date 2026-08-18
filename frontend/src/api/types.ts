@@ -88,7 +88,18 @@ export interface DocumentSummary {
   total_children?: number | null;
   indexed_nodes_count?: number;
   indexed_edges_count?: number;
+  progress_step?: string | null;
+  progress_current?: number;
+  progress_total?: number;
+  progress_percentage?: number;
+  progress_message?: string | null;
   error?: DocumentProcessingError | null;
+}
+
+export interface ReprocessDocumentResponse {
+  document_id: string;
+  status: string;
+  message: string;
 }
 
 export interface KnowledgeBaseDetail {

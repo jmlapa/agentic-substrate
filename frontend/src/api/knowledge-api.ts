@@ -61,6 +61,18 @@ export const knowledgeApi = {
     return response.data;
   },
 
+  async reprocessDocument(
+    kbId: string,
+    documentId: string
+  ): Promise<{ document_id: string; status: string; message: string }> {
+    const response = await apiClient.post<{
+      document_id: string;
+      status: string;
+      message: string;
+    }>(`/api/v1/knowledge/bases/${kbId}/documents/${documentId}/reprocess`);
+    return response.data;
+  },
+
   async queryBase(
     kbId: string,
     data: QueryKnowledgeRequest

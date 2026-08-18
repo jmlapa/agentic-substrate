@@ -25,7 +25,7 @@ export const Sidebar: React.FC = () => {
       to: '/playground',
       label: 'RAG Playground',
       icon: Sparkles,
-      badge: 'Gemini',
+      badge: 'Gemma 4',
     },
   ];
 
@@ -89,7 +89,7 @@ export const Sidebar: React.FC = () => {
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
         </div>
         <p className="mt-1.5 text-[11px] text-zinc-500 font-mono">
-          FalkorDB + Gemini Flash
+          FalkorDB + Gemma 4 (OpenRouter)
         </p>
       </div>
     </aside>

@@ -159,7 +159,7 @@ export const CreateKnowledgeBasePage: React.FC = () => {
               />
             )}
             <p className="text-xs text-zinc-500">
-              A ontologia instrui o Gemini Flash-Lite a extrair as entidades e conexões certas para o FalkorDB.
+              A ontologia instrui a IA (Gemma 4 / OpenRouter) a extrair as entidades e conexões certas para o FalkorDB.
             </p>
           </div>
         </Card>

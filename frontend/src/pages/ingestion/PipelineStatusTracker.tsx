@@ -19,6 +19,11 @@ export interface PipelineStatusTrackerProps {
   totalChildren?: number | null;
   indexedNodesCount?: number;
   indexedEdgesCount?: number;
+  progressStep?: string | null;
+  progressCurrent?: number;
+  progressTotal?: number;
+  progressPercentage?: number;
+  progressMessage?: string | null;
   errorStep?: string | null;
   errorMessage?: string | null;
   className?: string;
@@ -31,6 +36,11 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
   totalChildren,
   indexedNodesCount,
   indexedEdgesCount,
+  progressStep,
+  progressCurrent = 0,
+  progressTotal = 0,
+  progressPercentage = 0,
+  progressMessage,
   errorStep,
   errorMessage,
   className = '',
@@ -178,6 +188,33 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
           );
         })}
       </div>
+
+      {/* Barra de Progresso Granular em Tempo Real */}
+      {!isFailed && status !== 'INDEXED' && (progressPercentage > 0 || progressMessage) && (
+        <div className="mt-3.5 space-y-1.5 rounded-lg border border-indigo-900/50 bg-indigo-950/20 p-2.5 transition-all duration-300">
+          <div className="flex items-center justify-between text-xs gap-2">
+            <span className="font-medium text-indigo-300 flex items-center gap-1.5 min-w-0">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 shrink-0" />
+              <span className="truncate">{progressMessage || `Processando etapa ${progressStep || status}...`}</span>
+            </span>
+            <span className="font-mono font-bold text-indigo-200 shrink-0 whitespace-nowrap">
+              {progressTotal > 0 ? (
+                <>
+                  {progressPercentage}% <span className="text-zinc-400 font-normal">({progressCurrent}/{progressTotal})</span>
+                </>
+              ) : progressPercentage > 0 ? (
+                `${progressPercentage}%`
+              ) : null}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-500 ease-out rounded-full"
+              style={{ width: `${Math.min(100, Math.max(0, progressPercentage))}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {isFailed && (
         <div className="mt-3.5 flex items-start gap-2.5 rounded-lg border border-rose-900/60 bg-rose-950/30 p-2.5 text-xs text-rose-300">
