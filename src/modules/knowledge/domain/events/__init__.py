@@ -11,6 +11,9 @@ from src.modules.knowledge.domain.events.document_parsed_to_markdown_event impor
 from src.modules.knowledge.domain.events.document_processing_failed_event import (
     DocumentProcessingFailedEvent,
 )
+from src.modules.knowledge.domain.events.document_progress_updated_event import (
+    DocumentProgressUpdatedEvent,
+)
 from src.modules.knowledge.domain.events.document_stored_event import DocumentStoredEvent
 from src.modules.knowledge.domain.events.graph_extracted_from_document_event import (
     GraphExtractedFromDocumentEvent,
@@ -25,6 +28,7 @@ __all__ = [
     "DocumentKnowledgeIndexedEvent",
     "DocumentParsedToMarkdownEvent",
     "DocumentProcessingFailedEvent",
+    "DocumentProgressUpdatedEvent",
     "DocumentStoredEvent",
     "GraphExtractedFromDocumentEvent",
     "KnowledgeBaseCreatedEvent",

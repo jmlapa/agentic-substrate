@@ -12,7 +12,7 @@ from src.api_gateway.controllers.knowledge_controller import (
 from src.api_gateway.controllers.ontology_controller import ontology_router
 from src.kernel.infrastructure.app_settings import AppSettings
 
-container: AppContainer = create_app_container()
+container: AppContainer = create_app_container(run_in_background=True)
 settings = container.settings
 
 
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     container = create_app_container(
         settings=cfg,
         postgres_pool=pool,
+        run_in_background=True,
     )
     app.state.container = container
 
@@ -57,26 +58,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await pool.close()
 
 
-app = FastAPI(
-    title=settings.api_title if settings else "Agentic Substrate API",
-    description="Substrato modular para desenvolvimento agêntico com GraphRAG",
-    version=settings.api_version if settings else "0.1.0",
-    debug=settings.debug if settings else False,
-    lifespan=lifespan,
-)
+def create_app(container: AppContainer | None = None) -> FastAPI:
+    cfg = container.settings if container else (settings or AppSettings())
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    if container is not None:
+        application = FastAPI(
+            title=cfg.api_title if cfg else "Agentic Substrate API",
+            description="Substrato modular para desenvolvimento agêntico com GraphRAG",
+            version=cfg.api_version if cfg else "0.1.0",
+            debug=cfg.debug if cfg else False,
+        )
+        application.state.container = container
+    else:
+        application = FastAPI(
+            title=settings.api_title if settings else "Agentic Substrate API",
+            description="Substrato modular para desenvolvimento agêntico com GraphRAG",
+            version=settings.api_version if settings else "0.1.0",
+            debug=settings.debug if settings else False,
+            lifespan=lifespan,
+        )
 
-app.include_router(knowledge_router)
-app.include_router(ontology_router)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    application.include_router(knowledge_router)
+    application.include_router(ontology_router)
+
+    @application.get("/health", tags=["Health"])
+    async def health_check() -> dict[str, str]:
+        return {"status": "healthy", "service": "agentic-substrate"}
+
+    return application
 
 
-@app.get("/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
-    return {"status": "healthy", "service": "agentic-substrate"}
+app = create_app()

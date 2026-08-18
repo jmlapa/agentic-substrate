@@ -19,6 +19,9 @@ from src.modules.knowledge.domain.events.document_parsed_to_markdown_event impor
 from src.modules.knowledge.domain.events.document_processing_failed_event import (
     DocumentProcessingFailedEvent,
 )
+from src.modules.knowledge.domain.events.document_progress_updated_event import (
+    DocumentProgressUpdatedEvent,
+)
 from src.modules.knowledge.domain.events.document_stored_event import DocumentStoredEvent
 from src.modules.knowledge.domain.events.graph_extracted_from_document_event import (
     GraphExtractedFromDocumentEvent,
@@ -49,6 +52,7 @@ class KnowledgeBaseProjector:
         bus.subscribe(KnowledgeBaseCreatedEvent, self.handle_knowledge_base_created)
         bus.subscribe(DocumentAttachedEvent, self.handle_document_attached)
         bus.subscribe(DocumentStoredEvent, self.handle_document_stored)
+        bus.subscribe(DocumentProgressUpdatedEvent, self.handle_document_progress_updated)
         bus.subscribe(DocumentParsedToMarkdownEvent, self.handle_document_parsed)
         bus.subscribe(DocumentChunkedEvent, self.handle_document_chunked)
         bus.subscribe(GraphExtractedFromDocumentEvent, self.handle_graph_extracted)
@@ -62,6 +66,8 @@ class KnowledgeBaseProjector:
             await self.handle_document_attached(event)
         elif isinstance(event, DocumentStoredEvent):
             await self.handle_document_stored(event)
+        elif isinstance(event, DocumentProgressUpdatedEvent):
+            await self.handle_document_progress_updated(event)
         elif isinstance(event, DocumentParsedToMarkdownEvent):
             await self.handle_document_parsed(event)
         elif isinstance(event, DocumentChunkedEvent):
@@ -146,12 +152,46 @@ class KnowledgeBaseProjector:
         query = """
         UPDATE attached_documents
         SET status = 'UPLOADED',
+            error_step = NULL,
+            error_message = NULL,
             storage_path = $1,
             updated_at = NOW()
         WHERE id = $2;
         """
         async with self._pool.acquire() as conn:
             await conn.execute(query, event.storage_path, event.document_id)
+
+    async def handle_document_progress_updated(self, event: DomainEvent) -> None:
+        if not isinstance(event, DocumentProgressUpdatedEvent):
+            return
+
+        query = """
+        UPDATE attached_documents
+        SET status = CASE WHEN status = 'FAILED' THEN 'PROCESSING' ELSE status END,
+            error_step = NULL,
+            error_message = NULL,
+            progress_step = $1::varchar,
+            progress_current = $2::integer,
+            progress_total = $3::integer,
+            progress_percentage = CASE
+                WHEN progress_step = $1::varchar THEN
+                    GREATEST(COALESCE(progress_percentage, 0), $4::integer)
+                ELSE $4::integer
+            END,
+            progress_message = $5::text,
+            updated_at = NOW()
+        WHERE id = $6::uuid;
+        """
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                query,
+                event.step,
+                event.current,
+                event.total,
+                event.percentage,
+                event.message,
+                event.document_id,
+            )
 
     async def handle_document_parsed(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentParsedToMarkdownEvent):
@@ -160,6 +200,11 @@ class KnowledgeBaseProjector:
         query = """
         UPDATE attached_documents
         SET status = 'PARSED',
+            progress_step = 'CHUNKING',
+            progress_current = 0,
+            progress_total = 1,
+            progress_percentage = 0,
+            progress_message = 'Fatiando documento em Chunks Hierárquicos (Pai/Filho)...',
             updated_at = NOW()
         WHERE id = $1;
         """
@@ -175,6 +220,11 @@ class KnowledgeBaseProjector:
         SET status = 'CHUNKED',
             total_parents = $1,
             total_children = $2,
+            progress_step = 'EMBEDDINGS',
+            progress_current = 0,
+            progress_total = $2,
+            progress_percentage = 0,
+            progress_message = 'Iniciando geração de representações vetoriais...',
             updated_at = NOW()
         WHERE id = $3;
         """
@@ -193,6 +243,11 @@ class KnowledgeBaseProjector:
         query = """
         UPDATE attached_documents
         SET status = 'GRAPH_EXTRACTED',
+            progress_step = 'INDEXING',
+            progress_current = 0,
+            progress_total = 1,
+            progress_percentage = 0,
+            progress_message = 'Indexando nós e arestas no FalkorDB...',
             updated_at = NOW()
         WHERE id = $1;
         """
@@ -208,6 +263,11 @@ class KnowledgeBaseProjector:
         SET status = 'INDEXED',
             indexed_nodes_count = $1,
             indexed_edges_count = $2,
+            progress_step = 'INDEXED',
+            progress_current = 1,
+            progress_total = 1,
+            progress_percentage = 100,
+            progress_message = 'Processamento e indexação concluídos com sucesso',
             updated_at = NOW()
         WHERE id = $3;
         """

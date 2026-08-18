@@ -9,7 +9,9 @@ from src.kernel.infrastructure.async_token_bucket_limiter import (
 )
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
+from src.kernel.infrastructure.in_memory_job_queue import InMemoryJobQueue
 from src.kernel.infrastructure.postgres_event_store import PostgresEventStore
+from src.kernel.infrastructure.redis_job_queue import RedisJobQueue
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
     DocumentIngestionSagaCoordinator,
 )
@@ -34,6 +36,9 @@ from src.modules.knowledge.application.use_cases.list_ontology_templates import 
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeUseCase,
 )
+from src.modules.knowledge.application.use_cases.reprocess_document import (
+    ReprocessDocumentUseCase,
+)
 from src.modules.knowledge.domain.interfaces.i_document_parser import IDocumentParser
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
     IEmbeddingService,
@@ -42,6 +47,7 @@ from src.modules.knowledge.domain.interfaces.i_graph_extractor import (
     IGraphExtractor,
 )
 from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
+from src.modules.knowledge.domain.interfaces.i_job_queue import IJobQueue
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
@@ -85,17 +91,32 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_rag_synthesizer imp
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
 )
-from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
-    MarkItDownDocumentParser,
-)
 from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
     OpenRouterClientFactory,
+)
+from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
+    PageCheckpointStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
+    ParallelVlmDocumentParser,
+)
+from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_storage import (
+    ParentGraphCheckpointStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
+    PdfPageRenderer,
 )
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
 from src.modules.knowledge.infrastructure.adapters.postgres_ontology_repository import (
     PostgresOntologyRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.qwen_synthetic_toc_extractor import (
+    QwenSyntheticTocExtractor,
+)
+from src.modules.knowledge.infrastructure.adapters.toc_checkpoint_storage import (
+    TocCheckpointStorage,
 )
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
@@ -128,10 +149,12 @@ class AppContainer:
     create_kb_use_case: CreateKnowledgeBaseUseCase
     list_kbs_use_case: ListKnowledgeBasesUseCase
     attach_doc_use_case: AttachAndStoreDocumentUseCase
+    reprocess_document_use_case: ReprocessDocumentUseCase
     query_knowledge_use_case: QueryKnowledgeUseCase
     create_ontology_use_case: CreateOntologyTemplateUseCase
     get_ontology_use_case: GetOntologyTemplateUseCase
     list_ontologies_use_case: ListOntologyTemplatesUseCase
+    job_queue: IJobQueue | None = None
     projector: KnowledgeBaseProjector | None = None
     settings: AppSettings | None = None
 
@@ -144,6 +167,8 @@ def create_app_container(
     embedding_service_type: str | None = None,
     postgres_pool: Any | None = None,
     falkordb_client: Any | None = None,
+    redis_client: Any | None = None,
+    run_in_background: bool = False,
 ) -> AppContainer:
     cfg = settings or AppSettings()
     bus: EventBus = InMemoryEventBus()
@@ -169,7 +194,19 @@ def create_app_container(
     base_dir = storage_base_dir or cfg.storage_local_base_dir
     storage: IObjectStorage = LocalFileSystemStorageAdapter(base_directory=base_dir)
 
-    # Document Parser (MarkItDown with Fast-Path & OpenRouter Multimodal OCR)
+    # Checkpoint Storages (Zero-Token-Waste Resume)
+    page_checkpoint = PageCheckpointStorage(storage=storage)
+    toc_checkpoint = TocCheckpointStorage(storage=storage)
+    parent_graph_checkpoint = ParentGraphCheckpointStorage(storage=storage)
+
+    # Rate Limiter & Entity Registry (Global per process)
+    limiter = AsyncTokenBucketLimiter(
+        max_rpm=cfg.gemini_max_rpm,
+        max_tpm=cfg.gemini_max_tpm,
+    )
+    entity_registry = ExistingEntityRegistry()
+
+    # Document Parser (Two-Pass Stateful ToC + Parallel VLM OCR & Fast-Path)
     openrouter_key = cfg.openrouter_api_key.get_secret_value() if cfg.openrouter_api_key else None
     openrouter_client = OpenRouterClientFactory.create(
         api_key=openrouter_key,
@@ -177,10 +214,30 @@ def create_app_container(
         app_title=cfg.openrouter_app_title,
         app_referer=cfg.openrouter_app_referer,
     )
-    parser: IDocumentParser = MarkItDownDocumentParser(
-        openrouter_client=openrouter_client,
+    renderer = PdfPageRenderer(
+        low_res_scale=cfg.ocr_low_res_scale,
+        high_res_scale=cfg.ocr_high_res_scale,
+    )
+    toc_extractor = (
+        QwenSyntheticTocExtractor(
+            openai_client=openrouter_client,
+            page_renderer=renderer,
+            vision_model=cfg.ocr_vision_model_name,
+            rate_limiter=limiter,
+            checkpoint_storage=toc_checkpoint,
+        )
+        if openrouter_client
+        else None
+    )
+    parser: IDocumentParser = ParallelVlmDocumentParser(
+        openai_client=openrouter_client,
+        toc_extractor=toc_extractor,
+        page_renderer=renderer,
         vision_model=cfg.ocr_vision_model_name,
         default_prompt=cfg.ocr_default_markdown_prompt,
+        max_concurrency=cfg.ocr_max_concurrency,
+        rate_limiter=limiter,
+        checkpoint_storage=page_checkpoint,
     )
 
     # Markdown Chunker
@@ -195,13 +252,6 @@ def create_app_container(
         embedding_service = GeminiEmbeddingAdapter(api_key=gemini_key, dimension=dim)
     else:
         embedding_service = InMemoryEmbeddingService()
-
-    # Rate Limiter & Entity Registry
-    limiter = AsyncTokenBucketLimiter(
-        max_rpm=cfg.gemini_max_rpm,
-        max_tpm=cfg.gemini_max_tpm,
-    )
-    entity_registry = ExistingEntityRegistry()
 
     # Graph Extractor (PydanticAI with OpenRouter or Gemini)
     extractor_provider = cfg.graph_extractor_provider
@@ -269,6 +319,9 @@ def create_app_container(
         graph_store=graph_store,
         chunker=chunker,
         embedding_service=embedding_service,
+        page_checkpoint_storage=page_checkpoint,
+        parent_graph_checkpoint_storage=parent_graph_checkpoint,
+        run_in_background=run_in_background,
     )
 
     create_kb = CreateKnowledgeBaseUseCase(
@@ -278,6 +331,7 @@ def create_app_container(
     )
     list_kbs = ListKnowledgeBasesUseCase(repo)
     attach_doc = AttachAndStoreDocumentUseCase(store, repo, storage)
+    reprocess_doc = ReprocessDocumentUseCase(store, repo, bus)
     query_kb = QueryKnowledgeUseCase(
         graph_store=graph_store,
         embedding_service=embedding_service,
@@ -291,6 +345,13 @@ def create_app_container(
     projector: KnowledgeBaseProjector | None = None
     if postgres_pool is not None:
         projector = KnowledgeBaseProjector(pool=postgres_pool, event_bus=bus)
+
+    # Job Queue
+    job_queue: IJobQueue
+    if cfg.job_queue_type == "redis" and redis_client is not None:
+        job_queue = RedisJobQueue(client=redis_client)
+    else:
+        job_queue = InMemoryJobQueue()
 
     return AppContainer(
         event_bus=bus,
@@ -308,10 +369,12 @@ def create_app_container(
         create_kb_use_case=create_kb,
         list_kbs_use_case=list_kbs,
         attach_doc_use_case=attach_doc,
+        reprocess_document_use_case=reprocess_doc,
         query_knowledge_use_case=query_kb,
         create_ontology_use_case=create_ont,
         get_ontology_use_case=get_ont,
         list_ontologies_use_case=list_ont,
+        job_queue=job_queue,
         projector=projector,
         settings=cfg,
     )

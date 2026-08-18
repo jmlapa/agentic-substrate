@@ -1,6 +1,9 @@
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
 )
+from src.modules.knowledge.domain.entities.synthetic_document_toc import (
+    SyntheticDocumentToc,
+)
 from src.modules.knowledge.domain.events import (
     DocumentAttachedEvent,
     DocumentKnowledgeIndexedEvent,
@@ -17,6 +20,7 @@ from src.modules.knowledge.domain.interfaces import (
     IKnowledgeBaseRepository,
     ILlmSynthesisService,
     IObjectStorage,
+    ISyntheticTocExtractor,
 )
 from src.modules.knowledge.domain.ontology import (
     NodeTypeDefinition,
@@ -30,7 +34,9 @@ from src.modules.knowledge.domain.value_objects import (
     ExtractedGraph,
     GraphEdge,
     GraphNode,
+    HierarchicalTocItem,
     KnowledgeBaseStatus,
+    TocBatchState,
 )
 
 __all__ = [
@@ -44,12 +50,14 @@ __all__ = [
     "GraphEdge",
     "GraphExtractedFromDocumentEvent",
     "GraphNode",
+    "HierarchicalTocItem",
     "IDocumentParser",
     "IGraphExtractor",
     "IGraphStore",
     "IKnowledgeBaseRepository",
     "ILlmSynthesisService",
     "IObjectStorage",
+    "ISyntheticTocExtractor",
     "KnowledgeBaseAggregate",
     "KnowledgeBaseCreatedEvent",
     "KnowledgeBaseStatus",
@@ -58,4 +66,6 @@ __all__ = [
     "PropertyDefinition",
     "PropertyType",
     "RelationshipTypeDefinition",
+    "SyntheticDocumentToc",
+    "TocBatchState",
 ]

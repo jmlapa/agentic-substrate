@@ -19,6 +19,11 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeResponse,
     QueryKnowledgeUseCase,
 )
+from src.modules.knowledge.application.use_cases.reprocess_document import (
+    ReprocessDocumentRequest,
+    ReprocessDocumentResponse,
+    ReprocessDocumentUseCase,
+)
 
 __all__ = [
     "AttachAndStoreDocumentRequest",
@@ -34,4 +39,7 @@ __all__ = [
     "QueryKnowledgeRequest",
     "QueryKnowledgeResponse",
     "QueryKnowledgeUseCase",
+    "ReprocessDocumentRequest",
+    "ReprocessDocumentResponse",
+    "ReprocessDocumentUseCase",
 ]

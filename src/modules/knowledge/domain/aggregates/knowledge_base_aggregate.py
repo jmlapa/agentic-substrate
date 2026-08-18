@@ -185,6 +185,9 @@ class KnowledgeBaseAggregate(AggregateRoot):
             self.documents[event.document_id]["status"] = DocumentStatus.UPLOADED
             self.documents[event.document_id]["byte_size"] = event.byte_size
             self.documents[event.document_id]["storage_path"] = event.storage_path
+            self.documents[event.document_id]["error_step"] = None
+            self.documents[event.document_id]["error_message"] = None
+            self.documents[event.document_id]["error"] = None
 
     def _apply_document_parsed_to_markdown_event(
         self, event: DocumentParsedToMarkdownEvent

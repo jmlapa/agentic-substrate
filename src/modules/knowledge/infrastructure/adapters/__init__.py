@@ -34,6 +34,18 @@ from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser im
 from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
     OpenRouterClientFactory,
 )
+from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
+    PageCheckpointStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
+    ParallelVlmDocumentParser,
+)
+from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_storage import (
+    ParentGraphCheckpointStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
+    PdfPageRenderer,
+)
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
@@ -42,6 +54,12 @@ from src.modules.knowledge.infrastructure.adapters.postgres_ontology_repository 
 )
 from src.modules.knowledge.infrastructure.adapters.pydantic_ai_openrouter_provider_factory import (
     PydanticAiOpenRouterProviderFactory,
+)
+from src.modules.knowledge.infrastructure.adapters.qwen_synthetic_toc_extractor import (
+    QwenSyntheticTocExtractor,
+)
+from src.modules.knowledge.infrastructure.adapters.toc_checkpoint_storage import (
+    TocCheckpointStorage,
 )
 
 __all__ = [
@@ -57,7 +75,13 @@ __all__ = [
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
     "OpenRouterClientFactory",
-    "PydanticAiOpenRouterProviderFactory",
+    "PageCheckpointStorage",
+    "ParallelVlmDocumentParser",
+    "ParentGraphCheckpointStorage",
+    "PdfPageRenderer",
     "PostgresKnowledgeBaseRepository",
     "PostgresOntologyRepository",
+    "PydanticAiOpenRouterProviderFactory",
+    "QwenSyntheticTocExtractor",
+    "TocCheckpointStorage",
 ]

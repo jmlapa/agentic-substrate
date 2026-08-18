@@ -163,6 +163,11 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
             total_children,
             indexed_nodes_count,
             indexed_edges_count,
+            progress_step,
+            progress_current,
+            progress_total,
+            progress_percentage,
+            progress_message,
             error_step,
             error_message
         FROM attached_documents
@@ -208,6 +213,11 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
             total_children,
             indexed_nodes_count,
             indexed_edges_count,
+            progress_step,
+            progress_current,
+            progress_total,
+            progress_percentage,
+            progress_message,
             error_step,
             error_message
         FROM attached_documents
@@ -285,6 +295,11 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
                 "total_children": _get_val(d, "total_children"),
                 "indexed_nodes_count": _get_val(d, "indexed_nodes_count", 0),
                 "indexed_edges_count": _get_val(d, "indexed_edges_count", 0),
+                "progress_step": _get_val(d, "progress_step"),
+                "progress_current": _get_val(d, "progress_current", 0),
+                "progress_total": _get_val(d, "progress_total", 0),
+                "progress_percentage": _get_val(d, "progress_percentage", 0),
+                "progress_message": _get_val(d, "progress_message"),
             }
             err_step = _get_val(d, "error_step")
             err_msg = _get_val(d, "error_message")

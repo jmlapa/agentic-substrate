@@ -29,7 +29,7 @@ def test_alembic_revisions_chain_is_unbroken() -> None:
     # Revisions are walked from head to base
     rev_ids = [rev.revision for rev in revisions]
 
-    assert rev_ids == ["0006", "0005", "0004", "0003", "0002", "0001"]
+    assert rev_ids == ["0007", "0006", "0005", "0004", "0003", "0002", "0001"]
 
     rev_0001 = script.get_revision("0001")
     assert rev_0001 is not None
@@ -54,3 +54,7 @@ def test_alembic_revisions_chain_is_unbroken() -> None:
     rev_0006 = script.get_revision("0006")
     assert rev_0006 is not None
     assert rev_0006.down_revision == "0005"
+
+    rev_0007 = script.get_revision("0007")
+    assert rev_0007 is not None
+    assert rev_0007.down_revision == "0006"

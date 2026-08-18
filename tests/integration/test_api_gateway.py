@@ -1,12 +1,15 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.api_gateway.main import app
+from src.api_gateway.container import create_app_container
+from src.api_gateway.main import create_app
 
 
 @pytest.mark.asyncio
 async def test_api_e2e_flow() -> None:
-    transport = ASGITransport(app=app)
+    test_container = create_app_container(run_in_background=False)
+    test_app = create_app(container=test_container)
+    transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 1. Health check
         health_resp = await client.get("/health")
