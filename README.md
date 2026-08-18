@@ -68,8 +68,14 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
 - **Zero-Damage Chunking**: Never splits tables or code blocks across chunk boundaries.
 - **Hierarchical Breadcrumbs**: Preserves complete section hierarchy in Parent Chunks (~1.200 tokens) and Child Chunks (~200 tokens + 30 overlap).
 
-### 4. High-Fidelity Document Parsing (`MarkItDown`)
-- Extracts clean Markdown from PDF (using `pdfminer.six`/`pdfplumber`), DOCX, XLSX, PPTX, HTML, and plain text.
+### 4. Configurable Multimodal OCR & OpenRouter Vision (`MarkItDown`)
+- **Fast-Path Zero-Cost Default**: Plaintext and text-layer documents execute natively on CPU with zero LLM API calls and sub-second parsing speed.
+- **Multimodal Visual Analysis**: Optional toggle routing image-heavy, diagrammatic, and scanned documents to `qwen/qwen3-vl-30b-a3b-instruct` via OpenRouter.
+- **Custom Markdown Structure Injection**: Dynamic instruction prompt customizing Markdown formatting (strict tables, mathematical preservation, diagram annotations).
+
+### 5. Frontend Console SPA (`/frontend`)
+- Modern, responsive SPA built with **React 18.3 + Vite 5.4 + TypeScript 5.5 + Tailwind CSS 3.4** and TanStack React Query v5.
+- Visual management of Ontologies, Knowledge Bases, live ingestion pipeline progress tracker, and interactive RAG Playground with synthesized LLM responses and evidence inspection.
 
 ---
 
@@ -79,23 +85,25 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
 - [Docker & Docker Compose](https://www.docker.com/)
 - [Python 3.13+](https://www.python.org/)
 - [`uv`](https://docs.astral.sh/uv/) package manager
+- [Node.js 20+](https://nodejs.org/) (for frontend console)
 
 ### 1. Clone & Install Dependencies
 ```bash
 git clone https://github.com/insider/agentic-substrate.git
 cd agentic-substrate
 uv sync
+cd frontend && npm install && cd ..
 ```
 
 ### 2. Configure Environment
 ```bash
 cp .env.example .env
-# Edit .env and configure your GEMINI_API_KEY
+# Edit .env and configure your OPENROUTER_API_KEY and GEMINI_API_KEY
 ```
 
 ### 3. Start Local Infrastructure
 ```bash
-make up
+make dev
 ```
 This spins up:
 - **PostgreSQL 16** on `localhost:5432` (`substrate_postgres`)
@@ -112,11 +120,16 @@ make migrate
 make pre-commit
 ```
 
-### 6. Start the API Server
+### 6. Start the API Server & Frontend Console
 ```bash
+# Terminal 1: Backend API
 make run
+
+# Terminal 2: Frontend Console SPA
+cd frontend && npm run dev
 ```
-Access the interactive OpenAPI Swagger docs at: `http://localhost:8000/docs`
+- Interactive OpenAPI Swagger docs: `http://localhost:8000/docs`
+- Frontend Console SPA: `http://localhost:3000`
 
 ---
 
@@ -153,8 +166,10 @@ agentic-substrate/
 │   │   ├── 0001-hexagonal-event-sourced-architecture.md
 │   │   ├── 0002-unified-falkordb-hybrid-graphrag.md
 │   │   ├── 0003-pydantic-ai-graph-extractor-and-rate-limiter.md
-│   │   └── 0004-universal-structure-tolerant-chunker.md
+│   │   ├── 0004-universal-structure-tolerant-chunker.md
+│   │   └── 0005-configurable-ocr-and-openrouter-vlm.md
 │   └── ideas/                  # Concept exploration documents
+├── frontend/                   # React 18 + Vite SPA Console Hub & Playground
 ├── migrations/                 # Alembic async database migrations
 ├── scripts/                    # CLI scripts (ingestion, ontologies)
 │   ├── ingest_document.py
@@ -164,7 +179,7 @@ agentic-substrate/
 │   ├── kernel/                 # Pure domain primitives, Event Store & Bus
 │   └── modules/
 │       └── knowledge/          # GraphRAG domain, sagas, adapters & chunkers
-└── tests/                      # Unit & integration tests (93%+ coverage)
+└── tests/                      # Unit & integration tests (92%+ coverage)
 ```
 
 ---
@@ -178,8 +193,8 @@ agentic-substrate/
 | `make lint` | Run Ruff linter. |
 | `make format` | Format code with Ruff. |
 | `make typecheck` | Run Mypy in strict mode (`--strict`). |
-| `make up` | Start local Docker infrastructure containers. |
-| `make down` | Stop local Docker containers. |
+| `make dev` | Start local Docker infrastructure containers. |
+| `make dev-down` | Stop local Docker containers. |
 | `make migrate` | Apply all pending database migrations. |
 | `make run` | Start FastAPI development server with hot-reload. |
 
@@ -190,6 +205,7 @@ agentic-substrate/
 - [ADR-0002: Unified FalkorDB Hybrid GraphRAG Engine](docs/decisions/0002-unified-falkordb-hybrid-graphrag.md)
 - [ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization](docs/decisions/0003-pydantic-ai-graph-extractor-and-rate-limiter.md)
 - [ADR-0004: Universal Structure-Tolerant Markdown Chunker](docs/decisions/0004-universal-structure-tolerant-chunker.md)
+- [ADR-0005: Configurable Multimodal OCR, OpenRouter VLM and PydanticAI OpenAI Provider](docs/decisions/0005-configurable-ocr-and-openrouter-vlm.md)
 
 ---
 

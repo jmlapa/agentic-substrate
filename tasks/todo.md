@@ -1,164 +1,204 @@
-# Task List: PostgreSQL Persistence & Dead Code Cleanup
+# Task List: Configurable OCR & Optimized Visual Ingestion Pipeline
 
-## Phase 1: Database Schema & Migrations
+## Phase 1: Settings, Secrets & OpenRouter Client
 
-### Task 1: Migration Alembic 0005 para Ontologias e Knowledge Bases
-- **Description:** Criar a migração `migrations/versions/0005_create_knowledge_bases_and_ontologies_tables.py` contendo as tabelas `ontology_templates`, `knowledge_bases` e `attached_documents` com tipos UUID, JSONB e TIMESTAMPTZ.
+### Task 1: Settings & Environment Configuration
+- **Description:** Atualizar `AppSettings` em `src/kernel/infrastructure/app_settings.py`, `.env.example` e `.env` com configurações para o OpenRouter (`OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OCR_VISION_MODEL_NAME`, `OCR_MAX_CONCURRENCY`, `OCR_DEFAULT_MARKDOWN_PROMPT`).
 - **Acceptance criteria:**
-  - [ ] Tabela `ontology_templates` criada com colunas `id`, `name` (unique), `description`, `version`, `node_types`, `relationship_types`, `created_at`, `updated_at`.
-  - [ ] Tabela `knowledge_bases` criada com colunas `id`, `name`, `description`, `ontology_id` (FK para `ontology_templates.id` ON DELETE SET NULL), `status`, `storage_partition`, `created_at`, `updated_at`.
-  - [ ] Tabela `attached_documents` criada com colunas `id`, `kb_id` (FK para `knowledge_bases.id` ON DELETE CASCADE), `file_name`, `status`, `storage_path`, `created_at`, `updated_at`.
-  - [ ] Funções `upgrade()` e `downgrade()` completas e idempotentes.
+  - [x] `AppSettings` possui campos tipados com `SecretStr` para chave e defaults seguros.
+  - [x] `.env.example` e `.env` atualizados e documentados.
 - **Verification:**
-  - [ ] Command: `uv run alembic upgrade head`
+  - [x] Command: `uv run pytest tests/unit/test_app_settings.py` (ou teste de carregamento de settings)
 - **Dependencies:** None
-- **Files likely touched:**
-  - `migrations/versions/0005_create_knowledge_bases_and_ontologies_tables.py`
-- **Estimated scope:** Small (1 file)
+- **Files touched:**
+  - `src/kernel/infrastructure/app_settings.py`
+  - `.env.example`
+  - `.env`
+- **Estimated scope:** Small (3 files)
 
 ---
 
-### Task 2: Índices e Validação de DDL
-- **Description:** Adicionar índices nas tabelas relacionais (`idx_knowledge_bases_name`, `idx_attached_docs_kb_id`) para garantir buscas rápidas por nome e por partição de KB.
+### Task 2: Implementar `OpenRouterClientFactory`
+- **Description:** Criar `OpenRouterClientFactory` em `src/modules/knowledge/infrastructure/adapters/openrouter_client_factory.py` para instanciar o cliente `openai.OpenAI` configurado com base URL do OpenRouter e headers customizados.
 - **Acceptance criteria:**
-  - [ ] Índices criados e validados no script de migração.
+  - [x] Implementa factory respeitando o princípio Single Class per File.
+  - [x] Tipagem estrita e retorno do cliente apropriado para o MarkItDown.
 - **Verification:**
-  - [ ] Command: `uv run alembic upgrade head`
+  - [x] Command: `uv run mypy src/modules/knowledge/infrastructure/adapters/openrouter_client_factory.py --strict`
 - **Dependencies:** Task 1
-- **Files likely touched:**
-  - `migrations/versions/0005_create_knowledge_bases_and_ontologies_tables.py`
-- **Estimated scope:** Small (1 file)
-
----
-
-## Checkpoint: Migrations Verified
-- [ ] Migração 0005 aplicada com sucesso e tabelas criadas no banco.
-
----
-
-## Phase 2: PostgreSQL Repository Adapters
-
-### Task 3: Implementar `PostgresOntologyRepository`
-- **Description:** Implementar `PostgresOntologyRepository(IOntologyRepository)` usando `asyncpg.Pool` para salvar, buscar por id, buscar por nome e listar templates de ontologias.
-- **Acceptance criteria:**
-  - [ ] Implementa todos os métodos de `IOntologyRepository` (`save`, `get_by_id`, `get_by_name`, `list_all`).
-  - [ ] Serialização e desserialização de `NodeTypeDefinition` e `RelationshipTypeDefinition` via Pydantic TypeAdapter / JSONB.
-  - [ ] Regra Single Class per File respeitada.
-- **Verification:**
-  - [ ] Tests pass: `uv run pytest tests/unit/test_postgres_ontology_repository.py`
-  - [ ] Mypy: `uv run mypy src/modules/knowledge/infrastructure/adapters/postgres_ontology_repository.py --strict`
-- **Dependencies:** Task 1
-- **Files likely touched:**
-  - `src/modules/knowledge/infrastructure/adapters/postgres_ontology_repository.py`
+- **Files touched:**
+  - `src/modules/knowledge/infrastructure/adapters/openrouter_client_factory.py`
   - `src/modules/knowledge/infrastructure/adapters/__init__.py`
-- **Estimated scope:** Medium (2-3 files)
-
----
-
-### Task 4: Implementar `PostgresKnowledgeBaseRepository`
-- **Description:** Implementar `PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository)` usando `asyncpg.Pool` para gerenciar agregados de Knowledge Base e seus documentos vinculados de forma relacional.
-- **Acceptance criteria:**
-  - [ ] Implementa `save`, `get_by_id`, `list_all`, `add_document`, `update_document_status`.
-  - [ ] Mapeia para o aggregate root `KnowledgeBaseAggregate` e entidades `AttachedDocument`.
-  - [ ] Regra Single Class per File respeitada.
-- **Verification:**
-  - [ ] Tests pass: `uv run pytest tests/unit/test_postgres_knowledge_base_repository.py`
-  - [ ] Mypy: `uv run mypy src/modules/knowledge/infrastructure/adapters/postgres_knowledge_base_repository.py --strict`
-- **Dependencies:** Task 1
-- **Files likely touched:**
-  - `src/modules/knowledge/infrastructure/adapters/postgres_knowledge_base_repository.py`
-  - `src/modules/knowledge/infrastructure/adapters/__init__.py`
-- **Estimated scope:** Medium (2-3 files)
-
----
-
-### Task 5: Testes Unitários e de Integração dos Repositórios Postgres
-- **Description:** Criar testes automatizados para validar todas as operações CRUD e transacionais dos repositórios PostgreSQL.
-- **Acceptance criteria:**
-  - [ ] Testes unitários com mocks de conexão e testes de integração com banco real passando.
-- **Verification:**
-  - [ ] Command: `uv run pytest tests/unit/test_postgres_*.py`
-- **Dependencies:** Task 3, Task 4
-- **Files likely touched:**
-  - `tests/unit/test_postgres_ontology_repository.py`
-  - `tests/unit/test_postgres_knowledge_base_repository.py`
-- **Estimated scope:** Medium (2 files)
-
----
-
-## Checkpoint: Repositories Verified
-- [ ] Repositórios Postgres testados e aprovados com 100% de cobertura.
-
----
-
-## Phase 3: Lifespan, IoC Container & Startup Automation
-
-### Task 6: Configurar Lifespan do FastAPI e Factory Dinâmica no `AppContainer`
-- **Description:** Adicionar gerenciamento assíncrono de ciclo de vida (lifespan) no `src/api_gateway/main.py`, criando o pool `asyncpg` no startup e fechando no shutdown. Atualizar `create_app_container` para instanciar repositórios Postgres quando `postgres_pool` for fornecido.
-- **Acceptance criteria:**
-  - [ ] FastAPI inicializa pool `asyncpg` na inicialização e o injeta no `AppContainer`.
-  - [ ] `create_app_container` instancia `PostgresOntologyRepository`, `PostgresKnowledgeBaseRepository` e `PostgresEventStore` automaticamente.
-  - [ ] Se o banco estiver indisponível em ambiente de teste, fallback gracioso para `InMemory*`.
-- **Verification:**
-  - [ ] Tests pass: `uv run pytest tests/integration/test_api_gateway.py`
-- **Dependencies:** Task 5
-- **Files likely touched:**
-  - `src/api_gateway/main.py`
-  - `src/api_gateway/container.py`
-- **Estimated scope:** Medium (2-3 files)
-
----
-
-### Task 7: Execução Automática de Migrações no Startup do Container
-- **Description:** Configurar a inicialização do container backend no `docker-compose.yml` ou script de entrypoint para rodar `alembic upgrade head` antes de iniciar o Uvicorn, garantindo que o schema esteja sempre atualizado.
-- **Acceptance criteria:**
-  - [ ] Container `api` executa migrações no startup sem falhas.
-  - [ ] Containers sobem com dados persistentes que sobrevivem a `docker compose restart`.
-- **Verification:**
-  - [ ] Command: `docker compose -f docker/docker-compose.yml up -d --build`
-- **Dependencies:** Task 6
-- **Files likely touched:**
-  - `Dockerfile`
-  - `docker/docker-compose.yml`
 - **Estimated scope:** Small (2 files)
 
 ---
 
-## Checkpoint: Container Persistence Working
-- [ ] Dados criados na API ou Frontend continuam disponíveis após reiniciar os containers.
+## Checkpoint 1: Settings & Client Ready
 
 ---
 
-## Phase 4: Dead Code Cleanup & Quality Gates
+## Phase 2: Domain Interfaces & Aggregate Updates
 
-### Task 8: Limpeza de Código Morto e Refatorações
-- **Description:** Auditar a base de código para remover imports não utilizados, código morto ou comentários obsoletos.
+### Task 3: Atualizar `IDocumentParser` e `DocumentAttachedEvent`
+- **Description:** Atualizar o protocolo `IDocumentParser` e o evento de domínio `DocumentAttachedEvent` para aceitarem `enable_ocr: bool = False` e `ocr_instructions: str | None = None`.
 - **Acceptance criteria:**
-  - [ ] Zero código morto ou variáveis não utilizadas.
-  - [ ] Ruff check limpo sem warnings.
+  - [x] `IDocumentParser.parse_to_markdown` recebe `enable_ocr` e `ocr_instructions`.
+  - [x] `DocumentAttachedEvent` transporta `enable_ocr` e `ocr_instructions`.
 - **Verification:**
-  - [ ] Command: `uv run ruff check .`
+  - [x] Command: `uv run mypy src/modules/knowledge/domain/ --strict`
+- **Dependencies:** Task 2
+- **Files touched:**
+  - `src/modules/knowledge/domain/interfaces/i_document_parser.py`
+  - `src/modules/knowledge/domain/events/document_attached_event.py`
+- **Estimated scope:** Small (2 files)
+
+---
+
+### Task 4: Atualizar `KnowledgeBaseAggregate`
+- **Description:** Atualizar `KnowledgeBaseAggregate.attach_document` e seu event applier `_apply_document_attached_event` para persistir `enable_ocr` e `ocr_instructions` no estado interno do documento.
+- **Acceptance criteria:**
+  - [x] `attach_document` aceita `enable_ocr: bool = False` e `ocr_instructions: str | None = None`.
+  - [x] O dicionário `documents[doc_id]` armazena as preferências de OCR.
+- **Verification:**
+  - [x] Command: `uv run pytest tests/unit/modules/knowledge/domain/test_knowledge_base_aggregate.py`
+- **Dependencies:** Task 3
+- **Files touched:**
+  - `src/modules/knowledge/domain/aggregates/knowledge_base_aggregate.py`
+- **Estimated scope:** Small (1 file)
+
+---
+
+## Checkpoint 2: Domain Contracts Verified
+
+---
+
+## Phase 3: Application Layer & MarkItDown Adapter
+
+### Task 5: Refatorar `MarkItDownDocumentParser`
+- **Description:** Atualizar `MarkItDownDocumentParser` para suportar o modo nativo rápido (quando `enable_ocr=False`) e o modo multimodal com OpenRouter (quando `enable_ocr=True`), injetando `llm_prompt` customizado ou padrão.
+- **Acceptance criteria:**
+  - [x] `parse_to_markdown` executa fast-path em CPU quando `enable_ocr=False`.
+  - [x] `parse_to_markdown` utiliza o `MarkItDown` com `llm_client` e `llm_prompt` quando `enable_ocr=True`.
+  - [x] Fallback gracioso para decodificação textual em caso de falha.
+- **Verification:**
+  - [x] Command: `uv run pytest tests/unit/modules/knowledge/infrastructure/test_markitdown_document_parser.py`
+- **Dependencies:** Task 2, Task 3
+- **Files touched:**
+  - `src/modules/knowledge/infrastructure/adapters/markitdown_document_parser.py`
+- **Estimated scope:** Small (1 file)
+
+---
+
+### Task 6: Atualizar Use Case e Saga Coordinator
+- **Description:** Atualizar `AttachAndStoreDocumentRequest` e `AttachAndStoreDocumentUseCase` para receber `enable_ocr` e `ocr_instructions`. Atualizar `DocumentIngestionSagaCoordinator.handle_document_stored` para ler esses campos de `kb.documents[event.document_id]` e repassá-los ao `_parser.parse_to_markdown`.
+- **Acceptance criteria:**
+  - [x] `AttachAndStoreDocumentRequest` contém `enable_ocr: bool = False` e `ocr_instructions: str | None = None`.
+  - [x] A saga orquestra a chamada de parsing passando as opções configuradas pelo usuário.
+- **Verification:**
+  - [x] Command: `uv run pytest tests/unit/modules/knowledge/application/`
+- **Dependencies:** Task 4, Task 5
+- **Files touched:**
+  - `src/modules/knowledge/application/use_cases/attach_and_store_document/attach_and_store_document_request.py`
+  - `src/modules/knowledge/application/use_cases/attach_and_store_document/attach_and_store_document_use_case.py`
+  - `src/modules/knowledge/application/sagas/document_ingestion_saga_coordinator.py`
+- **Estimated scope:** Medium (3 files)
+
+---
+
+## Checkpoint 3: Application & Parsing Layer Ready
+
+---
+
+## Phase 4: API Gateway & Dependency Injection
+
+### Task 7: Atualizar Endpoint de Upload e Container
+- **Description:** Atualizar o endpoint `POST /api/v1/knowledge/bases/{kb_id}/documents` em `knowledge_controller.py` para aceitar `enable_ocr: bool = Form(default=False)` e `ocr_instructions: str | None = Form(default=None)`. Atualizar `create_app_container` em `container.py` para instanciar o `MarkItDownDocumentParser` com o cliente OpenRouter configurado.
+- **Acceptance criteria:**
+  - [x] O controller aceita os novos campos via `Form(...)` com defaults seguros.
+  - [x] `AppContainer` conecta a factory do OpenRouter ao `MarkItDownDocumentParser`.
+- **Verification:**
+  - [x] Command: `uv run pytest tests/unit/test_api_gateway.py`
+- **Dependencies:** Task 6
+- **Files touched:**
+  - `src/api_gateway/controllers/knowledge_controller.py`
+  - `src/api_gateway/container.py`
+- **Estimated scope:** Small (2 files)
+
+---
+
+## Checkpoint 4: Backend API Ready
+
+---
+
+## Phase 5: Frontend Console UI
+
+### Task 8: Atualizar Tipos e Client API no Frontend
+- **Description:** Atualizar `frontend/src/api/types.ts` e `frontend/src/api/knowledge-api.ts` para que `uploadDocument` aceite `enableOcr?: boolean` e `ocrInstructions?: string` e os anexe ao `FormData`.
+- **Acceptance criteria:**
+  - [x] Interface `UploadDocumentOptions` adicionada em `types.ts`.
+  - [x] `knowledgeApi.uploadDocument` envia `enable_ocr` e `ocr_instructions` no FormData.
+- **Verification:**
+  - [x] Command: `cd frontend && npm run build`
 - **Dependencies:** Task 7
-- **Files likely touched:**
-  - Diversos arquivos em `src/` e `tests/`
-- **Estimated scope:** Medium (3-5 files)
+- **Files touched:**
+  - `frontend/src/api/types.ts`
+  - `frontend/src/api/knowledge-api.ts`
+  - `frontend/src/hooks/useKnowledgeBases.ts`
+- **Estimated scope:** Small (3 files)
 
 ---
 
-### Task 9: Execução dos Gates Oficiais (`make pre-commit`, `npm run build`, `make dev`)
-- **Description:** Executar a suíte completa de qualidade para fechar a entrega.
+### Task 9: Atualizar Modal de Upload (`DocumentUploadModal.tsx`)
+- **Description:** Adicionar ao `DocumentUploadModal.tsx` um switch/toggle moderno para habilitar OCR multimodal, com alerta de performance/custo e um campo expansível para customizar as instruções de estrutura Markdown.
 - **Acceptance criteria:**
-  - [ ] `make pre-commit` 100% aprovado.
-  - [ ] `npm run build` no frontend 100% aprovado.
-  - [ ] Validação visual no Frontend com Ontologia e KB persistidas.
+  - [x] Toggle visual "Habilitar OCR / Análise Visual (Imagens, Tabelas e Gráficos)".
+  - [x] Banner explicativo: "Desativado por padrão para documentos de texto (processamento instantâneo com custo zero)."
+  - [x] Textarea opcional para "Instruções de Estrutura Markdown".
+  - [x] Envio das opções ao chamar a mutation de upload.
 - **Verification:**
-  - [ ] Command: `make pre-commit`
+  - [x] Command: `cd frontend && npm run build`
 - **Dependencies:** Task 8
-- **Files likely touched:**
+- **Files touched:**
+  - `frontend/src/pages/ingestion/DocumentUploadModal.tsx`
+- **Estimated scope:** Small (1 file)
+
+---
+
+## Checkpoint 5: Frontend UI Verified
+
+---
+
+## Phase 6: Automated Tests & Pre-Commit Gate
+
+### Task 10: Criar Testes Automatizados Abrangentes
+- **Description:** Criar e atualizar testes unitários para o `MarkItDownDocumentParser`, `AttachAndStoreDocumentUseCase`, `DocumentIngestionSagaCoordinator` e controller de upload.
+- **Acceptance criteria:**
+  - [x] Teste unitário de parsing com `enable_ocr=False` garantindo que o client LLM não é chamado.
+  - [x] Teste unitário de parsing com `enable_ocr=True` e `ocr_instructions` personalizadas.
+  - [x] Teste de integração do endpoint HTTP enviando multipart form com opções de OCR.
+- **Verification:**
+  - [x] Command: `uv run pytest tests/unit/ -v`
+- **Dependencies:** Tasks 1-9
+- **Files touched:**
+  - `tests/unit/modules/knowledge/infrastructure/test_markitdown_document_parser.py`
+  - `tests/unit/modules/knowledge/application/test_attach_and_store_document_use_case.py`
+- **Estimated scope:** Medium (2-3 files)
+
+---
+
+### Task 11: Execução dos Gates Oficiais (`make pre-commit`, `npm run build`)
+- **Description:** Executar a suíte completa de lint, formatação, verificação estrita de tipagem (Mypy Strict) e build de produção do frontend.
+- **Acceptance criteria:**
+  - [x] `make pre-commit` com zero erros e zero warnings.
+  - [x] `npm run build` no frontend com zero erros de TypeScript.
+- **Verification:**
+  - [x] Command: `make pre-commit`
+- **Dependencies:** Task 10
+- **Files touched:**
   - `CHANGELOG.md`
 - **Estimated scope:** Small (1 file)
 
 ---
 
-## Checkpoint: Complete
-- [ ] Todo o sistema operando com persistência total em PostgreSQL e FalkorDB.
+## Checkpoint 6: Feature Complete
+- [x] Pipeline de OCR configurável com OpenRouter e MarkItDown totalmente integrado, testado e validado.

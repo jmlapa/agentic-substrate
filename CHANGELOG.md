@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-18
+
+### Added
+- **Configurable Multimodal OCR & OpenRouter Integration (`MarkItDownDocumentParser` & `OpenRouterClientFactory`)**:
+  - **Fast-path Zero-Cost Default**: Plaintext and text-layer documents execute natively on CPU with zero LLM API calls and sub-second parsing speed.
+  - **Multimodal Visual Analysis via OpenRouter**: Opt-in toggle to route image-heavy, diagrammatic, and scanned documents to `qwen/qwen3-vl-30b-a3b-instruct` (or configured VLM) through OpenRouter.
+  - **Custom Markdown Structure Instructions (*Prompt Injection*)**: Upload request accepts custom formatting guidelines (e.g. strict GFM tables, mathematical preservation, standardized image annotations `> [Figura X: ...]`).
+- **PydanticAI OpenRouter Responses Provider (`PydanticAiOpenRouterProviderFactory` & `PydanticAiGraphExtractor`)**:
+  - Fábrica de modelos PydanticAI configurando `OpenAIResponsesModel` e `OpenAIProvider` com cliente `AsyncOpenAI` customizado.
+  - Headers institucionais de governança (`HTTP-Referer`, `X-Title`) e controle deslizante de taxa de requisições via `RateLimitedAsyncTransport`.
+  - Suporte ao modelo `deepseek/deepseek-v4-flash` para extração de grafos com alta precisão e baixo custo.
+  - Fallback gracioso automático para extração determinística em cenários de indisponibilidade de rede ou ambientes de teste.
+- **Backend API & Event Sourcing Updates**:
+  - `POST /api/v1/knowledge/bases/{kb_id}/documents` accepts `enable_ocr: bool` and `ocr_instructions: str` via multipart form data.
+  - `DocumentAttachedEvent` and `KnowledgeBaseAggregate` persist OCR preferences in event history.
+  - `DocumentIngestionSagaCoordinator` propagates document OCR options to the parser step.
+- **Frontend Console UI Enhancements**:
+  - Added visual toggle in `DocumentUploadModal.tsx` for multimodal OCR with real-time fast-path zero-cost badge.
+  - Added expandable textarea for optional Markdown structure instructions.
+  - Updated API client and React Query hooks to transmit upload options seamlessly.
+
 ## [0.2.1] - 2026-08-17
 
 ### Added
