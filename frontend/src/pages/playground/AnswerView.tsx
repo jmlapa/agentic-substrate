@@ -2,6 +2,7 @@ import React from 'react';
 import { Sparkles, Copy, Check } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { MarkdownRenderer } from '../../components/ui/MarkdownRenderer';
 
 export interface AnswerViewProps {
   answer: string;
@@ -18,7 +19,7 @@ export const AnswerView: React.FC<AnswerViewProps> = ({ answer }) => {
   };
 
   return (
-    <Card className="space-y-4 border-indigo-800/60 bg-gradient-to-b from-indigo-950/20 to-zinc-900/60">
+    <Card className="space-y-4 border-indigo-800/60 bg-gradient-to-b from-indigo-950/20 to-zinc-900/60 shadow-xl">
       <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-lg bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
@@ -28,7 +29,9 @@ export const AnswerView: React.FC<AnswerViewProps> = ({ answer }) => {
             <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
               Síntese Fact-Dense Grounded
             </h3>
-            <p className="text-[11px] text-zinc-400 font-mono">Gemma 4 26B A4B (OpenRouter) • Temperatura 0.1 • Proveniência Estrita</p>
+            <p className="text-[11px] text-zinc-400 font-mono">
+              Gemma 4 26B A4B (OpenRouter) • Temperatura 0.1 • Proveniência Estrita
+            </p>
           </div>
         </div>
 
@@ -36,14 +39,20 @@ export const AnswerView: React.FC<AnswerViewProps> = ({ answer }) => {
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          leftIcon={copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          leftIcon={
+            copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )
+          }
         >
           {copied ? 'Copiado' : 'Copiar'}
         </Button>
       </div>
 
-      <div className="prose prose-invert max-w-none text-sm text-zinc-200 leading-relaxed space-y-3 whitespace-pre-wrap">
-        {answer}
+      <div className="pt-1">
+        <MarkdownRenderer content={answer} />
       </div>
     </Card>
   );

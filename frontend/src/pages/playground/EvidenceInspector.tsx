@@ -3,6 +3,7 @@ import { Layers, FileText, Share2, ChevronDown, ChevronUp } from 'lucide-react';
 import { HybridSearchResult } from '../../api/types';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { MarkdownRenderer } from '../../components/ui/MarkdownRenderer';
 
 export interface EvidenceInspectorProps {
   results: HybridSearchResult[];
@@ -79,9 +80,9 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ results })
                     <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">
                       Texto do Parent Chunk ({res.parent_chunk_id}):
                     </span>
-                    <p className="text-zinc-300 leading-relaxed bg-zinc-900/60 p-3 rounded-lg border border-zinc-800 font-mono text-[11px] whitespace-pre-wrap">
-                      {res.parent_content}
-                    </p>
+                    <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/60 p-3">
+                      <MarkdownRenderer content={res.parent_content} />
+                    </div>
                   </div>
 
                   {hasGraph && (
