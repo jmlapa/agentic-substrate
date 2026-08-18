@@ -33,15 +33,19 @@ class QueryKnowledgeUseCase:
         query_vec = embeddings[0] if embeddings else []
 
         results = await self._graph_store.query_hybrid(request.kb_id, query_vec, request.top_k)
-
-        answer = ""
-        if self._synthesis_service is not None:
-            answer = await self._synthesis_service.synthesize_answer(request.query, results)
-        elif not results:
+        if not results:
             answer = (
                 "Nenhum documento ou contexto relevante foi encontrado na Knowledge Base "
                 "para responder a essa pergunta."
             )
+            return Ok(QueryKnowledgeResponse(answer=answer, results=results))
+
+        if request.mode == "retrieve":
+            answer = (
+                f"Modo retrieve: {len(results)} evidências recuperadas do grafo de conhecimento."
+            )
+        elif self._synthesis_service is not None:
+            answer = await self._synthesis_service.synthesize_answer(request.query, results)
         else:
             answer = f"Foram recuperadas {len(results)} evidências do grafo de conhecimento."
 

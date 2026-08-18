@@ -135,6 +135,7 @@ async def query_knowledge_base(
             kb_id=kb_id,
             query=payload.query,
             top_k=payload.top_k,
+            mode=payload.mode,
         )
     )
     if isinstance(res, Err):

@@ -69,3 +69,73 @@ async def test_query_knowledge_use_case_success() -> None:
         ["What are the security guidelines?"]
     )
     mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2, 0.3], 3)
+
+
+@pytest.mark.asyncio
+async def test_query_knowledge_use_case_retrieve_mode() -> None:
+    mock_graph_store = AsyncMock(spec=IGraphStore)
+    mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+    mock_synthesizer = AsyncMock()
+
+    kb_id = uuid4()
+    mock_embedding_service.embed_texts.return_value = [[0.5, 0.5]]
+
+    expected_results = [
+        HybridSearchResult(
+            parent_chunk_id="parent-fast",
+            header_path="# Direct Data",
+            parent_content="Fast raw content.",
+            relevance_score=0.99,
+            related_entities=[],
+        )
+    ]
+    mock_graph_store.query_hybrid.return_value = expected_results
+
+    use_case = QueryKnowledgeUseCase(
+        graph_store=mock_graph_store,
+        embedding_service=mock_embedding_service,
+        synthesis_service=mock_synthesizer,
+    )
+
+    request = QueryKnowledgeRequest(
+        kb_id=kb_id,
+        query="Raw query",
+        top_k=1,
+        mode="retrieve",
+    )
+
+    result = await use_case.execute(request)
+
+    assert isinstance(result, Ok)
+    assert len(result.value.results) == 1
+    assert "Modo retrieve: 1 evidências recuperadas" in result.value.answer
+    # Ensure synthesis_service was NOT invoked
+    mock_synthesizer.synthesize_answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_query_knowledge_use_case_empty_results() -> None:
+    mock_graph_store = AsyncMock(spec=IGraphStore)
+    mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+
+    kb_id = uuid4()
+    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_graph_store.query_hybrid.return_value = []
+
+    use_case = QueryKnowledgeUseCase(
+        graph_store=mock_graph_store,
+        embedding_service=mock_embedding_service,
+        synthesis_service=None,
+    )
+
+    request = QueryKnowledgeRequest(
+        kb_id=kb_id,
+        query="Non-existent info",
+        top_k=5,
+    )
+
+    result = await use_case.execute(request)
+
+    assert isinstance(result, Ok)
+    assert len(result.value.results) == 0
+    assert "Nenhum documento ou contexto relevante foi encontrado" in result.value.answer
