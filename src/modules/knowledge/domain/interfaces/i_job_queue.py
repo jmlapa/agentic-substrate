@@ -1,0 +1,13 @@
+from typing import Protocol
+
+from src.modules.knowledge.domain.value_objects.job_task import JobTask
+
+
+class IJobQueue(Protocol):
+    async def enqueue(self, queue_name: str, task: JobTask) -> None: ...
+
+    async def dequeue(self, queue_name: str, timeout: float = 1.0) -> JobTask | None: ...
+
+    async def qsize(self, queue_name: str) -> int: ...
+
+    async def clear(self, queue_name: str) -> None: ...
