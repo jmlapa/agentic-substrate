@@ -55,6 +55,9 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
+from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
+    DeepSeekRagSynthesizer,
+)
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
@@ -239,7 +242,15 @@ def create_app_container(
 
     # RAG Synthesis Service
     synthesis_service: ILlmSynthesisService
-    if gemini_key:
+    if openrouter_key:
+        synthesis_service = DeepSeekRagSynthesizer(
+            api_key=openrouter_key,
+            model_name=cfg.openrouter_graph_model_name,
+            base_url=cfg.openrouter_base_url,
+            app_title=cfg.openrouter_app_title,
+            app_referer=cfg.openrouter_app_referer,
+        )
+    elif gemini_key:
         synthesis_service = GeminiRagSynthesizer(
             api_key=gemini_key,
             model_name=cfg.gemini_model_name,

@@ -51,3 +51,17 @@ async def test_container_with_custom_app_settings() -> None:
     assert container.settings is not None
     assert container.settings.environment == "test"
     assert isinstance(container.embedding_service, GeminiEmbeddingAdapter)
+
+
+@pytest.mark.asyncio
+async def test_container_creates_deepseek_synthesis_adapter() -> None:
+    from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
+        DeepSeekRagSynthesizer,
+    )
+
+    settings = AppSettings(
+        OPENROUTER_API_KEY=SecretStr("mock-openrouter-key"),
+        OPENROUTER_GRAPH_MODEL_NAME="deepseek/deepseek-v4-flash",
+    )
+    container = create_app_container(settings=settings)
+    assert isinstance(container.synthesis_service, DeepSeekRagSynthesizer)

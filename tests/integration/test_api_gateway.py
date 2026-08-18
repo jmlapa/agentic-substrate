@@ -119,3 +119,13 @@ async def test_api_e2e_flow() -> None:
         assert len(query_data["results"]) >= 1
         assert "answer" in query_data
         assert len(query_data["answer"]) > 0
+
+        # 6.1 Query Knowledge Base in Retrieve-only mode (fast-path)
+        retrieve_resp = await client.post(
+            f"/api/v1/knowledge/bases/{kb_id}/query",
+            json={"query": "Tell me about Microservice", "top_k": 3, "mode": "retrieve"},
+        )
+        assert retrieve_resp.status_code == 200
+        retrieve_data = retrieve_resp.json()
+        assert len(retrieve_data["results"]) >= 1
+        assert "Modo retrieve:" in retrieve_data["answer"]
