@@ -1,94 +1,84 @@
-# Implementation Plan: Frontend Console SPA & RAG Query Playground
+# Implementation Plan: PostgreSQL Persistence & Dead Code Cleanup
 
 ## Overview
-Construir uma interface SPA moderna, leve e funcional no diretório `/frontend` (Vite, React 18+, TypeScript, Tailwind CSS, TanStack Query) integrada ao Agentic Substrate. A aplicação permitirá a gestão visual completa de ontologias estruturadas, criação e listagem de Knowledge Bases, upload de arquivos, monitoramento em tempo real por etapas do pipeline de ingestão GraphRAG e um Playground interativo de consultas RAG com síntese via LLM e inspeção de subgrafos FalkorDB.
+Substituir todas as implementações em memória de ontologias e bases de conhecimento (`InMemoryOntologyRepository`, `InMemoryKnowledgeBaseRepository`) por adaptadores relacionais persistentes no PostgreSQL (`PostgresOntologyRepository`, `PostgresKnowledgeBaseRepository`). Além disso, inicializar o pool de conexões assíncronas `asyncpg` no ciclo de vida (lifespan) da aplicação FastAPI, executar migrações Alembic automaticamente e remover códigos mortos/shims obsoletos, garantindo que ontologias, KBs e documentos persistam permanentemente mesmo após reinicializações e rebuilds de containers Docker.
 
 ---
 
-## Architecture Decisions (Decisões Fechadas)
-
-1. **Monorepo SPA Leve (`/frontend`)**:
-   - **React 18.3.1 + Vite 5.4+ (TypeScript 5.5+)** para bundle estático SPA minificado e hot-reload instantâneo.
-   - **Tailwind CSS 3.4+** com paleta Dark-first baseada em Zinc (`zinc-950` fundo, `zinc-900` cards, `zinc-800` bordas, `indigo-500`/`emerald-500` acentos).
-   - **TanStack React Query v5.50+** para gerenciamento de cache de servidor, refetching automático e polling inteligente de status.
-   - **React Hook Form 7.52+ + Zod 3.23+** para validação tipada estrita em tempo de formulário.
-   - **Single Component per File** e tipagem estrita em TypeScript (sem `any`), alinhado com as diretrizes do repositório.
-
-2. **Fechamento do Ciclo RAG no Backend (`api-gateway` e `knowledge`)**:
-   - `GET /api/v1/knowledge/bases`: Endpoint para listar todas as KBs existentes com métricas agregadas (número de documentos, partição de storage e status).
-   - `POST /api/v1/knowledge/bases/{kb_id}/query`: Atualização do endpoint de consulta para incorporar síntese de resposta com LLM via **Gemini 2.5 Flash-Lite** (`gemini-2.5-flash-lite`, temperatura `0.2`), retornando a resposta em Markdown formatado juntamente com as evidências (chunks e subgrafos FalkorDB recuperados).
-
-3. **Estratégia de Monitoramento do Pipeline**:
-   - Hook `usePipelineMonitor` com polling fixo de **2000ms (2s)** via React Query (`refetchInterval: 2000`).
-   - Auto-stop condicional: o polling é pausado assim que 100% dos documentos da KB atingem estado terminal (`COMPLETED` ou `FAILED`).
-   - Visualização por etapas da Saga: `ENFILEIRADO` ➔ `PARSING` ➔ `CHUNKING` ➔ `EMBEDDING` ➔ `EXTRAÇÃO DE GRAFO` ➔ `INDEXAÇÃO` ➔ `CONCLUÍDO`.
-
-4. **Containerização & Servidor Web de Produção**:
-   - **Nginx Alpine (`nginx:1.27-alpine`)** via Dockerfile multi-stage (estágio 1: build Node 20 alpine; estágio 2: runtime Nginx alpine).
-   - Tamanho final da imagem < 25MB.
-   - Configuração de fallback `try_files $uri $uri/ /index.html;` e proxy transparente de `/api/v1/` para o container do backend FastAPI.
-   - Integração no `docker/docker-compose.yml` mapeando a porta 3000 para acesso direto ao console.
+## Architecture Decisions
+1. **Modelagem Relacional no PostgreSQL (Alembic Migration 0005):**
+   - Tabela `ontology_templates`: `id` (UUID PK), `name` (VARCHAR), `description` (TEXT), `version` (INT), `node_types` (JSONB), `relationship_types` (JSONB), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ).
+   - Tabela `knowledge_bases`: `id` (UUID PK), `name` (VARCHAR), `description` (TEXT), `ontology_id` (UUID FK nullable), `status` (VARCHAR), `storage_partition` (VARCHAR), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ).
+   - Tabela `attached_documents`: `id` (UUID PK), `kb_id` (UUID FK cascade), `file_name` (VARCHAR), `status` (VARCHAR), `storage_path` (VARCHAR), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ).
+2. **Single Class per File & Hexagonal Repositories:**
+   - `PostgresOntologyRepository` em `src/modules/knowledge/infrastructure/adapters/postgres_ontology_repository.py`.
+   - `PostgresKnowledgeBaseRepository` em `src/modules/knowledge/infrastructure/adapters/postgres_knowledge_base_repository.py`.
+   - Tipagem estrita com Mypy (`asyncpg.Pool` / `asyncpg.Connection`) e Result pattern nos casos de uso.
+3. **Lifespan Assíncrono com Auto-Migração e Conexão Robusta:**
+   - `src/api_gateway/main.py` gerencia o ciclo de vida via `@asynccontextmanager` do FastAPI: inicializa o pool `asyncpg`, executa `alembic upgrade head` programaticamente se configurado, e injeta o container configurado com os adaptadores do PostgreSQL.
+   - Fallback para `InMemory*` apenas durante testes unitários onde não houver pool configurado.
+4. **Remoção de Código Morto:**
+   - Auditar e remover arquivos não utilizados, unificar referências de chunker para `StructureTolerantMarkdownChunker` e limpar imports/shims redundantes.
 
 ---
 
 ## Task List
 
-### Phase 1: Backend Support Endpoints & Synthesis Service
-- [ ] **Task 1: List Knowledge Bases Use Case & Endpoint**
-  - Implementar caso de uso `ListKnowledgeBasesUseCase`, DTOs e rota `GET /api/v1/knowledge/bases`.
-- [ ] **Task 2: RAG Answer Synthesis & Enriched Query Endpoint**
-  - Implementar serviço/caso de uso de síntese com Gemini Flash-Lite e enriquecer `POST /api/v1/knowledge/bases/{kb_id}/query`.
-- [ ] **Task 3: Backend Tests & Quality Gate**
-  - Testes unitários para novos use cases e rotas. Validação com `make pre-commit`.
+### Phase 1: Database Schema & Migrations
+- [ ] **Task 1: Migration Alembic 0005 para Ontologias e Knowledge Bases**
+  - Criar migração `migrations/versions/0005_create_knowledge_bases_and_ontologies_tables.py` com tabelas `ontology_templates`, `knowledge_bases` e `attached_documents`.
+- [ ] **Task 2: Modelos / Mapeamentos DDL e Índices de Performance**
+  - Adicionar índices em `knowledge_bases.name`, `attached_documents.kb_id` e chaves estrangeiras.
 
-### Checkpoint: Backend Foundation
-- [ ] Todos os testes do backend passando, tipagem Mypy strict 100% limpa, endpoints testados.
+### Checkpoint: Migrations Verified
+- [ ] `uv run alembic upgrade head` executa sem erros criando as 3 tabelas no Postgres local.
 
-### Phase 2: Frontend Scaffolding & Core Design System
-- [ ] **Task 4: Setup do Projeto Frontend (Vite + React + TS + Tailwind)**
-  - Configurar `/frontend`, `package.json`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js`, `index.css` e cliente Axios/QueryClient.
-- [ ] **Task 5: Layout Base & Componentes Atômicos de UI**
-  - Criar `Sidebar`, `Header`, `PageContainer`, `Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Progress`, `EmptyState` e `Toast`.
+---
 
-### Checkpoint: Frontend Scaffolding
-- [ ] Frontend compila sem erros de TypeScript, layout renderiza e navegação funciona.
+### Phase 2: PostgreSQL Repository Adapters
+- [ ] **Task 3: Implementar `PostgresOntologyRepository`**
+  - Implementar métodos `save`, `get_by_id`, `get_by_name`, `list_all` em `src/modules/knowledge/infrastructure/adapters/postgres_ontology_repository.py`.
+- [ ] **Task 4: Implementar `PostgresKnowledgeBaseRepository`**
+  - Implementar métodos `save`, `get_by_id`, `list_all`, `add_document`, `update_document_status` em `src/modules/knowledge/infrastructure/adapters/postgres_knowledge_base_repository.py`.
+- [ ] **Task 5: Testes Unitários e de Integração dos Repositórios Postgres**
+  - Criar suite de testes em `tests/unit/test_postgres_repositories.py` e `tests/integration/test_postgres_repositories.py`.
 
-### Phase 3: Vertical Slice: Gestão de Ontologias
-- [ ] **Task 6: Ontologies API, Types e React Query Hooks**
-  - Criar contratos TypeScript, chamadas de API (`ontologies-api.ts`) e hooks (`useOntologies.ts`).
-- [ ] **Task 7: Páginas de Listagem, Criação Estruturada e Detalhe de Ontologia**
-  - `OntologiesListPage.tsx`, `CreateOntologyPage.tsx` (com adição dinâmica de entidades/relações) e `OntologyDetailPage.tsx`.
+### Checkpoint: Repositories Verified
+- [ ] Testes de repositórios passando com 100% de sucesso.
 
-### Checkpoint: Ontologies Module
-- [ ] Usuário consegue criar ontologias estruturadas, listar e inspecionar detalhes via UI.
+---
 
-### Phase 4: Vertical Slice: Knowledge Bases, Upload & Monitor de Pipeline
-- [ ] **Task 8: Gestão de Knowledge Bases (Listagem, Criação e Detalhes)**
-  - `KnowledgeBasesListPage.tsx`, `CreateKnowledgeBasePage.tsx` (com seleção ou criação inline de ontologia) e `KnowledgeBaseDetailPage.tsx`.
-- [ ] **Task 9: Dropzone de Upload & Monitor Visual de Etapas do Pipeline**
-  - `DocumentUploadModal.tsx`, `PipelineStatusTracker.tsx` (stepper visual), `DocumentMetricsDrawer.tsx` e hook `usePipelineMonitor.ts`.
+### Phase 3: Lifespan, IoC Container & Startup Automation
+- [ ] **Task 6: Configurar Lifespan do FastAPI e Factory Dinâmica no `AppContainer`**
+  - Atualizar `src/api_gateway/main.py` com lifespan assíncrono para gerenciar pool `asyncpg` e registrar o container em `app.state`.
+  - Atualizar `src/api_gateway/container.py` para instanciar `PostgresOntologyRepository` e `PostgresKnowledgeBaseRepository` quando o pool do Postgres estiver ativo.
+- [ ] **Task 7: Execução Automática de Migrações no Startup do Container**
+  - Adicionar comando de inicialização ou script no container `api` para rodar migrações antes de iniciar o Uvicorn (`alembic upgrade head && uvicorn ...`).
 
-### Checkpoint: Knowledge Bases & Ingestion Flow
-- [ ] Criação de KB, upload de arquivos e acompanhamento das etapas do pipeline em tempo real validados na UI.
+### Checkpoint: Container Persistence Working
+- [ ] Reiniciar containers e validar que ontologias e KBs continuam salvas no PostgreSQL.
 
-### Phase 5: Vertical Slice: RAG Query Playground & Containerização
-- [ ] **Task 10: Playground de Consulta RAG com Síntese e Inspetor de Evidências**
-  - `QueryPlaygroundView.tsx`, `AnswerView.tsx` (markdown renderer), `EvidenceInspector.tsx` (chunks e subgrafos) e `useRagQuery.ts`.
-- [ ] **Task 11: Multi-stage Dockerfile & Integração no Docker Compose**
-  - Criar `/frontend/Dockerfile`, `/frontend/nginx.conf` e adicionar serviço `frontend` na porta 3000 no `docker-compose.yml`.
-- [ ] **Task 12: Validação Integrada Ponta a Ponta & Pre-Commit Gate**
-  - Execução dos gates de qualidade (testes frontend Vitest, `npm run build`, `make pre-commit`).
+---
 
-### Checkpoint: Final Review & Self-Hosted Ready
-- [ ] Stack completa sobe com `docker-compose up`, fluxo ponta a ponta (Ontologia ➔ KB ➔ Upload ➔ Monitor ➔ Playground) 100% funcional.
+### Phase 4: Dead Code Cleanup & Quality Gates
+- [ ] **Task 8: Limpeza de Código Morto e Refatorações de Chunker/Extractor**
+  - Limpar imports obsoletos, avaliar dependência de `MarkdownParentChildChunker` e garantir que o projeto use exclusivamente os padrões canônicos.
+- [ ] **Task 9: Execução dos Gates Oficiais (`make pre-commit`, `npm run build`, `make dev`)**
+  - Executar suíte completa de lint, mypy strict, testes com cobertura >= 90% e teste ponta a ponta no Frontend.
+
+### Checkpoint: Complete
+- [ ] Todos os gates aprovados e persistência validada no navegador.
 
 ---
 
 ## Risks and Mitigations
+| Risco | Impacto | Mitigação |
+|---|---|---|
+| Diferença de schema JSON entre Pydantic e colunas `JSONB` | Médio | Usar `.model_dump(mode='json')` e `TypeAdapter` para serialização/deserialização determinística dos nós e relações. |
+| Conexão do Postgres não pronta no startup do container | Médio | O `docker-compose.yml` já usa `depends_on: postgres: condition: service_healthy`. Adicionar retentativa no lifespan. |
+| Quebra de retrocompatibilidade em testes unitários existentes | Baixo | Manter os adaptadores `InMemory*` disponíveis para testes rápidos de unidade sem dependência de Postgres. |
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Bloqueio de CORS entre frontend e API FastAPI | Médio | Configurar middleware de CORS permissivo no FastAPI para ambiente local e Docker. |
-| Ingestão assíncrona longa em arquivos pesados | Médio | Implementar polling resiliente com backoff suave e indicadores visuais claros de status por fase. |
-| Latência na síntese do LLM no endpoint de query | Baixo | Utilizar o Gemini Flash-Lite (`gemini-2.5-flash-lite`), com timeout configurado e loading state dedicado no Playground. |
-| Payload de grafo muito grande para renderização | Baixo | Foco em visualização tabular/hierárquica estruturada de nós e arestas em vez de canvas 3D pesado na V1. |
+---
+
+## Open Questions
+- Nenhuma no momento. O escopo e os contratos estão alinhados com a arquitetura hexagonal existente.

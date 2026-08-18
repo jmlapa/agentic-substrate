@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.api_gateway.container import AppContainer
 from src.api_gateway.dtos.create_ontology_template_dto import (
@@ -20,7 +20,9 @@ from src.modules.knowledge.application.use_cases.list_ontology_templates import 
 ontology_router = APIRouter(prefix="/api/v1/ontologies", tags=["Ontologies"])
 
 
-def get_container() -> AppContainer:
+def get_container(request: Request) -> AppContainer:
+    if hasattr(request.app.state, "container") and request.app.state.container:
+        return request.app.state.container  # type: ignore[no-any-return]
     from src.api_gateway.main import container
 
     return container

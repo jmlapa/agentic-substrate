@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from src.api_gateway.container import AppContainer
 from src.api_gateway.dtos.create_knowledge_base_dto import (
@@ -28,7 +28,9 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
 router = APIRouter(prefix="/api/v1/knowledge", tags=["Knowledge"])
 
 
-def get_container() -> AppContainer:
+def get_container(request: Request) -> AppContainer:
+    if hasattr(request.app.state, "container") and request.app.state.container:
+        return request.app.state.container  # type: ignore[no-any-return]
     from src.api_gateway.main import container
 
     return container

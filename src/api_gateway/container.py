@@ -85,6 +85,12 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
+    PostgresKnowledgeBaseRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_ontology_repository import (
+    PostgresOntologyRepository,
+)
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
 )
@@ -140,8 +146,14 @@ def create_app_container(
     else:
         store = InMemoryEventStore(event_bus=bus)
 
-    repo: IKnowledgeBaseRepository = InMemoryKnowledgeBaseRepository()
-    ontology_repo: IOntologyRepository = InMemoryOntologyRepository()
+    repo: IKnowledgeBaseRepository
+    ontology_repo: IOntologyRepository
+    if postgres_pool:
+        repo = PostgresKnowledgeBaseRepository(pool=postgres_pool)
+        ontology_repo = PostgresOntologyRepository(pool=postgres_pool)
+    else:
+        repo = InMemoryKnowledgeBaseRepository()
+        ontology_repo = InMemoryOntologyRepository()
 
     # Object Storage (Local File System)
     base_dir = storage_base_dir or cfg.storage_local_base_dir
