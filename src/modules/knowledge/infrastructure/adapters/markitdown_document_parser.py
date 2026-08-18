@@ -106,6 +106,10 @@ class MarkItDownDocumentParser(IDocumentParser):
         content_type: str,
         enable_ocr: bool = False,
         ocr_instructions: str | None = None,
+        doc_id: Any = None,
+        kb_partition: str | None = None,
+        progress_callback: Any = None,
+        **kwargs: Any,
     ) -> str:
         file_extension = self._infer_extension(file_name, content_type)
         return await asyncio.to_thread(

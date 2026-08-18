@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -10,4 +10,7 @@ class IDocumentParser(Protocol):
         content_type: str,
         enable_ocr: bool = False,
         ocr_instructions: str | None = None,
+        doc_id: Any = None,
+        kb_partition: str | None = None,
+        progress_callback: Any = None,
     ) -> str: ...

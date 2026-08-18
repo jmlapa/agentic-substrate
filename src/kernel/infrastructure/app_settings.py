@@ -76,6 +76,9 @@ class AppSettings(BaseSettings):
         alias="OCR_VISION_MODEL_NAME",
     )
     ocr_max_concurrency: int = Field(default=5, alias="OCR_MAX_CONCURRENCY")
+    ocr_toc_batch_size: int = Field(default=25, alias="OCR_TOC_BATCH_SIZE")
+    ocr_low_res_scale: float = Field(default=1.0, alias="OCR_LOW_RES_SCALE")
+    ocr_high_res_scale: float = Field(default=2.0, alias="OCR_HIGH_RES_SCALE")
     ocr_default_markdown_prompt: str = Field(
         default=(
             "Transcribe document faithfully into GitHub Flavored Markdown. "
@@ -105,6 +108,16 @@ class AppSettings(BaseSettings):
     falkordb_host: str = Field(default="localhost", alias="FALKORDB_HOST")
     falkordb_port: int = Field(default=6380, alias="FALKORDB_PORT")
     falkordb_password: SecretStr | None = Field(default=None, alias="FALKORDB_PASSWORD")
+
+    # Redis & Job Queue
+    job_queue_type: Literal["memory", "redis"] = Field(
+        default="memory",
+        alias="JOB_QUEUE_TYPE",
+    )
+    redis_host: str = Field(default="localhost", alias="REDIS_HOST")
+    redis_port: int = Field(default=6379, alias="REDIS_PORT")
+    redis_password: SecretStr | None = Field(default=None, alias="REDIS_PASSWORD")
+    redis_db: int = Field(default=0, alias="REDIS_DB")
 
     # Object Storage
     storage_type: Literal["local", "s3"] = Field(default="local", alias="STORAGE_TYPE")

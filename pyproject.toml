@@ -48,6 +48,7 @@ pythonpath = ["."]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+exclude = ["scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N"]
@@ -61,11 +62,13 @@ mypy_path = "."
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+exclude = ["^scripts/"]
 
 [[tool.mypy.overrides]]
 module = [
     "asyncpg.*",
     "falkordb.*",
     "markitdown.*",
+    "pypdfium2.*",
 ]
 ignore_missing_imports = true
