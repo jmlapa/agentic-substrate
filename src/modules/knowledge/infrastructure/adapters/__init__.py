@@ -1,3 +1,6 @@
+from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
+    DeepSeekRagSynthesizer,
+)
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
@@ -42,6 +45,7 @@ from src.modules.knowledge.infrastructure.adapters.pydantic_ai_openrouter_provid
 )
 
 __all__ = [
+    "DeepSeekRagSynthesizer",
     "FalkorDbGraphStoreAdapter",
     "GeminiEmbeddingAdapter",
     "GeminiRagSynthesizer",

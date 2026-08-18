@@ -1,133 +1,169 @@
-# Task List: CQRS Consolidated Read Model & Projections
+# Task List: DeepSeek-V4-Flash Fact-Dense RAG Synthesis & Dual-Payload
 
-## Phase 1: Database Migration & Schema Expansion
+## Phase 1: DeepSeek Rag Synthesizer Adapter (TDD)
 
-### Task 1: Alembic Migration `0006_expand_attached_documents_read_model.py`
-- **Description:** Criar nova migration Alembic para adicionar colunas ricas de leitura na tabela relacional `attached_documents` (`enable_ocr`, `ocr_instructions`, `total_parents`, `total_children`, `indexed_nodes_count`, `indexed_edges_count`, `error_step`, `error_message`).
+### Task 1: Implementar `DeepSeekRagSynthesizer`
+- **Description:** Criar o adaptador `DeepSeekRagSynthesizer` em `src/modules/knowledge/infrastructure/adapters/deepseek_rag_synthesizer.py` implementando `ILlmSynthesisService`. O serviço formata o contexto híbrido (chunks estruturados e entidades do subgrafo) e invoca a API do OpenRouter (`deepseek/deepseek-v4-flash`) com prompt fact-dense focado em bullets e citações explícitas.
 - **Acceptance criteria:**
-  - [x] Migration Alembic gerada e encadeada após a `0005`.
-  - [x] `upgrade()` adiciona todas as colunas com defaults apropriados.
-  - [x] `downgrade()` reverte a remoção das colunas com segurança.
+  - [ ] Implementa Single Class per File (`DeepSeekRagSynthesizer`).
+  - [ ] Usa `httpx.AsyncClient` com headers `HTTP-Referer` e `X-Title`.
+  - [ ] Exporta no `__init__.py` da pasta `adapters`.
 - **Verification:**
-  - [x] Command: `uv run pytest tests/unit/test_migrations.py`
-  - [x] Command: `alembic upgrade head`
+  - [ ] Command: `uv run mypy src/modules/knowledge/infrastructure/adapters/deepseek_rag_synthesizer.py`
 - **Dependencies:** None
 - **Files touched:**
-  - `migrations/versions/0006_expand_attached_documents_read_model.py`
-- **Estimated scope:** Small (1 file)
-
----
-
-## Phase 2: Event-Driven Read Model Projector
-
-### Task 2: Implementar `KnowledgeBaseProjector`
-- **Description:** Criar `KnowledgeBaseProjector` em `src/modules/knowledge/infrastructure/projections/knowledge_base_projector.py` assinando os 8 eventos de domínio (`KnowledgeBaseCreatedEvent`, `DocumentAttachedEvent`, `DocumentStoredEvent`, `DocumentParsedToMarkdownEvent`, `DocumentChunkedEvent`, `GraphExtractedFromDocumentEvent`, `DocumentKnowledgeIndexedEvent`, `DocumentProcessingFailedEvent`) e sincronizando atomicamente as tabelas `knowledge_bases` e `attached_documents`.
-- **Acceptance criteria:**
-  - [x] Implementa Single Class per File.
-  - [x] Trata cada evento com queries idempotentes (`ON CONFLICT DO UPDATE`).
-  - [x] Operações 100% assíncronas com `asyncpg.Pool`.
-- **Verification:**
-  - [x] Command: `uv run pytest tests/unit/test_knowledge_base_projector.py`
-- **Dependencies:** Task 1
-- **Files touched:**
-  - `src/modules/knowledge/infrastructure/projections/knowledge_base_projector.py`
-  - `src/modules/knowledge/infrastructure/projections/__init__.py`
+  - `src/modules/knowledge/infrastructure/adapters/deepseek_rag_synthesizer.py`
+  - `src/modules/knowledge/infrastructure/adapters/__init__.py`
 - **Estimated scope:** Medium (2 files)
 
 ---
 
-### Task 3: Conectar o Projetor no Container de Injeção de Dependências
-- **Description:** Registrar `KnowledgeBaseProjector` no `AppContainer` (`src/api_gateway/container.py`) e assinar os eventos no `EventBus` durante o bootstrap da aplicação.
+### Task 2: Testes Unitários de `DeepSeekRagSynthesizer`
+- **Description:** Criar testes unitários em `tests/unit/test_deepseek_rag_synthesizer.py` cobrindo cenários com busca vazia, resposta bem-sucedida do OpenRouter com formatação Markdown, fallback em caso de erro HTTP e injeção de `httpx.AsyncClient` mockado.
 - **Acceptance criteria:**
-  - [x] Projetor instanciado no `AppContainer` quando o `EventBus` estiver configurado.
-  - [x] Eventos disparados pelo `PostgresEventStore` fluem automaticamente para o projetor.
+  - [ ] 100% de cobertura nos métodos do adaptador.
+  - [ ] Zero chamadas de rede reais nos testes unitários.
 - **Verification:**
-  - [x] Command: `uv run pytest tests/integration/test_container_configuration.py`
-- **Dependencies:** Task 2
+  - [ ] Command: `uv run pytest tests/unit/test_deepseek_rag_synthesizer.py`
+- **Dependencies:** Task 1
+- **Files touched:**
+  - `tests/unit/test_deepseek_rag_synthesizer.py`
+- **Estimated scope:** Small (1 file)
+
+---
+
+## Checkpoint 1: Adaptador de Síntese
+- [ ] Testes unitários do `DeepSeekRagSynthesizer` passando.
+- [ ] Validação de tipos do Mypy limpa no módulo do adaptador.
+
+---
+
+## Phase 2: Dual-Mode Query Use Case & API Contract
+
+### Task 3: Atualizar DTOs e Request de Query
+- **Description:** Adicionar campo opcional `mode: str = "synthesis"` em `QueryKnowledgeRequest` e `QueryKnowledgeDTO` para suportar `"synthesis"` e `"retrieve"`.
+- **Acceptance criteria:**
+  - [ ] `QueryKnowledgeDTO` e `QueryKnowledgeRequest` tipados com default `"synthesis"`.
+  - [ ] Compatibilidade retroativa mantida para requisições existentes.
+- **Verification:**
+  - [ ] Command: `uv run mypy src/api_gateway/dtos/query_knowledge_dto.py src/modules/knowledge/application/use_cases/query_knowledge/`
+- **Dependencies:** None
+- **Files touched:**
+  - `src/api_gateway/dtos/query_knowledge_dto.py`
+  - `src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_request.py`
+- **Estimated scope:** Small (2 files)
+
+---
+
+### Task 4: Atualizar `QueryKnowledgeUseCase` com Fast-Path para `mode="retrieve"`
+- **Description:** Modificar `QueryKnowledgeUseCase` para avaliar `request.mode`. Se `mode == "retrieve"`, pula o `synthesis_service` e retorna imediatamente os resultados recuperados (`answer` informativa/curta com total de evidências). Se `mode == "synthesis"`, chama o `synthesis_service.synthesize_answer`.
+- **Acceptance criteria:**
+  - [ ] Fast-path executado quando `mode == "retrieve"`.
+  - [ ] Síntese executada quando `mode == "synthesis"`.
+  - [ ] Tratamento gracioso quando nenhum resultado for encontrado.
+- **Verification:**
+  - [ ] Command: `uv run mypy src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_use_case.py`
+- **Dependencies:** Task 3
+- **Files touched:**
+  - `src/modules/knowledge/application/use_cases/query_knowledge/query_knowledge_use_case.py`
+- **Estimated scope:** Small (1 file)
+
+---
+
+### Task 5: Testes Unitários do `QueryKnowledgeUseCase`
+- **Description:** Atualizar e expandir os testes unitários do caso de uso em `tests/unit/test_query_knowledge_use_case.py` para validar ambos os fluxos (`synthesis` e `retrieve`).
+- **Acceptance criteria:**
+  - [ ] Teste validando que `mode == "retrieve"` não chama o `synthesis_service`.
+  - [ ] Teste validando que `mode == "synthesis"` chama o sintetizador corretamente.
+- **Verification:**
+  - [ ] Command: `uv run pytest tests/unit/test_query_knowledge_use_case.py`
+- **Dependencies:** Task 4
+- **Files touched:**
+  - `tests/unit/test_query_knowledge_use_case.py`
+- **Estimated scope:** Small (1 file)
+
+---
+
+## Checkpoint 2: Casos de Uso & API
+- [ ] Testes do caso de uso executando com 100% de sucesso.
+
+---
+
+## Phase 3: Container Wiring & Testes de Integração
+
+### Task 6: Atualizar `AppContainer` para Injetar `DeepSeekRagSynthesizer`
+- **Description:** Ajustar `src/api_gateway/container.py` para instanciar `DeepSeekRagSynthesizer` usando `cfg.openrouter_api_key` e `cfg.openrouter_graph_model_name` (ou fallback para `InMemoryRagSynthesizer` se a chave não existir).
+- **Acceptance criteria:**
+  - [ ] `DeepSeekRagSynthesizer` instanciado com as configurações do OpenRouter.
+  - [ ] Mypy strict satisfeito sem nenhum `Any` implícito.
+- **Verification:**
+  - [ ] Command: `uv run mypy src/api_gateway/container.py`
+- **Dependencies:** Task 1, Task 4
 - **Files touched:**
   - `src/api_gateway/container.py`
 - **Estimated scope:** Small (1 file)
 
 ---
 
-## Checkpoint 1: Projeções Ativas e Sincronizadas
-- [x] Testes de unidade do `KnowledgeBaseProjector` passando.
-- [x] Migrations executadas e validadas no PostgreSQL.
-
----
-
-## Phase 3: Repository & Read Model Queries
-
-### Task 4: Atualizar `PostgresKnowledgeBaseRepository`
-- **Description:** Atualizar `PostgresKnowledgeBaseRepository` para persistir `ontology_id` no `save`, e carregar o schema ontológico via `LEFT JOIN ontology_templates` e todas as métricas dos documentos no `get_by_id` e `list_all`.
+### Task 7: Testes de Integração da API de Query
+- **Description:** Atualizar `tests/integration/test_knowledge_controller.py` para testar queries com payload contendo `mode="retrieve"` e `mode="synthesis"`.
 - **Acceptance criteria:**
-  - [x] `save()` persiste `ontology_id` na tabela `knowledge_bases`.
-  - [x] `get_by_id()` executa `LEFT JOIN ontology_templates` e retorna o aggregate com `kb.ontology` preenchido.
-  - [x] `get_by_id()` e `list_all()` retornam todos os campos enriquecidos de documentos (`total_parents`, `total_children`, etc.).
+  - [ ] Endpoint `/api/v1/knowledge/bases/{kb_id}/query` responde com 200 OK para ambos os modos.
 - **Verification:**
-  - [x] Command: `uv run pytest tests/unit/test_postgres_repositories.py`
-- **Dependencies:** Task 3
-- **Files touched:**
-  - `src/modules/knowledge/infrastructure/adapters/postgres_knowledge_base_repository.py`
-- **Estimated scope:** Small (1 file)
-
----
-
-### Task 5: Streamline `KnowledgeController` para Consumo Direto do Repositório
-- **Description:** Limpar `knowledge_controller.py` para consultar diretamente o repositório relacional consolidado `container.kb_repository.get_by_id` em $O(1)$, desacoplando leituras do `event_store`.
-- **Acceptance criteria:**
-  - [x] `GET /bases/{kb_id}` consulta `kb_repository.get_by_id` diretamente.
-  - [x] `GET /bases` retorna a listagem completa com status consolidado.
-- **Verification:**
-  - [x] Command: `uv run pytest tests/integration/test_api_gateway.py`
-- **Dependencies:** Task 4
-- **Files touched:**
-  - `src/api_gateway/controllers/knowledge_controller.py`
-- **Estimated scope:** Small (1 file)
-
----
-
-## Phase 4: Backfill & Sync Utility
-
-### Task 6: Implementar Backfill / Replay de Projeções
-- **Description:** Criar método `rebuild_projections()` ou utilitário no `KnowledgeBaseProjector` para repassar eventos passados do `EventStore` e garantir que qualquer base histórica seja consolidada nas tabelas relacionais.
-- **Acceptance criteria:**
-  - [x] Replay itera por todos os aggregates e atualiza o estado consolidado.
-  - [x] Operação segura e idempotente.
-- **Verification:**
-  - [x] Command: `uv run pytest tests/unit/test_knowledge_base_projector.py`
-- **Dependencies:** Task 5
-- **Files touched:**
-  - `src/modules/knowledge/infrastructure/projections/knowledge_base_projector.py`
-  - `src/api_gateway/main.py`
-- **Estimated scope:** Small (1 file)
-
----
-
-## Phase 5: Especificações, ADR e Documentação
-
-### Task 7: Criar `SPEC-consolidated-read-model-projections.md`, ADR 0006 e Atualizar `CAPABILITY-MAP.md`
-- **Description:** Formalizar a arquitetura de Projeções CQRS no projeto, criando a spec do Marco 1.12, o ADR 0006 e atualizando o mapa de capacidades.
-- **Acceptance criteria:**
-  - [x] `SPEC-consolidated-read-model-projections.md` criado com objetivos, diagrama e contratos.
-  - [x] `docs/decisions/0006-cqrs-read-model-projections.md` registrado.
-  - [x] `CAPABILITY-MAP.md` atualizado com o Marco 1.12.
-- **Verification:**
-  - [x] Manual review dos documentos Markdown.
+  - [ ] Command: `uv run pytest tests/integration/test_knowledge_controller.py`
 - **Dependencies:** Task 6
 - **Files touched:**
-  - `SPEC-consolidated-read-model-projections.md`
-  - `docs/decisions/0006-cqrs-read-model-projections.md`
-  - `CAPABILITY-MAP.md`
-- **Estimated scope:** Medium (3 files)
+  - `tests/integration/test_knowledge_controller.py`
+- **Estimated scope:** Small (1 file)
 
 ---
 
-## Checkpoint 2: Validação Completa e Gates de Qualidade
-- [x] Executar suíte de testes unitários e de integração (`uv run pytest`).
-- [x] Executar checagem de tipos estrita (`uv run mypy src tests`).
-- [x] Executar formatador e linter (`uv run ruff check .` & `uv run ruff format --check .`).
-- [x] Executar gate oficial `make pre-commit`.
-- [x] Validar build do frontend (`cd frontend && npm run build`).
+## Phase 4: Frontend Console & Playground
 
+### Task 8: Atualizar `QueryPlaygroundView.tsx` e `types.ts`
+- **Description:** Atualizar o frontend para adicionar seletor de modo (`Síntese Fact-Dense (DeepSeek)` vs `Apenas Recuperação (Retrieve)`) e estilizar a exibição da síntese com proveniência.
+- **Acceptance criteria:**
+  - [ ] `QueryKnowledgeDTO` atualizado em `frontend/src/api/types.ts`.
+  - [ ] Toggle de modo interativo no playground.
+  - [ ] Suporte à renderização limpa do markdown e evidências.
+- **Verification:**
+  - [ ] Command: `npm --prefix frontend run build` (ou checagem de tipos/componente)
+- **Dependencies:** Task 7
+- **Files touched:**
+  - `frontend/src/api/types.ts`
+  - `frontend/src/pages/playground/QueryPlaygroundView.tsx`
+- **Estimated scope:** Medium (2 files)
 
+---
+
+## Phase 5: Especificação, ADR e Qualidade
+
+### Task 9: Criar `SPEC-deepseek-v4-fact-dense-rag-synthesis.md` e ADR-0007
+- **Description:** Documentar a decisão arquitetural e a especificação técnica do sintetizador e do modo retrieve, atualizando `CAPABILITY-MAP.md` e `CHANGELOG.md`.
+- **Acceptance criteria:**
+  - [ ] `SPEC-deepseek-v4-fact-dense-rag-synthesis.md` criado.
+  - [ ] ADR-0007 registrado em `docs/decisions/`.
+  - [ ] `CAPABILITY-MAP.md` e `CHANGELOG.md` sincronizados.
+- **Verification:**
+  - [ ] Documentos criados e links validados.
+- **Dependencies:** Task 8
+- **Files touched:**
+  - `SPEC-deepseek-v4-fact-dense-rag-synthesis.md`
+  - `docs/decisions/0007-deepseek-v4-fact-dense-rag-synthesis.md`
+  - `CAPABILITY-MAP.md`
+  - `CHANGELOG.md`
+- **Estimated scope:** Medium (4 files)
+
+---
+
+### Task 10: Executar Gate Oficial de Qualidade (`make pre-commit`)
+- **Description:** Executar o gate completo do repositório para garantir zero erros de lint, formato, tipagem Mypy e 100% de cobertura nos testes.
+- **Acceptance criteria:**
+  - [ ] Ruff check & format passam com zero avisos.
+  - [ ] Mypy em modo strict passa com zero erros.
+  - [ ] 100% dos testes unitários e de integração passando.
+- **Verification:**
+  - [ ] Command: `make pre-commit`
+- **Dependencies:** Tasks 1-9
+- **Files touched:** All project files
+- **Estimated scope:** Small (0 code modifications if clean)
