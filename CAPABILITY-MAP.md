@@ -18,6 +18,7 @@
 - `SPEC-pydantic-ai-graph-extractor-and-rate-limiter.md` (Marco 1.9 - PydanticAI Graph Extractor, Rate Limiter RPM/TPM & Entity Canonicalization) — Concluído
 - `SPEC-frontend-console.md` (Marco 1.10 - Frontend Console SPA & RAG Query Playground) — Concluído
 - `SPEC-configurable-ocr-and-visual-ingestion.md` (Marco 1.11 - OCR Multimodal Configurável, OpenRouter & MarkItDown Custom Structure) — Concluído (v0.3.0)
+- `SPEC-consolidated-read-model-projections.md` (Marco 1.12 - CQRS Consolidated Read Model & Event-Driven Projections) — Concluído (v0.3.1)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -25,6 +26,7 @@
 - `docs/decisions/0003-pydantic-ai-graph-extractor-and-rate-limiter.md`
 - `docs/decisions/0004-universal-structure-tolerant-chunker.md`
 - `docs/decisions/0005-configurable-ocr-and-openrouter-vlm.md`
+- `docs/decisions/0006-cqrs-read-model-projections.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
@@ -32,4 +34,5 @@
 3. **Marco 1.8 & 1.9 (Concluído):** `knowledge:structure-tolerant-chunker` ──→ `knowledge:pydantic-ai-extractor-and-rate-limiter`
 4. **Marco 1.10 (Concluído):** `frontend-console` (Vite+React SPA, Ontologias, KBs, Monitor de Pipeline, Playground RAG)
 5. **Marco 1.11 (Concluído - v0.3.0):** `knowledge:configurable-ocr-and-visual-ingestion` (OpenRouter, Fast-Path MarkItDown, Qwen3-VL, DeepSeek-V4-Flash)
-6. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+6. **Marco 1.12 (Concluído - v0.3.1):** `knowledge:cqrs-consolidated-read-model-projections` (Event-Driven Projector, Migration 0006, O(1) Relational Queries)
+7. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`

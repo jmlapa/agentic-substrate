@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-18
+
+### Added
+- **CQRS Consolidated Read Model & Event-Driven Projections (`KnowledgeBaseProjector`)**:
+  - Projector assíncrono escutando os 8 eventos de domínio do ciclo de vida da KB e sincronizando de forma idempotente as tabelas relacionais `knowledge_bases` e `attached_documents`.
+  - Migration Alembic `0006_expand_attached_documents_read_model.py` expandindo a tabela de leitura com opções de OCR, contadores de chunks pai/filho, nós/arestas no FalkorDB e diagnósticos de erro.
+  - Rotina de sincronização e backfill idempotente durante o bootstrap (`lifespan`) da API Gateway.
+- **Repositório de Leitura O(1) com JOIN Ontológico (`PostgresKnowledgeBaseRepository`)**:
+  - Consultas `get_by_id` e `list_all` executam `LEFT JOIN ontology_templates` para retornar o schema ontológico completo e métricas de documentos em tempo constante, sem necessidade de replay de eventos em requisições de leitura.
+- **Frontend Pipeline Tracker & Card Ontológico**:
+  - Correção do índice de conclusão no `PipelineStatusTracker.tsx`, exibindo checkmarks verdes em todas as etapas quando o status atinge `INDEXED`.
+  - Card dedicado de **Ontologia Vinculada (Schema do Grafo)** na tela de detalhes da Knowledge Base (`KnowledgeBaseDetailPage.tsx`), com badges de entidades e relações.
+
 ## [0.3.0] - 2026-08-18
 
 ### Added
