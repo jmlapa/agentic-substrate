@@ -205,10 +205,14 @@ class KnowledgeBaseAggregate(AggregateRoot):
         if event.document_id in self.documents:
             self.documents[event.document_id]["status"] = DocumentStatus.GRAPH_EXTRACTED
             self.documents[event.document_id]["extracted_graph"] = event.extracted_graph
+            self.documents[event.document_id]["node_count"] = event.node_count
+            self.documents[event.document_id]["edge_count"] = event.edge_count
 
     def _apply_document_knowledge_indexed_event(self, event: DocumentKnowledgeIndexedEvent) -> None:
         if event.document_id in self.documents:
             self.documents[event.document_id]["status"] = DocumentStatus.INDEXED
+            self.documents[event.document_id]["indexed_nodes_count"] = event.indexed_nodes_count
+            self.documents[event.document_id]["indexed_edges_count"] = event.indexed_edges_count
 
     def _apply_document_processing_failed_event(self, event: DocumentProcessingFailedEvent) -> None:
         if event.document_id in self.documents:

@@ -24,6 +24,12 @@ from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
 )
+from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
+    KnowledgeBaseAggregate,
+)
+from src.modules.knowledge.domain.value_objects.knowledge_base_status import (
+    KnowledgeBaseStatus,
+)
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["Knowledge"])
 
@@ -146,23 +152,53 @@ async def get_knowledge_base(
 ) -> dict[str, Any]:
     kb = await container.kb_repository.get_by_id(kb_id)
     if not kb:
+        # Fallback de resiliência caso a projeção ainda não tenha sido processada
+        events = await container.event_store.get_events(kb_id)
+        if events:
+            aggregate = KnowledgeBaseAggregate(id=kb_id)
+            aggregate.load_from_history(events)
+            kb = aggregate
+
+    if not kb:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Knowledge Base not found",
         )
+
+    ontology_data: dict[str, Any] | None = None
+    if kb.ontology:
+        ontology_data = {
+            "name": kb.ontology.name,
+            "description": kb.ontology.description,
+            "node_types": [nt.model_dump() for nt in kb.ontology.node_types],
+            "relationship_types": [rt.model_dump() for rt in kb.ontology.relationship_types],
+        }
+
+    status_val = kb.status.value if isinstance(kb.status, KnowledgeBaseStatus) else str(kb.status)
+
     return {
         "id": str(kb.id),
         "name": kb.name,
         "description": kb.description,
-        "status": kb.status.value,
+        "status": status_val,
         "storage_partition": kb.storage_partition,
+        "ontology": ontology_data,
         "documents": [
             {
                 "id": str(doc["id"]),
-                "file_name": doc["file_name"],
+                "file_name": doc.get("file_name", "document"),
                 "status": (
-                    doc["status"].value if hasattr(doc["status"], "value") else str(doc["status"])
+                    doc["status"].value
+                    if hasattr(doc.get("status"), "value")
+                    else str(doc.get("status", "PENDING_UPLOAD"))
                 ),
+                "enable_ocr": bool(doc.get("enable_ocr", False)),
+                "ocr_instructions": doc.get("ocr_instructions"),
+                "total_parents": doc.get("total_parents"),
+                "total_children": doc.get("total_children"),
+                "indexed_nodes_count": doc.get("indexed_nodes_count", 0),
+                "indexed_edges_count": doc.get("indexed_edges_count", 0),
+                "error": doc.get("error"),
             }
             for doc in kb.documents.values()
         ],

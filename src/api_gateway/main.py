@@ -41,6 +41,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         postgres_pool=pool,
     )
     app.state.container = container
+
+    if pool and container.projector:
+        try:
+            async with pool.acquire() as conn:
+                streams = await conn.fetch("SELECT aggregate_id FROM event_streams")
+                for s in streams:
+                    events = await container.event_store.get_events(s["aggregate_id"])
+                    await container.projector.rebuild_projections_from_events(events)
+        except Exception:
+            pass
+
     yield
     if pool:
         await pool.close()

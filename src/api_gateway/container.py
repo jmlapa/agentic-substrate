@@ -103,6 +103,9 @@ from src.modules.knowledge.infrastructure.extractors.existing_entity_registry im
 from src.modules.knowledge.infrastructure.extractors.pydantic_ai_graph_extractor import (
     PydanticAiGraphExtractor,
 )
+from src.modules.knowledge.infrastructure.projections.knowledge_base_projector import (
+    KnowledgeBaseProjector,
+)
 
 
 @dataclass
@@ -126,6 +129,7 @@ class AppContainer:
     create_ontology_use_case: CreateOntologyTemplateUseCase
     get_ontology_use_case: GetOntologyTemplateUseCase
     list_ontologies_use_case: ListOntologyTemplatesUseCase
+    projector: KnowledgeBaseProjector | None = None
     settings: AppSettings | None = None
 
 
@@ -272,6 +276,10 @@ def create_app_container(
     get_ont = GetOntologyTemplateUseCase(ontology_repo)
     list_ont = ListOntologyTemplatesUseCase(ontology_repo)
 
+    projector: KnowledgeBaseProjector | None = None
+    if postgres_pool is not None:
+        projector = KnowledgeBaseProjector(pool=postgres_pool, event_bus=bus)
+
     return AppContainer(
         event_bus=bus,
         event_store=store,
@@ -292,5 +300,6 @@ def create_app_container(
         create_ontology_use_case=create_ont,
         get_ontology_use_case=get_ont,
         list_ontologies_use_case=list_ont,
+        projector=projector,
         settings=cfg,
     )
