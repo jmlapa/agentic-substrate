@@ -245,8 +245,9 @@ def create_app_container(
     if openrouter_key:
         synthesis_service = DeepSeekRagSynthesizer(
             api_key=openrouter_key,
-            model_name=cfg.openrouter_graph_model_name,
+            model_name=cfg.openrouter_synthesis_model_name,
             base_url=cfg.openrouter_base_url,
+            max_tokens=cfg.openrouter_synthesis_max_tokens,
             app_title=cfg.openrouter_app_title,
             app_referer=cfg.openrouter_app_referer,
         )

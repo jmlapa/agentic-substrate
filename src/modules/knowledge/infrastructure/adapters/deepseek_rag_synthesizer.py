@@ -21,9 +21,10 @@ class DeepSeekRagSynthesizer(ILlmSynthesisService):
     def __init__(
         self,
         api_key: str,
-        model_name: str = "deepseek/deepseek-v4-flash",
+        model_name: str = "google/gemma-4-26b-a4b-it",
         base_url: str = "https://openrouter.ai/api/v1",
         temperature: float = 0.1,
+        max_tokens: int = 800,
         http_client: httpx.AsyncClient | None = None,
         app_title: str = "Agentic Substrate",
         app_referer: str = "https://agentic-substrate.local",
@@ -32,6 +33,7 @@ class DeepSeekRagSynthesizer(ILlmSynthesisService):
         self._model_name = model_name
         self._base_url = base_url.rstrip("/")
         self._temperature = temperature
+        self._max_tokens = max_tokens
         self._client = http_client
         self._app_title = app_title
         self._app_referer = app_referer
@@ -104,6 +106,7 @@ class DeepSeekRagSynthesizer(ILlmSynthesisService):
         payload: dict[str, Any] = {
             "model": self._model_name,
             "temperature": self._temperature,
+            "max_tokens": self._max_tokens,
             "messages": [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_prompt},

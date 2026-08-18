@@ -60,8 +60,16 @@ class AppSettings(BaseSettings):
         alias="GRAPH_EXTRACTOR_PROVIDER",
     )
     openrouter_graph_model_name: str = Field(
-        default="deepseek/deepseek-v4-flash",
+        default="google/gemma-4-26b-a4b-it",
         alias="OPENROUTER_GRAPH_MODEL_NAME",
+    )
+    openrouter_synthesis_model_name: str = Field(
+        default="google/gemma-4-26b-a4b-it",
+        alias="OPENROUTER_SYNTHESIS_MODEL_NAME",
+    )
+    openrouter_synthesis_max_tokens: int = Field(
+        default=800,
+        alias="OPENROUTER_SYNTHESIS_MAX_TOKENS",
     )
     ocr_vision_model_name: str = Field(
         default="qwen/qwen3-vl-30b-a3b-instruct",
