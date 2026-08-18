@@ -20,6 +20,8 @@
 - `SPEC-configurable-ocr-and-visual-ingestion.md` (Marco 1.11 - OCR Multimodal Configurável, OpenRouter & MarkItDown Custom Structure) — Concluído (v0.3.0)
 - `SPEC-consolidated-read-model-projections.md` (Marco 1.12 - CQRS Consolidated Read Model & Event-Driven Projections) — Concluído (v0.3.1)
 - `SPEC-deepseek-v4-fact-dense-rag-synthesis.md` (Marco 1.13 - DeepSeek-V4-Flash Fact-Dense RAG Synthesis & Dual-Mode Retrieval) — Concluído (v0.3.2)
+- `SPEC-synthetic-toc-and-parallel-vlm-ocr.md` (Marco 1.14 - Stateful Synthetic ToC & Resilient Parallel VLM OCR) — Concluído (v0.3.3)
+- `SPEC-resilient-saga-reprocessing-and-job-queues.md` (Marco 1.15 - Resilient Saga Reprocessing, Redis Job Queues & Zero-Token-Waste Checkpoints) — Planejado (v0.3.4)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -38,4 +40,5 @@
 5. **Marco 1.11 (Concluído - v0.3.0):** `knowledge:configurable-ocr-and-visual-ingestion` (OpenRouter, Fast-Path MarkItDown, Qwen3-VL, DeepSeek-V4-Flash)
 6. **Marco 1.12 (Concluído - v0.3.1):** `knowledge:cqrs-consolidated-read-model-projections` (Event-Driven Projector, Migration 0006, O(1) Relational Queries)
 7. **Marco 1.13 (Concluído - v0.3.2):** `knowledge:deepseek-v4-fact-dense-rag-synthesis` (DeepSeek-V4-Flash via OpenRouter, Fact-Dense Markdown, Dual-Mode synthesis/retrieve)
-8. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+8. **Marco 1.14 (Concluído - v0.3.3):** `knowledge:synthetic-toc-and-parallel-vlm-ocr` (Stateful Rolling Window ToC, Parallel Two-Pass OCR, Concurrency & Rate Limiting)
+9. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`

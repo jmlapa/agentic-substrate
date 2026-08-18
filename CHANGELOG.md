@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-08-18
+
+### Added
+- **Real-Time Telemetry Precision, Continuous Pipeline Transitions & Frontend Polish (Marco 1.17)**:
+  - **Limpeza de Mensagens de OCR e Contador Agregado**:
+    - Substituição da mensagem do OCR interpolada por `page_num` pela contagem acumulada `"Processando OCR: {cur}/{total_pages} páginas concluídas"`, eliminando oscilações de números fora de ordem causadas pelo término concorrente de workers.
+  - **Cálculo de Percentual com Teto Estrito (99% Guard)**:
+    - Garantia matemática de que o percentual de conclusão nunca exiba $100\%$ enquanto existirem itens pendentes na etapa ($cur < tot$), eliminando arredondamentos precoces no frontend.
+  - **Transições de Telemetria Instantâneas e Contínuas**:
+    - Emissão de `DocumentProgressUpdatedEvent` imediato nos inícios das etapas de `CHUNKING`, `GRAPH_EXTRACTION` e `EMBEDDINGS`, proporcionando feedback visual contínuo ao usuário enquanto os lotes são preparados.
+  - **Sincronização Explícita do Read Model no Projector**:
+    - Atualização dos handlers `handle_document_parsed`, `handle_document_chunked` e `handle_document_indexed` no `KnowledgeBaseProjector` para sincronizar e limpar mensagens de etapas anteriores no PostgreSQL.
+  - **Polimento Visual do Frontend (`PipelineStatusTracker`)**:
+    - Renderização limpa com ícone animado de spinner, truncamento defensivo de textos longos e badge condicional `{pct}% ({cur}/{tot})` com transições suaves de layout.
+
+## [0.3.5] - 2026-08-18
+
+### Added
+- **Resilient ToC Checkpoints, Monotonic Telemetry & Thread-Safe Fast-Path OCR (Marco 1.16)**:
+  - **`TocCheckpointStorage`**:
+    - Persistência atômica granular de lotes do Synthetic ToC (`toc_cache/{doc_id}/batch_{batch_num:04d}.json`) contendo itens e o estado de passagem (`TocBatchState`).
+    - Persistência do ToC consolidado (`toc_cache/{doc_id}/toc.json`) eliminando reprocessamento de ToC em caso de reinicialização da saga a custo **$0.00**.
+  - **Fast-Path OCR Cache Hit**:
+    - Se todas as páginas do documento já estiverem presentes no `PageCheckpointStorage`, o `ParallelVlmDocumentParser` pula a etapa de ToC integralmente e monta o Markdown consolidado diretamente do disco em milissegundos sem chamadas à LLM.
+  - **Fila de Workers e Telemetria Monotônica (`asyncio.Queue`)**:
+    - Refatoração do OCR concorrente para usar fila de workers com uso de RAM constante $O(\text{concurrency})$ em vez de $O(N)$ corrotinas.
+    - Substituição do envio de índice estático por contador atômico de páginas concluídas (`completed_count`), eliminando a oscilação visual de progresso no frontend ($x \rightarrow x-4$).
+    - Contador atômico `completed_parents` na extração de grafos no coordenador da Saga.
+  - **Thread-Safety no Renderizador C-PDFium**:
+    - Mutex de thread (`threading.Lock`) no `PdfPageRenderer` garantindo isolamento seguro em picos de concorrência multithread.
+  - **Guarda Monotônica no Projector**:
+    - Query SQL no `KnowledgeBaseProjector` com cláusula `GREATEST` para impedir regressão de percentual em caso de desordem de pacotes de rede.
+
+## [0.3.4] - 2026-08-18
+
+### Added
+- **Resilient Saga Reprocessing, Redis Job Queues & Zero-Token-Waste Checkpoints (Marco 1.15)**:
+  - **Checkpoints Atômicos em Disco com Custo Zero ($0.00)**:
+    - `PageCheckpointStorage`: Salva cada página transcrita por OCR em `ocr_cache/{doc_id}/page_{page_num:04d}.md`. Retomadas e reprocessamentos reutilizam instantaneamente páginas já processadas sem nenhuma chamada à API de VLM.
+    - `ParentGraphCheckpointStorage`: Salva grafos ontológicos Pydantic extraídos por Parent Chunk em `graph_cache/{doc_id}/parent_{parent_id}.json`. Retomadas carregam o grafo do disco sem chamadas adicionais de LLM.
+    - Cache estrutural de Chunks em `chunks/{doc_id}_chunks.json` evitando re-chunking redundante.
+  - **Filas de Jobs Assíncronas (`IJobQueue`)**:
+    - Implementações `InMemoryJobQueue` e `RedisJobQueue` (baseada em listas atômicas `LPUSH` / `BLPOP`).
+    - Value Objects imutáveis `JobTask`, `PageOcrJobPayload` e `ParentGraphJobPayload`.
+  - **Telemetria Granular de Progresso e CQRS**:
+    - Novo evento de domínio `DocumentProgressUpdatedEvent` emitindo percentual, página/chunk atual, total e mensagens contextuais.
+    - Migração Alembic `0007_add_document_progress_telemetry.py` e atualização do `KnowledgeBaseProjector` para persistência em tempo real nas colunas `progress_step`, `progress_current`, `progress_total`, `progress_percentage` e `progress_message`.
+  - **Endpoint e Caso de Uso de Reprocessamento**:
+    - `ReprocessDocumentUseCase` e endpoint `POST /api/v1/knowledge/bases/{kb_id}/documents/{doc_id}/reprocess` para retomar ingestões interrompidas com total segurança.
+  - **Frontend Real-Time Progress & Retry**:
+    - Barra de progresso dinâmica em tempo real no `PipelineStatusTracker.tsx` com indicação de progresso e badges informativos.
+    - Botão **"Retomar Ingestão (Zero Tokens)"** no card de documentos em `KnowledgeBaseDetailPage.tsx`.
+  - **Micro-batches de Embeddings**:
+    - Fatiamento de chunks filhos em micro-lotes de 50 embeddings por requisição, prevenindo estouro de payload HTTP e rate limits.
+
+## [0.3.3] - 2026-08-18
+
+### Added
+- **Stateful Synthetic ToC & Resilient Parallel VLM OCR (`ParallelVlmDocumentParser`, `QwenSyntheticTocExtractor`, `PdfPageRenderer`)**:
+  - **Passo 1 (Synthetic ToC)**: Extração da árvore hierárquica completa (`#`, `##`, `###`, `####`) mesmo para documentos sem sumário/índice através de fatiamento em lotes encadeados de 20-25 páginas em baixa resolução (1.0x / ~72 DPI) com passagem de estado ativo (`TocBatchState`).
+  - **Passo 2 (Parallel Transcription)**: Transcrição simultânea de páginas em alta resolução (2.0x / ~200 DPI) com controle estrito de concorrência (`asyncio.Semaphore(ocr_max_concurrency)`), injeção determinística de hierarquia por página e resiliência a 429 com exponential backoff.
+  - **Value Objects & Entidades de Domínio**: `HierarchicalTocItem`, `TocBatchState`, `SyntheticDocumentToc` e protocolo `ISyntheticTocExtractor`.
+  - **Renderizador Dual-Scale**: `PdfPageRenderer` assíncrono com `pypdfium2` gerando JPEGs em memória em escalas 1.0x (ToC) e 2.0x (OCR).
+
 ## [0.3.2] - 2026-08-18
 
 ### Added
