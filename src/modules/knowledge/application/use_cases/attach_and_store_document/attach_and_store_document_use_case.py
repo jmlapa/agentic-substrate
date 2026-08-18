@@ -42,7 +42,12 @@ class AttachAndStoreDocumentUseCase:
         kb = KnowledgeBaseAggregate(id=request.kb_id)
         kb.load_from_history(events)
 
-        doc_id = kb.attach_document(request.file_name, request.content_type)
+        doc_id = kb.attach_document(
+            file_name=request.file_name,
+            content_type=request.content_type,
+            enable_ocr=request.enable_ocr,
+            ocr_instructions=request.ocr_instructions,
+        )
         doc_info = kb.documents[doc_id]
         storage_path = doc_info["storage_path"]
 

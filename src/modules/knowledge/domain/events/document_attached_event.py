@@ -8,3 +8,5 @@ class DocumentAttachedEvent(DomainEvent):
     file_name: str
     content_type: str
     storage_path: str
+    enable_ocr: bool = False
+    ocr_instructions: str | None = None

@@ -41,6 +41,42 @@ class AppSettings(BaseSettings):
     )
     embedding_dimension: int = Field(default=768, alias="EMBEDDING_DIMENSION")
 
+    # OpenRouter & Multimodal OCR / Graph Extraction
+    openrouter_api_key: SecretStr | None = Field(default=None, alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1",
+        alias="OPENROUTER_BASE_URL",
+    )
+    openrouter_app_title: str = Field(
+        default="Agentic Substrate",
+        alias="OPENROUTER_APP_TITLE",
+    )
+    openrouter_app_referer: str = Field(
+        default="https://agentic-substrate.local",
+        alias="OPENROUTER_APP_REFERER",
+    )
+    graph_extractor_provider: Literal["gemini", "openrouter"] = Field(
+        default="openrouter",
+        alias="GRAPH_EXTRACTOR_PROVIDER",
+    )
+    openrouter_graph_model_name: str = Field(
+        default="deepseek/deepseek-v4-flash",
+        alias="OPENROUTER_GRAPH_MODEL_NAME",
+    )
+    ocr_vision_model_name: str = Field(
+        default="qwen/qwen3-vl-30b-a3b-instruct",
+        alias="OCR_VISION_MODEL_NAME",
+    )
+    ocr_max_concurrency: int = Field(default=5, alias="OCR_MAX_CONCURRENCY")
+    ocr_default_markdown_prompt: str = Field(
+        default=(
+            "Transcribe document faithfully into GitHub Flavored Markdown. "
+            "Preserve tables, headings and lists, and provide descriptive "
+            "text for figures and diagrams."
+        ),
+        alias="OCR_DEFAULT_MARKDOWN_PROMPT",
+    )
+
     # Database / Event Store
     event_store_type: Literal["memory", "postgres"] = Field(
         default="memory",

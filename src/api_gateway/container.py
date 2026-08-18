@@ -85,6 +85,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
+    OpenRouterClientFactory,
+)
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
@@ -159,8 +162,19 @@ def create_app_container(
     base_dir = storage_base_dir or cfg.storage_local_base_dir
     storage: IObjectStorage = LocalFileSystemStorageAdapter(base_directory=base_dir)
 
-    # Document Parser (MarkItDown)
-    parser: IDocumentParser = MarkItDownDocumentParser()
+    # Document Parser (MarkItDown with Fast-Path & OpenRouter Multimodal OCR)
+    openrouter_key = cfg.openrouter_api_key.get_secret_value() if cfg.openrouter_api_key else None
+    openrouter_client = OpenRouterClientFactory.create(
+        api_key=openrouter_key,
+        base_url=cfg.openrouter_base_url,
+        app_title=cfg.openrouter_app_title,
+        app_referer=cfg.openrouter_app_referer,
+    )
+    parser: IDocumentParser = MarkItDownDocumentParser(
+        openrouter_client=openrouter_client,
+        vision_model=cfg.ocr_vision_model_name,
+        default_prompt=cfg.ocr_default_markdown_prompt,
+    )
 
     # Markdown Chunker
     chunker: IMarkdownChunker = StructureTolerantMarkdownChunker()
@@ -182,14 +196,30 @@ def create_app_container(
     )
     entity_registry = ExistingEntityRegistry()
 
-    # Graph Extractor (PydanticAI)
-    extractor: IGraphExtractor = PydanticAiGraphExtractor(
-        rate_limiter=limiter,
-        entity_registry=entity_registry,
-        model_name=cfg.gemini_model_name,
-        api_key=gemini_key,
-        max_concurrency=cfg.gemini_max_concurrency,
-    )
+    # Graph Extractor (PydanticAI with OpenRouter or Gemini)
+    extractor_provider = cfg.graph_extractor_provider
+    extractor: IGraphExtractor
+    if extractor_provider == "openrouter" and openrouter_key:
+        extractor = PydanticAiGraphExtractor(
+            rate_limiter=limiter,
+            entity_registry=entity_registry,
+            provider_type="openrouter",
+            model_name=cfg.openrouter_graph_model_name,
+            api_key=openrouter_key,
+            base_url=cfg.openrouter_base_url,
+            app_title=cfg.openrouter_app_title,
+            app_referer=cfg.openrouter_app_referer,
+            max_concurrency=cfg.gemini_max_concurrency,
+        )
+    else:
+        extractor = PydanticAiGraphExtractor(
+            rate_limiter=limiter,
+            entity_registry=entity_registry,
+            provider_type="gemini",
+            model_name=cfg.gemini_model_name,
+            api_key=gemini_key,
+            max_concurrency=cfg.gemini_max_concurrency,
+        )
 
     # Graph Store (FalkorDB or InMemory)
     grp_type = graph_store_type or cfg.graph_store_type

@@ -119,8 +119,16 @@ class DocumentIngestionSagaCoordinator:
             doc_info = kb.documents.get(event.document_id, {})
             file_name = doc_info.get("file_name", "doc.txt")
             content_type = doc_info.get("content_type", "text/plain")
+            enable_ocr = bool(doc_info.get("enable_ocr", False))
+            ocr_instructions = doc_info.get("ocr_instructions")
 
-            markdown_text = await self._parser.parse_to_markdown(raw_bytes, file_name, content_type)
+            markdown_text = await self._parser.parse_to_markdown(
+                raw_bytes=raw_bytes,
+                file_name=file_name,
+                content_type=content_type,
+                enable_ocr=enable_ocr,
+                ocr_instructions=ocr_instructions,
+            )
             md_path = f"{kb.storage_partition}/markdown/{event.document_id}.md"
             await self._storage.put_object(md_path, markdown_text.encode("utf-8"), "text/markdown")
 

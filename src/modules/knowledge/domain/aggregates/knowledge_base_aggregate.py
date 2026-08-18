@@ -61,7 +61,13 @@ class KnowledgeBaseAggregate(AggregateRoot):
         )
         return kb
 
-    def attach_document(self, file_name: str, content_type: str) -> UUID:
+    def attach_document(
+        self,
+        file_name: str,
+        content_type: str,
+        enable_ocr: bool = False,
+        ocr_instructions: str | None = None,
+    ) -> UUID:
         doc_id = uuid4()
         storage_path = f"{self.storage_partition}/raw/{doc_id}-{file_name}"
         self.record_event(
@@ -72,6 +78,8 @@ class KnowledgeBaseAggregate(AggregateRoot):
                 file_name=file_name,
                 content_type=content_type,
                 storage_path=storage_path,
+                enable_ocr=enable_ocr,
+                ocr_instructions=ocr_instructions,
             )
         )
         return doc_id
@@ -168,6 +176,8 @@ class KnowledgeBaseAggregate(AggregateRoot):
             "content_type": event.content_type,
             "storage_path": event.storage_path,
             "status": DocumentStatus.PENDING_UPLOAD,
+            "enable_ocr": event.enable_ocr,
+            "ocr_instructions": event.ocr_instructions,
         }
 
     def _apply_document_stored_event(self, event: DocumentStoredEvent) -> None:

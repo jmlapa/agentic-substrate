@@ -1,11 +1,12 @@
 import asyncio
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.google import GoogleProvider
 
 from src.kernel.infrastructure.async_token_bucket_limiter import (
@@ -29,6 +30,9 @@ from src.modules.knowledge.domain.value_objects.extracted_graph import (
 )
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.infrastructure.adapters.pydantic_ai_openrouter_provider_factory import (
+    PydanticAiOpenRouterProviderFactory,
+)
 from src.modules.knowledge.infrastructure.extractors.existing_entity_registry import (
     ExistingEntityRegistry,
 )
@@ -61,7 +65,7 @@ class _GraphExtractionOutput(BaseModel):
 
 class PydanticAiGraphExtractor(IGraphExtractor):
     """
-    Extrator ontológico de grafos com PydanticAI v2 e Gemini Flash-Lite.
+    Extrator ontológico de grafos com PydanticAI v2 compatível com OpenRouter e Gemini.
     Possui controle de RPM/TPM via RateLimitedAsyncTransport e canonização de entidades.
     """
 
@@ -69,14 +73,22 @@ class PydanticAiGraphExtractor(IGraphExtractor):
         self,
         rate_limiter: AsyncTokenBucketLimiter | None = None,
         entity_registry: IEntityRegistry | None = None,
-        model_name: str = "gemini-3.5-flash-lite",
+        provider_type: Literal["gemini", "openrouter"] = "openrouter",
+        model_name: str = "deepseek/deepseek-v4-flash",
         api_key: str | None = None,
+        base_url: str = "https://openrouter.ai/api/v1",
+        app_title: str = "Agentic Substrate",
+        app_referer: str = "https://agentic-substrate.local",
         max_concurrency: int = 15,
     ) -> None:
         self._limiter = rate_limiter or AsyncTokenBucketLimiter()
         self._registry = entity_registry or ExistingEntityRegistry()
+        self._provider_type = provider_type
         self._model_name = model_name
         self._api_key = api_key
+        self._base_url = base_url
+        self._app_title = app_title
+        self._app_referer = app_referer
         self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
         self._fallback_extractor = StructuredPydanticGraphExtractor()
         self._default_kb_id = uuid4()
@@ -148,58 +160,88 @@ class PydanticAiGraphExtractor(IGraphExtractor):
         system_prompt = self._build_system_prompt(ontology, known_entities)
 
         async with self._semaphore:
-            # Transporte HTTP com Rate Limiter para capturar cada disparo de rede
-            transport = RateLimitedAsyncTransport(rate_limiter=self._limiter)
-            async with httpx.AsyncClient(transport=transport, timeout=60.0) as http_client:
-                provider = GoogleProvider(api_key=self._api_key, http_client=http_client)
-                model = GoogleModel(self._model_name, provider=provider)
-
+            if self._provider_type == "openrouter":
+                openrouter_model: OpenAIResponsesModel = (
+                    PydanticAiOpenRouterProviderFactory.create_model(
+                        api_key=self._api_key,
+                        model_name=self._model_name,
+                        base_url=self._base_url,
+                        app_title=self._app_title,
+                        app_referer=self._app_referer,
+                        rate_limiter=self._limiter,
+                    )
+                )
                 agent: Agent[None, _GraphExtractionOutput] = Agent(
-                    model=model,
+                    model=openrouter_model,
                     system_prompt=system_prompt,
                     output_type=_GraphExtractionOutput,
                 )
+            else:
+                transport = RateLimitedAsyncTransport(rate_limiter=self._limiter)
+                async with httpx.AsyncClient(transport=transport, timeout=60.0) as http_client:
+                    google_provider = GoogleProvider(api_key=self._api_key, http_client=http_client)
+                    google_model = GoogleModel(self._model_name, provider=google_provider)
+                    agent = Agent(
+                        model=google_model,
+                        system_prompt=system_prompt,
+                        output_type=_GraphExtractionOutput,
+                    )
 
-                user_prompt = (
-                    "Extraia todos os nós e relações do seguinte fragmento "
-                    f"respeitando a ontologia:\n\n```markdown\n{markdown_text}\n```"
-                )
+            user_prompt = (
+                "Extraia todos os nós e relações do seguinte fragmento "
+                f"respeitando a ontologia:\n\n```markdown\n{markdown_text}\n```"
+            )
 
+            try:
                 run_result = await agent.run(user_prompt)
                 output: _GraphExtractionOutput = run_result.output
-
-                nodes: list[GraphNode] = []
-                edges: list[GraphEdge] = []
-
-                for ent in output.entities:
-                    # Registra no catálogo cumulativo
+            except Exception:
+                # Fallback resiliente para extração estruturada se o provedor remoto falhar
+                fallback_res = await self._fallback_extractor.extract_graph(markdown_text, ontology)
+                for node in fallback_res.nodes:
                     await self._registry.register_entity(
                         target_kb,
                         CanonicalEntity(
-                            id=ent.id,
-                            name=ent.name,
-                            entity_type=ent.entity_type,
-                            aliases=ent.aliases,
+                            id=node.id,
+                            name=node.properties.get("name", node.id),
+                            entity_type=node.node_type,
+                            aliases=[node.id],
                         ),
                     )
-                    props = dict(ent.properties)
-                    props["name"] = ent.name
-                    nodes.append(
-                        GraphNode(
-                            id=ent.id,
-                            node_type=ent.entity_type,
-                            properties=props,
-                        )
-                    )
+                return fallback_res
 
-                for rel in output.relations:
-                    edges.append(
-                        GraphEdge(
-                            source_id=rel.source_id,
-                            target_id=rel.target_id,
-                            relationship_type=rel.relationship_type,
-                            properties=rel.properties,
-                        )
-                    )
+            nodes: list[GraphNode] = []
+            edges: list[GraphEdge] = []
 
-                return ExtractedGraph(nodes=nodes, edges=edges)
+            for ent in output.entities:
+                # Registra no catálogo cumulativo
+                await self._registry.register_entity(
+                    target_kb,
+                    CanonicalEntity(
+                        id=ent.id,
+                        name=ent.name,
+                        entity_type=ent.entity_type,
+                        aliases=ent.aliases,
+                    ),
+                )
+                props = dict(ent.properties)
+                props["name"] = ent.name
+                nodes.append(
+                    GraphNode(
+                        id=ent.id,
+                        node_type=ent.entity_type,
+                        properties=props,
+                    )
+                )
+
+            for rel in output.relations:
+                edges.append(
+                    GraphEdge(
+                        source_id=rel.source_id,
+                        target_id=rel.target_id,
+                        relationship_type=rel.relationship_type,
+                        properties=rel.properties,
+                    )
+                )
+
+            return ExtractedGraph(nodes=nodes, edges=edges)

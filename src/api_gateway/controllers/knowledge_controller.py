@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from src.api_gateway.container import AppContainer
 from src.api_gateway.dtos.create_knowledge_base_dto import (
@@ -82,6 +82,8 @@ async def list_knowledge_bases(
 async def upload_document_to_kb(
     kb_id: UUID,
     file: UploadFile = File(...),
+    enable_ocr: bool = Form(default=False),
+    ocr_instructions: str | None = Form(default=None),
     container: AppContainer = Depends(get_container),
 ) -> dict[str, str]:
     content = await file.read()
@@ -94,6 +96,8 @@ async def upload_document_to_kb(
             file_name=file_name,
             content_type=content_type,
             file_content=content,
+            enable_ocr=enable_ocr,
+            ocr_instructions=ocr_instructions,
         )
     )
     if isinstance(res, Err):

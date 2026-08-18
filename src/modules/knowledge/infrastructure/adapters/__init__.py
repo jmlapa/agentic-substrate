@@ -28,11 +28,17 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
     MarkItDownDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
+    OpenRouterClientFactory,
+)
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
 from src.modules.knowledge.infrastructure.adapters.postgres_ontology_repository import (
     PostgresOntologyRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.pydantic_ai_openrouter_provider_factory import (
+    PydanticAiOpenRouterProviderFactory,
 )
 
 __all__ = [
@@ -46,6 +52,8 @@ __all__ = [
     "InMemoryRagSynthesizer",
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
+    "OpenRouterClientFactory",
+    "PydanticAiOpenRouterProviderFactory",
     "PostgresKnowledgeBaseRepository",
     "PostgresOntologyRepository",
 ]
