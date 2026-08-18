@@ -77,6 +77,7 @@ services:
     volumes:
       - ../data/storage:/app/data/storage
       - ../src:/app/src
+      - ../migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
