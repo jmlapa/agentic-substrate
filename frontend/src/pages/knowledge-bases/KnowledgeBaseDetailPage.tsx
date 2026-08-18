@@ -40,7 +40,7 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
       title={kb ? kb.name : 'Detalhes da Knowledge Base'}
       description={kb?.description || 'Partição de armazenamento e pipeline GraphRAG'}
       actions={
-        <div className="flex items-center gap-3">
+        <>
           <Button
             variant="outline"
             onClick={() => navigate('/knowledge-bases')}
@@ -64,14 +64,13 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
             Upload de Arquivo
           </Button>
           <Button
-            variant="primary"
-            className="bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950"
+            variant="success"
             onClick={() => navigate(`/playground?kbId=${kbId}`)}
             leftIcon={<Sparkles className="w-4 h-4" />}
           >
             Abrir Playground
           </Button>
-        </div>
+        </>
       }
     >
       {isLoading && <LoadingSpinner message="Carregando Knowledge Base..." />}

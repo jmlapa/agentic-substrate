@@ -29,7 +29,7 @@ export const OntologyDetailPage: React.FC = () => {
       title={ontology ? ontology.name : 'Detalhes da Ontologia'}
       description={ontology?.description || 'Visualização do esquema ontológico'}
       actions={
-        <div className="flex items-center gap-3">
+        <>
           <Button
             variant="outline"
             onClick={() => navigate('/ontologies')}
@@ -44,7 +44,7 @@ export const OntologyDetailPage: React.FC = () => {
           >
             {copied ? 'Copiado!' : 'Copiar JSON'}
           </Button>
-        </div>
+        </>
       }
     >
       {isLoading && <LoadingSpinner message="Carregando detalhes da ontologia..." />}
