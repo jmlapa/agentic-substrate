@@ -8,26 +8,73 @@ import {
   Database,
   AlertCircle,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { DocumentProcessingStatus } from '../../api/types';
 
 export interface PipelineStatusTrackerProps {
   status: DocumentProcessingStatus | string;
+  enableOcr?: boolean;
+  totalParents?: number | null;
+  totalChildren?: number | null;
+  indexedNodesCount?: number;
+  indexedEdgesCount?: number;
+  errorStep?: string | null;
+  errorMessage?: string | null;
   className?: string;
 }
 
 export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
   status,
+  enableOcr,
+  totalParents,
+  totalChildren,
+  indexedNodesCount,
+  indexedEdgesCount,
+  errorStep,
+  errorMessage,
   className = '',
 }) => {
   const stages = [
-    { key: 'UPLOADED', label: 'Upload', icon: Clock },
-    { key: 'PARSED', label: 'Parsing', icon: FileCode },
-    { key: 'CHUNKED', label: 'Chunking', icon: Layers },
-    { key: 'GRAPH_EXTRACTED', label: 'Grafo LLM', icon: Sparkles },
-    { key: 'INDEXED', label: 'Indexado', icon: Database },
+    {
+      key: 'UPLOADED',
+      label: 'Upload',
+      icon: Clock,
+      sublabel: 'Persistido',
+    },
+    {
+      key: 'PARSED',
+      label: 'Parsing',
+      icon: enableOcr ? Eye : FileCode,
+      sublabel: enableOcr ? 'OCR Vision' : 'MarkItDown',
+    },
+    {
+      key: 'CHUNKED',
+      label: 'Chunking',
+      icon: Layers,
+      sublabel:
+        totalParents && totalChildren
+          ? `${totalParents}P / ${totalChildren}F`
+          : 'Parent-Child',
+    },
+    {
+      key: 'GRAPH_EXTRACTED',
+      label: 'Grafo LLM',
+      icon: Sparkles,
+      sublabel:
+        indexedNodesCount !== undefined && indexedNodesCount > 0
+          ? `${indexedNodesCount}N / ${indexedEdgesCount || 0}A`
+          : 'PydanticAI',
+    },
+    {
+      key: 'INDEXED',
+      label: 'Indexado',
+      icon: Database,
+      sublabel: 'FalkorDB + Vetor',
+    },
   ];
 
+  // Determina o índice de progresso da saga (0 a 5)
   const getStageIndex = (s: string) => {
     switch (s) {
       case 'PENDING_UPLOAD':
@@ -51,68 +98,98 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
   const currentIndex = getStageIndex(status);
 
   return (
-    <div className={`w-full py-2 ${className}`}>
+    <div className={`w-full py-2.5 ${className}`}>
       <div className="flex items-center justify-between relative">
-        {/* Connecting Line */}
-        <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-0.5 bg-zinc-800 -z-0" />
+        {/* Linha de Conexão Base */}
+        <div className="absolute top-4 left-6 right-6 h-0.5 bg-zinc-800 -z-0" />
+        {/* Linha de Progresso Ativa */}
         <div
-          className={`absolute top-1/2 left-4 -translate-y-1/2 h-0.5 transition-all duration-500 -z-0 ${
-            isFailed ? 'bg-rose-500' : 'bg-indigo-500'
+          className={`absolute top-4 left-6 h-0.5 transition-all duration-700 ease-out -z-0 ${
+            isFailed ? 'bg-rose-500' : 'bg-emerald-500'
           }`}
           style={{
             width: isFailed
               ? '100%'
-              : `${Math.min(100, Math.max(0, ((currentIndex - 1) / (stages.length - 1)) * 100))}%`,
+              : `${Math.min(
+                  100,
+                  Math.max(
+                    0,
+                    currentIndex === 5
+                      ? 100
+                      : ((currentIndex) / (stages.length - 1)) * 100
+                  )
+                )}%`,
           }}
         />
 
         {stages.map((stage, idx) => {
           const stageStep = idx + 1;
-          const isDone = currentIndex > stageStep;
-          const isCurrent = currentIndex === stageStep && !isFailed;
+          // Quando INDEXED (5), todos os 5 passos são 'isDone = true'
+          const isDone = currentIndex >= stageStep;
+          // O passo atual em execução é o próximo a ser completado
+          const isCurrent = !isDone && currentIndex === idx && !isFailed;
           const Icon = stage.icon;
 
           return (
-            <div key={stage.key} className="flex flex-col items-center gap-1.5 z-10">
+            <div
+              key={stage.key}
+              className="flex flex-col items-center gap-1.5 z-10 min-w-[64px]"
+            >
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
                   isDone
-                    ? 'border-emerald-500 bg-emerald-950 text-emerald-400'
+                    ? 'border-emerald-500/80 bg-emerald-950 text-emerald-400 shadow-sm shadow-emerald-500/10'
                     : isCurrent
-                    ? 'border-indigo-500 bg-indigo-950 text-indigo-400 shadow-md shadow-indigo-500/20'
+                    ? 'border-indigo-500 bg-indigo-950 text-indigo-300 shadow-md shadow-indigo-500/30 ring-2 ring-indigo-500/20'
                     : isFailed
                     ? 'border-zinc-800 bg-zinc-900 text-zinc-600'
-                    : 'border-zinc-800 bg-zinc-900 text-zinc-500'
+                    : 'border-zinc-800 bg-zinc-900/90 text-zinc-500'
                 }`}
+                title={stage.label}
               >
                 {isDone ? (
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 ) : isCurrent ? (
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
                 ) : (
                   <Icon className="w-3.5 h-3.5" />
                 )}
               </div>
-              <span
-                className={`text-[10px] font-medium tracking-tight whitespace-nowrap ${
-                  isDone
-                    ? 'text-emerald-400'
-                    : isCurrent
-                    ? 'text-indigo-300 font-bold'
-                    : 'text-zinc-500'
-                }`}
-              >
-                {stage.label}
-              </span>
+
+              <div className="flex flex-col items-center text-center">
+                <span
+                  className={`text-[11px] font-semibold tracking-tight whitespace-nowrap ${
+                    isDone
+                      ? 'text-emerald-400'
+                      : isCurrent
+                      ? 'text-indigo-300 font-bold'
+                      : isFailed
+                      ? 'text-zinc-600'
+                      : 'text-zinc-500'
+                  }`}
+                >
+                  {stage.label}
+                </span>
+                <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
+                  {stage.sublabel}
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
 
       {isFailed && (
-        <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-rose-400 font-medium">
-          <AlertCircle className="w-3.5 h-3.5" />
-          Falha no processamento durante a extração do pipeline
+        <div className="mt-3.5 flex items-start gap-2.5 rounded-lg border border-rose-900/60 bg-rose-950/30 p-2.5 text-xs text-rose-300">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-rose-200">
+              Falha no processamento (Etapa: {errorStep || 'Pipeline Ingestion'})
+            </p>
+            {errorMessage && (
+              <p className="text-[11px] font-mono text-rose-400/90">{errorMessage}</p>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -76,6 +76,7 @@ services:
       - VECTOR_STORE_TYPE=${VECTOR_STORE_TYPE:-pgvector}
     volumes:
       - ../data/storage:/app/data/storage
+      - ../src:/app/src
     depends_on:
       postgres:
         condition: service_healthy

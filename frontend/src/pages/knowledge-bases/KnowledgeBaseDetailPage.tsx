@@ -10,6 +10,10 @@ import {
   HardDrive,
   RefreshCw,
   FolderOpen,
+  GitFork,
+  Layers,
+  Eye,
+  Tag,
 } from 'lucide-react';
 import { usePipelineMonitor } from '../../hooks/usePipelineMonitor';
 import { PageContainer } from '../../components/layout/PageContainer';
@@ -137,11 +141,93 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
                 <span className="text-xs font-medium">
-                  {processingDocsCount} documento(s) em processamento assíncrono. O monitor atualiza automaticamente a cada 2s.
+                  {processingDocsCount} documento(s) em processamento assíncrono na saga. O monitor atualiza automaticamente a cada 2s.
                 </span>
               </div>
             </div>
           )}
+
+          {/* Ontologia Vinculada (Schema do Grafo) */}
+          <Card className="space-y-4 border-zinc-800 bg-zinc-900/60">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-indigo-950 border border-indigo-800 text-indigo-400">
+                  <GitFork className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">
+                    Ontologia Vinculada (Schema do Grafo)
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    {kb.ontology
+                      ? `${kb.ontology.name} — ${kb.ontology.description}`
+                      : 'Nenhuma ontologia de domínio foi vinculada a esta Knowledge Base.'}
+                  </p>
+                </div>
+              </div>
+              {kb.ontology && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="purple">
+                    {kb.ontology.node_types.length} Tipos de Entidades
+                  </Badge>
+                  <Badge variant="default">
+                    {kb.ontology.relationship_types.length} Tipos de Relações
+                  </Badge>
+                </div>
+              )}
+            </div>
+
+            {kb.ontology ? (
+              <div className="space-y-3">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-2">
+                    Entidades Reconhecidas pelo Extrator LLM:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {kb.ontology.node_types.map((nt) => (
+                      <div
+                        key={nt.name}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-xs text-zinc-200"
+                        title={nt.description}
+                      >
+                        <Tag className="w-3 h-3 text-indigo-400" />
+                        <span className="font-semibold text-zinc-100">{nt.name}</span>
+                        {nt.properties.length > 0 && (
+                          <span className="text-[10px] text-zinc-400">
+                            ({nt.properties.length} props)
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {kb.ontology.relationship_types.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-2">
+                      Relações Válidas:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {kb.ontology.relationship_types.map((rt) => (
+                        <div
+                          key={rt.name}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-300"
+                        >
+                          <span className="text-zinc-400">{rt.source_node_type}</span>
+                          <span className="text-indigo-400 font-bold">➔ {rt.name} ➔</span>
+                          <span className="text-zinc-400">{rt.target_node_type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500 italic">
+                A indexação operou em modo puramente estrutural (Document ➔ ParentChunk ➔ ChildChunk + Embeddings Vetoriais).
+              </p>
+            )}
+          </Card>
 
           {/* Documents Section */}
           <div className="space-y-4">
@@ -171,29 +257,81 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {docs.map((doc) => (
-                  <Card key={doc.id} className="space-y-3 bg-zinc-900/80 border-zinc-800">
+                  <Card key={doc.id} className="space-y-4 bg-zinc-900/90 border-zinc-800">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
                         <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
                         <span className="font-semibold text-sm text-zinc-100">{doc.file_name}</span>
                         <span className="text-[11px] font-mono text-zinc-500">({doc.id})</span>
                       </div>
-                      <Badge
-                        variant={
-                          doc.status === 'INDEXED'
-                            ? 'success'
-                            : doc.status === 'FAILED'
-                            ? 'error'
-                            : 'purple'
-                        }
-                      >
-                        {doc.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {doc.enable_ocr && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800 text-emerald-300">
+                            <Eye className="w-3 h-3 text-emerald-400" /> OCR Vision Ativo
+                          </span>
+                        )}
+                        <Badge
+                          variant={
+                            doc.status === 'INDEXED'
+                              ? 'success'
+                              : doc.status === 'FAILED'
+                              ? 'error'
+                              : 'purple'
+                          }
+                        >
+                          {doc.status}
+                        </Badge>
+                      </div>
                     </div>
+
+                    {/* OCR Instructions if provided */}
+                    {doc.ocr_instructions && (
+                      <div className="text-xs bg-zinc-950/70 border border-zinc-800/80 rounded-lg p-2.5 text-zinc-300">
+                        <span className="font-semibold text-zinc-400 block text-[10px] uppercase tracking-wider mb-1">
+                          Diretrizes de OCR / MarkItDown:
+                        </span>
+                        <p className="italic text-zinc-300 font-mono text-[11px]">
+                          &ldquo;{doc.ocr_instructions}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Metadata Chips: Chunks & Graph Stats */}
+                    {(doc.total_parents || doc.total_children || doc.indexed_nodes_count) && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-300 pt-1">
+                        {doc.total_parents && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                            <Layers className="w-3 h-3 text-indigo-400" />
+                            <strong>{doc.total_parents}</strong> Seções Parent
+                          </span>
+                        )}
+                        {doc.total_children && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                            <Layers className="w-3 h-3 text-emerald-400" />
+                            <strong>{doc.total_children}</strong> Chunks Filhos (pgvector)
+                          </span>
+                        )}
+                        {doc.indexed_nodes_count !== undefined && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <strong>{doc.indexed_nodes_count}</strong> Nós / <strong>{doc.indexed_edges_count || 0}</strong> Arestas (FalkorDB)
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Timeline stepper */}
                     <div className="pt-2 border-t border-zinc-800/60">
-                      <PipelineStatusTracker status={doc.status} />
+                      <PipelineStatusTracker
+                        status={doc.status}
+                        enableOcr={doc.enable_ocr}
+                        totalParents={doc.total_parents}
+                        totalChildren={doc.total_children}
+                        indexedNodesCount={doc.indexed_nodes_count}
+                        indexedEdgesCount={doc.indexed_edges_count}
+                        errorStep={doc.error?.step}
+                        errorMessage={doc.error?.message}
+                      />
                     </div>
                   </Card>
                 ))}

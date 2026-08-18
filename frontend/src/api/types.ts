@@ -73,10 +73,22 @@ export type DocumentProcessingStatus =
   | 'INDEXED'
   | 'FAILED';
 
+export interface DocumentProcessingError {
+  step?: string;
+  message?: string;
+}
+
 export interface DocumentSummary {
   id: string;
   file_name: string;
   status: DocumentProcessingStatus | string;
+  enable_ocr?: boolean;
+  ocr_instructions?: string | null;
+  total_parents?: number | null;
+  total_children?: number | null;
+  indexed_nodes_count?: number;
+  indexed_edges_count?: number;
+  error?: DocumentProcessingError | null;
 }
 
 export interface KnowledgeBaseDetail {
@@ -85,6 +97,7 @@ export interface KnowledgeBaseDetail {
   description: string;
   status: string;
   storage_partition: string;
+  ontology?: OntologySchema | null;
   documents: DocumentSummary[];
 }
 
