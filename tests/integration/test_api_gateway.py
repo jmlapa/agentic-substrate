@@ -126,7 +126,7 @@ async def test_api_e2e_flow() -> None:
         assert query_data["total_tokens_estimated"] > 0
         assert "retrieval_trace" in query_data
         assert query_data["retrieval_trace"]["top_k"] == 3
-        assert query_data["retrieval_trace"]["candidate_k"] == 20
+        assert query_data["retrieval_trace"]["candidate_k"] == 50
 
         # 6.1 Query Knowledge Base in Retrieve-only mode (fast-path)
         retrieve_resp = await client.post(

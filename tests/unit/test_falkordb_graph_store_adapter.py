@@ -202,15 +202,17 @@ async def test_falkordb_graph_store_query_hybrid() -> None:
 
     adapter = FalkorDbGraphStoreAdapter(client=mock_client)
     kb_id = uuid4()
-    results = await adapter.query_hybrid(kb_id, [0.1, 0.2, 0.3], top_k=5, candidate_k=20)
+    results = await adapter.query_hybrid(kb_id, [0.1, 0.2, 0.3], top_k=5, candidate_k=50)
 
     # Check Cypher query generated
     query_call_args = mock_graph_handle.query.call_args[0][0]
     # Ensure no hardcoded (e:Entity) label constraint exists
     assert "(e:Entity)" not in query_call_args
     assert "(e)<-[:MENTIONS]-" in query_call_args
-    # Ensure neighbor fanout is capped per seed
-    assert "[0..2]" in query_call_args
+    # Ensure neighbor fanout is expanded to 5 per seed
+    assert "[0..5]" in query_call_args
+    # Ensure no premature LIMIT $top_k before graph expansion
+    assert "ORDER BY seed_score DESC LIMIT $top_k" not in query_call_args
 
     assert len(results) == 1
     assert results[0].parent_chunk_id == "p1"

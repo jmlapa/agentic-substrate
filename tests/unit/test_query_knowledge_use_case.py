@@ -32,7 +32,7 @@ async def test_query_knowledge_use_case_success() -> None:
     synthesizer = InMemoryRagSynthesizer()
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.2, 0.3]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.2, 0.3]
 
     expected_results = [
         HybridSearchResult(
@@ -78,14 +78,12 @@ async def test_query_knowledge_use_case_success() -> None:
     assert result.value.results[0].relevance_score == 0.94
     assert result.value.total_tokens_estimated > 0
     assert "retrieval_trace" in result.value.model_dump()
-    assert result.value.retrieval_trace["candidate_k"] == 20
+    assert result.value.retrieval_trace["candidate_k"] == 50
     assert result.value.retrieval_trace["top_k"] == 3
     assert "Relevant content about security." in result.value.answer
-    mock_embedding_service.embed_texts.assert_awaited_once_with(
-        ["What are the security guidelines?"]
-    )
-    # Candidate oversampling: candidate_k = max(3 * 4, 20) = 20
-    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2, 0.3], 3, 20)
+    mock_embedding_service.embed_query.assert_awaited_once_with("What are the security guidelines?")
+    # Candidate oversampling: candidate_k = max(3 * 4, 50) = 50
+    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2, 0.3], 3, 50)
 
 
 @pytest.mark.asyncio
@@ -95,7 +93,7 @@ async def test_query_knowledge_use_case_retrieve_mode() -> None:
     mock_synthesizer = AsyncMock()
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.5, 0.5]]
+    mock_embedding_service.embed_query.return_value = [0.5, 0.5]
 
     expected_results = [
         HybridSearchResult(
@@ -130,6 +128,9 @@ async def test_query_knowledge_use_case_retrieve_mode() -> None:
     assert len(result.value.results) == 1
     assert "Modo retrieve: 1 evidências recuperadas" in result.value.answer
     assert result.value.retrieval_trace["mode"] == "retrieve"
+    assert result.value.retrieval_trace["candidate_k"] == 50  # max(1 * 4, 50) = 50
+    mock_embedding_service.embed_query.assert_awaited_once_with("Raw query")
+    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.5, 0.5], 1, 50)
     # Ensure synthesis_service was NOT invoked
     mock_synthesizer.synthesize_answer.assert_not_awaited()
 
@@ -140,7 +141,7 @@ async def test_query_knowledge_use_case_empty_results() -> None:
     mock_embedding_service = AsyncMock(spec=IEmbeddingService)
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.1]
     mock_graph_store.query_hybrid.return_value = []
 
     use_case = QueryKnowledgeUseCase(
@@ -170,7 +171,7 @@ async def test_query_knowledge_use_case_dynamic_token_budgeting() -> None:
     synthesizer = InMemoryRagSynthesizer()
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.1]
 
     # 3 chunks with 1000 characters each (~250 tokens each = 750 tokens total)
     # But request max_tokens_budget is set to 300 tokens
@@ -223,7 +224,7 @@ async def test_query_knowledge_use_case_discards_micro_chunks_below_threshold() 
     synthesizer = InMemoryRagSynthesizer()
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.1]
 
     # Chunk 1 consumes 180 tokens (out of 200 budget).
     # Remaining budget is 20 tokens. Since 20 tokens < 50 min_useful_tokens,
@@ -277,7 +278,7 @@ async def test_query_knowledge_use_case_chunk_zero_never_dropped() -> None:
     synthesizer = InMemoryRagSynthesizer()
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.1]
 
     # Chunk 1 has 300 tokens (990 chars), but budget is only 40 tokens (< 50 MIN_USEFUL_TOKENS)
     # Even with budget < MIN_USEFUL_TOKENS, chunk #1 must be preserved and truncated, NEVER dropped!
@@ -325,7 +326,7 @@ async def test_query_knowledge_use_case_flags_synthesis_error_in_trace() -> None
     )
 
     kb_id = uuid4()
-    mock_embedding_service.embed_texts.return_value = [[0.1, 0.1]]
+    mock_embedding_service.embed_query.return_value = [0.1, 0.1]
     mock_graph_store.query_hybrid.return_value = [
         HybridSearchResult(
             parent_chunk_id="p1",
@@ -348,3 +349,98 @@ async def test_query_knowledge_use_case_flags_synthesis_error_in_trace() -> None
 
     assert isinstance(result, Ok)
     assert result.value.retrieval_trace["synthesis_error"] is True
+
+
+def test_query_knowledge_request_and_dto_defaults_and_limits() -> None:
+    from pydantic import ValidationError
+
+    from src.api_gateway.dtos.query_knowledge_dto import QueryKnowledgeDTO
+
+    kb_id = uuid4()
+
+    # 1. Defaults should be the maximum allowed values: top_k = 20, max_tokens_budget = 32000
+    req_default = QueryKnowledgeRequest(kb_id=kb_id, query="Default check")
+    assert req_default.top_k == 20
+    assert req_default.max_tokens_budget == 32000
+    assert req_default.mode == "synthesis"
+    assert req_default.include_graph_triples is True
+
+    dto_default = QueryKnowledgeDTO(query="Default check")
+    assert dto_default.top_k == 20
+    assert dto_default.max_tokens_budget == 32000
+    assert dto_default.mode == "synthesis"
+    assert dto_default.include_graph_triples is True
+
+    # 2. Validation boundary enforcement for top_k (1 <= top_k <= 20)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeRequest(kb_id=kb_id, query="Invalid top_k", top_k=21)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeRequest(kb_id=kb_id, query="Invalid top_k", top_k=0)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeDTO(query="Invalid top_k", top_k=21)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeDTO(query="Invalid top_k", top_k=0)
+
+    # 3. Validation boundary enforcement for max_tokens_budget (50 <= max_tokens_budget <= 32000)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeRequest(kb_id=kb_id, query="Invalid budget", max_tokens_budget=32001)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeRequest(kb_id=kb_id, query="Invalid budget", max_tokens_budget=49)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeDTO(query="Invalid budget", max_tokens_budget=32001)
+    with pytest.raises(ValidationError):
+        QueryKnowledgeDTO(query="Invalid budget", max_tokens_budget=49)
+
+
+@pytest.mark.asyncio
+async def test_query_knowledge_use_case_uses_maximum_defaults() -> None:
+    mock_graph_store = AsyncMock(spec=IGraphStore)
+    mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+    synthesizer = InMemoryRagSynthesizer()
+
+    kb_id = uuid4()
+    mock_embedding_service.embed_query.return_value = [0.1, 0.2]
+    mock_graph_store.query_hybrid.return_value = []
+
+    use_case = QueryKnowledgeUseCase(
+        graph_store=mock_graph_store,
+        embedding_service=mock_embedding_service,
+        synthesis_service=synthesizer,
+    )
+
+    request = QueryKnowledgeRequest(kb_id=kb_id, query="Check default max parameters")
+    result = await use_case.execute(request)
+
+    assert isinstance(result, Ok)
+    assert result.value.retrieval_trace["top_k"] == 20
+    assert result.value.retrieval_trace["token_budget_limit"] == 32000
+    assert result.value.retrieval_trace["candidate_k"] == 80  # max(20 * 4, 50) = 80
+    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2], 20, 80)
+    mock_embedding_service.embed_query.assert_awaited_once_with("Check default max parameters")
+
+
+@pytest.mark.asyncio
+async def test_query_knowledge_use_case_candidate_k_minimum_oversampling() -> None:
+    mock_graph_store = AsyncMock(spec=IGraphStore)
+    mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+    synthesizer = InMemoryRagSynthesizer()
+
+    kb_id = uuid4()
+    mock_embedding_service.embed_query.return_value = [0.1, 0.2]
+    mock_graph_store.query_hybrid.return_value = []
+
+    use_case = QueryKnowledgeUseCase(
+        graph_store=mock_graph_store,
+        embedding_service=mock_embedding_service,
+        synthesis_service=synthesizer,
+    )
+
+    # Even for top_k=1, candidate_k should be at least 50
+    request = QueryKnowledgeRequest(kb_id=kb_id, query="Minimum oversampling test", top_k=1)
+    result = await use_case.execute(request)
+
+    assert isinstance(result, Ok)
+    assert result.value.retrieval_trace["top_k"] == 1
+    assert result.value.retrieval_trace["candidate_k"] == 50  # max(1 * 4, 50) = 50
+    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2], 1, 50)
+    mock_embedding_service.embed_query.assert_awaited_once_with("Minimum oversampling test")

@@ -112,13 +112,13 @@ async def test_falkordb_live_graphrag_retrieval_and_expansion() -> None:
             ExtractedGraph(nodes=[node_lgpd, node_lei], edges=[]),
         )
 
-        # 5. Query Hybrid Search against live FalkorDB
+        # 5. Query Hybrid Search against live FalkorDB with top_k=3
         query_vec = [1.0, 0.0, 0.0, 0.0]
-        results = await adapter.query_hybrid(kb_id, query_vec, top_k=3, candidate_k=10)
+        results_top_3 = await adapter.query_hybrid(kb_id, query_vec, top_k=3, candidate_k=50)
 
         # Assertions on real FalkorDB response
-        assert len(results) >= 1
-        top_res = results[0]
+        assert len(results_top_3) >= 1
+        top_res = results_top_3[0]
         assert top_res.parent_chunk_id == "parent-sec-1"
         assert top_res.document_name == "governanca_publica.md"
         assert top_res.next_chunk_id == "parent-sec-2"
@@ -132,6 +132,12 @@ async def test_falkordb_live_graphrag_retrieval_and_expansion() -> None:
         # Verify that entities with dynamic labels (:Regulation, :Law) are preserved
         entity_types = [e.get("type") for e in top_res.related_entities]
         assert "Regulation" in entity_types or "Law" in entity_types
+
+        # 6. Verify Top-1 Invariance: querying with top_k=1 evaluates all seeds naturally
+        results_top_1 = await adapter.query_hybrid(kb_id, query_vec, top_k=1, candidate_k=50)
+        assert len(results_top_1) == 1
+        assert results_top_1[0].parent_chunk_id == results_top_3[0].parent_chunk_id
+        assert results_top_1[0].relevance_score == results_top_3[0].relevance_score
 
     finally:
         # Cleanup graph from live FalkorDB
