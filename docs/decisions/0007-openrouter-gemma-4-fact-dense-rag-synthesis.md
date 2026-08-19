@@ -20,7 +20,10 @@ Accepted
 2. **Prompting Fact-Dense & Citações Estritas**:
    - Respostas em Markdown direto ao ponto, estruturadas em tópicos densos.
    - Inclusão obrigatória de referências rastreáveis `[^chunk:<id>]` e `[^entidade:<tipo>:<nome>]`.
-3. **Arquitetura Dual-Mode no `QueryKnowledgeUseCase`**:
+3. **Otimização de Throughput & Supressão de Raciocínio (Reasoning)**:
+   - Configuração de roteamento prioritário na OpenRouter via `provider: {"sort": "throughput", "allow_fallbacks": True}` para garantir provedores com maior vazão de tokens (ex: Parasail/Cloudflare a ~95 tok/s).
+   - Supressão explícita de tokens de raciocínio com `reasoning: {"effort": "none", "exclude": True}` para evitar latência oculta.
+4. **Arquitetura Dual-Mode no `QueryKnowledgeUseCase`**:
    - Suporte ao parâmetro `mode: "synthesis" | "retrieve"` nos DTOs e na API.
    - `mode == "retrieve"`: Fast-path sem acionamento de LLM, devolvendo a resposta imediatamente com todos os nós e chunks recuperados.
    - `mode == "synthesis"`: Fluxo completo de busca híbrida com síntese LLM via Gemma 4.

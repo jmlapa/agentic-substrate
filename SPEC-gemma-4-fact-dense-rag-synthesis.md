@@ -64,4 +64,6 @@ O endpoint de consulta híbrida (`POST /api/v1/knowledge/bases/{kb_id}/query`) a
 
 * **Modelo:** `google/gemma-4-26b-a4b-it` via OpenRouter.
 * **Configuração:** Temperatura 0.1, `max_tokens: 800`.
+* **Roteamento de Provedor & Throughput:** `provider: {"sort": "throughput", "allow_fallbacks": True}`, roteando dinamicamente para os clusters mais rápidos da OpenRouter (ex: Parasail/Cloudflare a ~95 tok/s).
+* **Supressão de Reasoning:** `reasoning: {"effort": "none", "exclude": True}`, garantindo zero tokens e latência oculta de raciocínio.
 * **Prompt System:** Formatação estrita Fact-Dense em tópicos, proibindo enrolações conversacionais e forçando citações explícitas de proveniência (`[^chunk:<id>]`).

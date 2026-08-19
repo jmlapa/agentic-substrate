@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `candidate_k` no `QueryKnowledgeUseCase` padronizado como $\max(top\_k \times 4, 50)$ (mínimo de 50 `ChildChunk`s).
   - **Busca Semântica Assimétrica (`embed_query`)**:
     - `QueryKnowledgeUseCase` agora invoca `IEmbeddingService.embed_query` com a instrução oficial do Gemini 2 (`task: search result | query: ...`) para máxima precisão pergunta-resposta.
+  - **Otimização de Throughput & Supressão de Raciocínio no OpenRouter**:
+    - Configuração de `provider: {"sort": "throughput", "allow_fallbacks": True}` no `OpenRouterRagSynthesizer`, roteando dinamicamente para os clusters de inferência com maior vazão (~95 tokens/s via Parasail).
+    - Desativação explícita de tokens de raciocínio com `reasoning: {"effort": "none", "exclude": True}`, reduzindo o tempo de síntese em mais de 60%.
   - **Testes de Invariância Top-1 e Documentação**:
     - Suíte de testes atualizada comprovando que `top_k=1` avalia todo o pool de sementes e retorna o mesmo nó campeão que `top_k=3` ou `top_k=5`.
     - Criação do `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`.
