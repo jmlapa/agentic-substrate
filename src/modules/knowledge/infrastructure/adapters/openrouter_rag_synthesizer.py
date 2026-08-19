@@ -123,6 +123,14 @@ class OpenRouterRagSynthesizer(ILlmSynthesisService):
             "model": self._model_name,
             "temperature": self._temperature,
             "max_tokens": self._max_tokens,
+            "provider": {
+                "sort": "throughput",
+                "allow_fallbacks": True,
+            },
+            "reasoning": {
+                "effort": "none",
+                "exclude": True,
+            },
             "messages": [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_prompt},
