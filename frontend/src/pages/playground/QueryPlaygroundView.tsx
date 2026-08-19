@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Sparkles, Sliders, Database } from 'lucide-react';
+import { Sparkles, Sliders, Database, Cpu, ShieldCheck } from 'lucide-react';
 import { useKnowledgeBases } from '../../hooks/useKnowledgeBases';
 import { useRagQuery } from '../../hooks/useRagQuery';
 import { QueryKnowledgeResponse } from '../../api/types';
@@ -13,6 +13,46 @@ import { LoadingSpinner } from '../../components/feedback/LoadingSpinner';
 import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 import { AnswerView } from './AnswerView';
 import { EvidenceInspector } from './EvidenceInspector';
+
+interface TopKConfig {
+  topK: number;
+  label: string;
+  budget: number;
+  description: string;
+}
+
+const TOP_K_CONFIGS: TopKConfig[] = [
+  {
+    topK: 1,
+    label: 'Top 1 chunk/nó • 2.000 tokens máx',
+    budget: 2000,
+    description: '1 parent chunk (~1.200 tokens) + margem de segurança',
+  },
+  {
+    topK: 3,
+    label: 'Top 3 chunks/nós • 4.500 tokens máx (Recomendado)',
+    budget: 4500,
+    description: 'Até 3 parent chunks com 25% de margem contra truncamento',
+  },
+  {
+    topK: 5,
+    label: 'Top 5 chunks/nós • 7.500 tokens máx',
+    budget: 7500,
+    description: 'Até 5 parent chunks expandidos no grafo com folga de segurança',
+  },
+  {
+    topK: 10,
+    label: 'Top 10 chunks/nós • 15.000 tokens máx',
+    budget: 15000,
+    description: 'Até 10 parent chunks para consultas amplas de alta abrangência',
+  },
+];
+
+const getSafeTokenBudgetForTopK = (k: number): number => {
+  const found = TOP_K_CONFIGS.find((c) => c.topK === k);
+  if (found) return found.budget;
+  return Math.min(32000, Math.max(2000, k * 1500));
+};
 
 export const QueryPlaygroundView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -29,6 +69,8 @@ export const QueryPlaygroundView: React.FC = () => {
   const [lastSubmittedQuery, setLastSubmittedQuery] = useState('');
 
   const kbs = kbsData?.knowledge_bases || [];
+  const currentBudget = getSafeTokenBudgetForTopK(topK);
+  const currentConfig = TOP_K_CONFIGS.find((c) => c.topK === topK);
 
   useEffect(() => {
     if (urlKbId) {
@@ -49,6 +91,8 @@ export const QueryPlaygroundView: React.FC = () => {
     if (!selectedKbId || !query.trim() || ragMutation.isPending) return;
 
     setLastSubmittedQuery(query);
+    const tokenBudget = getSafeTokenBudgetForTopK(topK);
+
     try {
       const res = await ragMutation.mutateAsync({
         kbId: selectedKbId,
@@ -56,6 +100,7 @@ export const QueryPlaygroundView: React.FC = () => {
           query,
           top_k: Number(topK) || 3,
           mode,
+          max_tokens_budget: tokenBudget,
         },
       });
       setQueryResponse(res);
@@ -117,21 +162,42 @@ export const QueryPlaygroundView: React.FC = () => {
               </select>
             </div>
 
-            <div className="w-full sm:w-40">
+            <div className="w-full sm:w-64">
               <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5 flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                Top-K Evidências
+                Top-K Evidências & Token Budget
               </label>
               <select
                 value={topK}
                 onChange={(e) => setTopK(Number(e.target.value))}
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
-                <option value={1}>Top 1 chunk/nó</option>
-                <option value={3}>Top 3 chunks/nós</option>
-                <option value={5}>Top 5 chunks/nós</option>
-                <option value={10}>Top 10 chunks/nós</option>
+                {TOP_K_CONFIGS.map((cfg) => (
+                  <option key={cfg.topK} value={cfg.topK}>
+                    {cfg.label}
+                  </option>
+                ))}
               </select>
+            </div>
+          </div>
+
+          {/* Token Budget Info Banner */}
+          <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-zinc-300">
+              <Cpu className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>
+                Orçamento de Retrieval:{' '}
+                <strong className="text-zinc-100 font-mono">
+                  {currentBudget.toLocaleString()} tokens
+                </strong>
+                <span className="text-zinc-500 ml-1.5">
+                  ({currentConfig?.description || `${topK} chunks com margem segura`})
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] text-emerald-400/90 shrink-0 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Margem anti-truncamento ativa</span>
             </div>
           </div>
 
@@ -194,10 +260,15 @@ export const QueryPlaygroundView: React.FC = () => {
             />
 
             {/* Evidence Inspector */}
-            <EvidenceInspector results={queryResponse.results} />
+            <EvidenceInspector
+              results={queryResponse.results}
+              retrievalTrace={queryResponse.retrieval_trace}
+              totalTokensEstimated={queryResponse.total_tokens_estimated}
+            />
           </div>
         )}
       </div>
     </PageContainer>
   );
 };
+

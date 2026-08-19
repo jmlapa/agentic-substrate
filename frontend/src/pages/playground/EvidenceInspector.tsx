@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
-import { Layers, FileText, Share2, ChevronDown, ChevronUp } from 'lucide-react';
-import { HybridSearchResult } from '../../api/types';
+import { Layers, FileText, Share2, ChevronDown, ChevronUp, Cpu, AlertTriangle } from 'lucide-react';
+import { HybridSearchResult, RetrievalTrace } from '../../api/types';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { MarkdownRenderer } from '../../components/ui/MarkdownRenderer';
 
 export interface EvidenceInspectorProps {
   results: HybridSearchResult[];
+  retrievalTrace?: RetrievalTrace;
+  totalTokensEstimated?: number;
 }
 
-export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ results }) => {
+export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
+  results,
+  retrievalTrace,
+  totalTokensEstimated,
+}) => {
   const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({
     0: true, // open first by default
   });
@@ -26,15 +32,57 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ results })
     );
   }
 
+  const consumedTokens = retrievalTrace?.token_budget_consumed ?? totalTokensEstimated ?? 0;
+  const budgetLimit = retrievalTrace?.token_budget_limit;
+  const isBudgetTruncated = Boolean(retrievalTrace?.budget_truncated);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
           <Layers className="w-4 h-4 text-emerald-400" />
           Evidências Recuperadas do Grafo ({results.length})
         </h4>
-        <span className="text-[11px] text-zinc-500 font-mono">Busca Híbrida Vetorial + Cypher</span>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {budgetLimit ? (
+            <Badge variant={isBudgetTruncated ? 'warning' : 'info'}>
+              <Cpu className="w-3 h-3 mr-0.5 inline-block" />
+              Budget: {consumedTokens.toLocaleString()} / {budgetLimit.toLocaleString()} tokens
+            </Badge>
+          ) : consumedTokens > 0 ? (
+            <Badge variant="info">
+              <Cpu className="w-3 h-3 mr-0.5 inline-block" />
+              Tokens estimados: ~{consumedTokens.toLocaleString()}
+            </Badge>
+          ) : null}
+
+          {isBudgetTruncated && (
+            <Badge variant="warning">
+              <AlertTriangle className="w-3 h-3 mr-0.5 inline-block" />
+              Truncamento Aplicado
+            </Badge>
+          )}
+
+          <span className="text-[11px] text-zinc-500 font-mono hidden md:inline-block">
+            Busca Híbrida Vetorial + Cypher
+          </span>
+        </div>
       </div>
+
+      {isBudgetTruncated && (
+        <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3.5 py-2.5 text-xs text-amber-300 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Teto de Orçamento de Tokens Atingido</p>
+            <p className="text-[11px] text-amber-400/80">
+              O volume textual dos parent chunks recuperados atingiu o limite de{' '}
+              {budgetLimit?.toLocaleString()} tokens configurado para esta busca. Os chunks
+              inferiores foram truncados ou omitidos para preservar o orçamento de contexto.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {results.map((res, idx) => {
@@ -114,3 +162,4 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ results })
     </div>
   );
 };
+

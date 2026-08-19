@@ -145,13 +145,30 @@ export interface HybridSearchResult {
   related_entities: Record<string, unknown>[];
 }
 
+export interface RetrievalTrace {
+  candidate_k?: number;
+  top_k?: number;
+  mode?: string;
+  token_budget_limit?: number;
+  token_budget_consumed?: number;
+  budget_truncated?: boolean;
+  results_count?: number;
+  synthesis_error?: boolean;
+  retrieval_sources?: string[];
+  [key: string]: unknown;
+}
+
 export interface QueryKnowledgeRequest {
   query: string;
   top_k?: number;
   mode?: 'synthesis' | 'retrieve';
+  max_tokens_budget?: number;
+  include_graph_triples?: boolean;
 }
 
 export interface QueryKnowledgeResponse {
   answer: string;
   results: HybridSearchResult[];
+  total_tokens_estimated?: number;
+  retrieval_trace?: RetrievalTrace;
 }
