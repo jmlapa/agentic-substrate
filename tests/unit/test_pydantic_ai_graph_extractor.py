@@ -64,7 +64,7 @@ async def test_pydantic_ai_graph_extractor_with_openrouter_provider(
 
     extractor = PydanticAiGraphExtractor(
         provider_type="openrouter",
-        model_name="deepseek/deepseek-v4-flash",
+        model_name="google/gemma-4-26b-a4b-it",
         api_key="sk-or-fake-key",
         rate_limiter=limiter,
         entity_registry=registry,

@@ -61,9 +61,6 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
-from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
-    DeepSeekRagSynthesizer,
-)
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
@@ -93,6 +90,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 )
 from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
     OpenRouterClientFactory,
+)
+from src.modules.knowledge.infrastructure.adapters.openrouter_rag_synthesizer import (
+    OpenRouterRagSynthesizer,
 )
 from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
     PageCheckpointStorage,
@@ -293,7 +293,7 @@ def create_app_container(
     # RAG Synthesis Service
     synthesis_service: ILlmSynthesisService
     if openrouter_key:
-        synthesis_service = DeepSeekRagSynthesizer(
+        synthesis_service = OpenRouterRagSynthesizer(
             api_key=openrouter_key,
             model_name=cfg.openrouter_synthesis_model_name,
             base_url=cfg.openrouter_base_url,

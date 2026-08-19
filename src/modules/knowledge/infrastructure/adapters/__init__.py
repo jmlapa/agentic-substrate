@@ -34,6 +34,9 @@ from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser im
 from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
     OpenRouterClientFactory,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_rag_synthesizer import (
+    OpenRouterRagSynthesizer,
+)
 from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
     PageCheckpointStorage,
 )
@@ -75,6 +78,7 @@ __all__ = [
     "LocalFileSystemStorageAdapter",
     "MarkItDownDocumentParser",
     "OpenRouterClientFactory",
+    "OpenRouterRagSynthesizer",
     "PageCheckpointStorage",
     "ParallelVlmDocumentParser",
     "ParentGraphCheckpointStorage",

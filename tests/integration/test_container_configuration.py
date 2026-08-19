@@ -57,17 +57,17 @@ async def test_container_with_custom_app_settings() -> None:
 
 
 @pytest.mark.asyncio
-async def test_container_creates_deepseek_synthesis_adapter() -> None:
-    from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
-        DeepSeekRagSynthesizer,
+async def test_container_creates_openrouter_synthesis_adapter() -> None:
+    from src.modules.knowledge.infrastructure.adapters.openrouter_rag_synthesizer import (
+        OpenRouterRagSynthesizer,
     )
 
     settings = AppSettings(
         OPENROUTER_API_KEY=SecretStr("mock-openrouter-key"),
-        OPENROUTER_GRAPH_MODEL_NAME="deepseek/deepseek-v4-flash",
+        OPENROUTER_SYNTHESIS_MODEL_NAME="google/gemma-4-26b-a4b-it",
     )
     container = create_app_container(settings=settings)
-    assert isinstance(container.synthesis_service, DeepSeekRagSynthesizer)
+    assert isinstance(container.synthesis_service, OpenRouterRagSynthesizer)
 
 
 @pytest.mark.asyncio

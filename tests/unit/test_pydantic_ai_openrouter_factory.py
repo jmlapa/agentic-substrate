@@ -10,7 +10,7 @@ def test_pydantic_ai_openrouter_factory_creates_openai_responses_model() -> None
     limiter = AsyncTokenBucketLimiter(max_rpm=200)
     model = PydanticAiOpenRouterProviderFactory.create_model(
         api_key="sk-or-test-key",
-        model_name="deepseek/deepseek-v4-flash",
+        model_name="google/gemma-4-26b-a4b-it",
         base_url="https://openrouter.ai/api/v1",
         app_title="Agentic Substrate Test",
         app_referer="https://test.local",
@@ -18,7 +18,8 @@ def test_pydantic_ai_openrouter_factory_creates_openai_responses_model() -> None
     )
 
     assert isinstance(model, OpenAIResponsesModel)
-    assert model.model_name == "deepseek/deepseek-v4-flash"
+    assert model.model_name == "google/gemma-4-26b-a4b-it"
+
     assert model.provider is not None
     # Inspect internal custom client
     custom_client = getattr(model.provider, "_client", None)
