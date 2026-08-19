@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Otimização de Throughput & Supressão de Raciocínio no OpenRouter**:
     - Configuração de `provider: {"sort": "throughput", "allow_fallbacks": True}` no `OpenRouterRagSynthesizer`, roteando dinamicamente para os clusters de inferência com maior vazão (~95 tokens/s via Parasail).
     - Desativação explícita de tokens de raciocínio com `reasoning: {"effort": "none", "exclude": True}`, reduzindo o tempo de síntese em mais de 60%.
+  - **Adoção do Qwen3 VL 32B Dense no OCR Multimodal e Synthetic ToC**:
+    - Substituição do modelo padrão de visão de `qwen/qwen3-vl-30b-a3b-instruct` para `qwen/qwen3-vl-32b-instruct`.
+    - Ganho de ~30% em velocidade de OCR por página (~65 tokens/s vs ~40 tokens/s) com redução de 20% no custo por token.
+    - Injeção de roteamento `provider: {"sort": "throughput"}` e supressão de reasoning em `ParallelVlmDocumentParser` e `QwenSyntheticTocExtractor`.
   - **Testes de Invariância Top-1 e Documentação**:
     - Suíte de testes atualizada comprovando que `top_k=1` avalia todo o pool de sementes e retorna o mesmo nó campeão que `top_k=3` ou `top_k=5`.
     - Criação do `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`.

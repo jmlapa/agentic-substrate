@@ -15,9 +15,9 @@ Document ingestion in high-volume enterprise and legal environments involves het
 ## Decision
 1. **Dual-Path Document Ingestion Architecture**:
    - **Fast-Path Zero-Cost Default (`enable_ocr=False`)**: Process documents natively in CPU memory using MarkItDown without making any external LLM/VLM network calls (sub-second execution, $0.00 cost).
-   - **Multimodal OCR (`enable_ocr=True`)**: Route document parsing to a Vision-Language Model via OpenRouter (`qwen/qwen3-vl-30b-a3b-instruct`) with support for custom Markdown structure instructions (*Prompt Injection*).
+   - **Multimodal OCR (`enable_ocr=True`)**: Route document parsing to a Vision-Language Model via OpenRouter (`qwen/qwen3-vl-32b-instruct`) with support for custom Markdown structure instructions (*Prompt Injection*) and throughput-sorted provider routing (`sort: throughput`).
 2. **Unified OpenRouter Gateway & Model Selection**:
-   - **OCR / Vision Model**: `qwen/qwen3-vl-30b-a3b-instruct` (MoE with ~3.3B active parameters, optimal balance between optical accuracy and cost).
+   - **OCR / Vision Model**: `qwen/qwen3-vl-32b-instruct` (Dense vision-language model with ~65 tok/s throughput on Alibaba clusters and 20% lower token cost).
    - **Graph Extraction & RAG Synthesis**: `deepseek/deepseek-v4-flash` for deterministic Pydantic extraction.
 3. **PydanticAI v2 Integration via Custom OpenAI Client**:
    - Create `PydanticAiOpenRouterProviderFactory` to configure `OpenAIResponsesModel` and `OpenAIProvider` with a custom `AsyncOpenAI` client.

@@ -3,7 +3,7 @@
 ## Objective
 Prover um pipeline de ingestão de documentos híbrido, de alta velocidade e custo-otimizado com **MarkItDown**, integrando:
 1. **OCR Multimodal Opcional (Opt-in pelo Frontend):** Documentos puramente textuais utilizam o parser nativo em C/Python sem invocar chamadas de LLM (custo zero e tempo de execução quase instantâneo).
-2. **Processamento Visual Acelerado via OpenRouter / Qwen3-VL:** Quando o OCR é habilitado para documentos com diagramas, gráficos ou tabelas complexas, o sistema delega para o modelo multimodal `qwen/qwen3-vl-30b-a3b-instruct` (ou configurado) via OpenRouter com concorrência assíncrona.
+2. **Processamento Visual Acelerado via OpenRouter / Qwen3-VL:** Quando o OCR é habilitado para documentos com diagramas, gráficos ou tabelas complexas, o sistema delega para o modelo multimodal `qwen/qwen3-vl-32b-instruct` (ou configurado) via OpenRouter com concorrência assíncrona e priorização por throughput.
 3. **Diretrizes Customizadas de Estrutura Markdown (*Prompt Injection* no MarkItDown):** O usuário pode fornecer instruções personalizadas no momento do upload sobre como organizar o Markdown resultante (ex: preservação de fórmulas LaTeX, extração de tabelas em GFM, anotações padronizadas de imagens `> [Figura X: ...]`).
 
 ---

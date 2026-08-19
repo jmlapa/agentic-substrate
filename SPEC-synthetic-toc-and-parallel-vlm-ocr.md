@@ -96,19 +96,19 @@ class ISyntheticTocExtractor(Protocol):
 
 ## 4. Configurações de Governança e Resiliência
 
-```ini
 # Concorrência e Batching
-OCR_VISION_MODEL_NAME=qwen/qwen3-vl-30b-a3b-instruct
+OCR_VISION_MODEL_NAME=qwen/qwen3-vl-32b-instruct
 OCR_MAX_CONCURRENCY=5
 OCR_TOC_BATCH_SIZE=25
 OCR_LOW_RES_SCALE=1.0
 OCR_HIGH_RES_SCALE=2.0
 
-# Rate Limiting & Backoff
+# Rate Limiting, Throughput Routing & Backoff
 OPENROUTER_MAX_RPM=300
 OPENROUTER_MAX_TPM=1000000
 OCR_MAX_RETRIES_429=5
-```
+OCR_PROVIDER_SORT=throughput
+OCR_REASONING_EFFORT=none
 
 ---
 
