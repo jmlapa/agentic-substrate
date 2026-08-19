@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import Any
 from uuid import UUID
@@ -13,6 +14,8 @@ from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
 from src.modules.knowledge.domain.value_objects.structural_graph_document import (
     StructuralGraphDocument,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class FalkorDbGraphStoreAdapter(IGraphStore):
@@ -150,6 +153,20 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             )
             edges_count += 1
 
+        # 4. Merge sequential [:NEXT] edges in batch between consecutive Parent Chunks
+        if len(document.parents) > 1:
+            pairs = [
+                {"p1_id": document.parents[i].id, "p2_id": document.parents[i + 1].id}
+                for i in range(len(document.parents) - 1)
+            ]
+            batch_next_query = (
+                "UNWIND $pairs AS pair "
+                "MATCH (p1:ParentChunk {id: pair.p1_id}), (p2:ParentChunk {id: pair.p2_id}) "
+                "MERGE (p1)-[r:NEXT]->(p2)"
+            )
+            graph_handle.query(batch_next_query, {"pairs": pairs})
+            edges_count += len(pairs)
+
         return nodes_count, edges_count
 
     def _store_parent_mentions_sync(
@@ -192,7 +209,8 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
 
         try:
             res = graph_handle.query(cypher_query)
-        except Exception:
+        except Exception as e:
+            logger.error("Failed to query subgraph in FalkorDB: %s", e, exc_info=True)
             return []
 
         results: list[dict[str, Any]] = []
@@ -211,47 +229,116 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         return results[:top_k]
 
     def _query_hybrid_sync(
-        self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
+        self,
+        kb_id: UUID,
+        query_embedding: list[float],
+        top_k: int = 5,
+        candidate_k: int = 20,
     ) -> list[HybridSearchResult]:
+        if not query_embedding:
+            return []
+
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
         query = (
-            "CALL db.idx.vector.queryNodes('ChildChunk', 'embedding', $top_k, vecf32($query_vec)) "
-            "YIELD node AS child, score "
-            "MATCH (parent:ParentChunk)-[:CONTAINS_CHILD]->(child) "
-            "OPTIONAL MATCH (parent)-[:MENTIONS]->(entity) "
-            "RETURN parent.id AS parent_id, "
-            "       parent.header_path AS header_path, "
-            "       parent.content AS parent_content, "
-            "       collect(DISTINCT {type: labels(entity)[0], "
-            "properties: properties(entity)}) AS related_entities, "
-            "       max(score) AS relevance_score "
+            "CALL db.idx.vector.queryNodes('ChildChunk', 'embedding', "
+            "$candidate_k, vecf32($query_vec)) "
+            "YIELD node AS child, score AS vec_score "
+            "MATCH (p_seed:ParentChunk)-[:CONTAINS_CHILD]->(child) "
+            "WITH p_seed, max(1.0 - vec_score) AS seed_score "
+            "ORDER BY seed_score DESC "
+            "LIMIT $top_k "
+            "OPTIONAL MATCH (p_seed)-[:MENTIONS]->(e)<-[:MENTIONS]-(p_neighbor:ParentChunk) "
+            "WHERE p_neighbor <> p_seed "
+            "WITH p_seed, seed_score, p_neighbor, count(DISTINCT e) AS shared_entities "
+            "ORDER BY shared_entities DESC "
+            "WITH p_seed, seed_score, "
+            "collect(DISTINCT {parent: p_neighbor, "
+            "shared_entities: shared_entities})[0..2] AS top_neighbors "
+            "UNWIND (CASE WHEN size(top_neighbors) > 0 THEN top_neighbors "
+            "ELSE [{parent: null, shared_entities: 0}] END) AS tn "
+            "WITH collect(DISTINCT {parent: p_seed, base_score: seed_score, "
+            "is_seed: true, shared_entities: 0}) + "
+            "     collect(DISTINCT {parent: tn.parent, base_score: seed_score * 0.7, "
+            "is_seed: false, shared_entities: tn.shared_entities}) AS raw_candidates "
+            "UNWIND raw_candidates AS c "
+            "WITH c.parent AS p, max(c.base_score) AS base_score, "
+            "max(c.shared_entities) AS shared_entities, max(c.is_seed) AS is_seed "
+            "WHERE p IS NOT NULL "
+            "WITH p, (base_score + (shared_entities * 0.10)) AS fused_score, is_seed "
+            "ORDER BY fused_score DESC "
+            "LIMIT $top_k "
+            "OPTIONAL MATCH (p)-[:MENTIONS]->(e1) "
+            "OPTIONAL MATCH (e1)-[r]->(e2) "
+            "OPTIONAL MATCH (d:Document)-[:HAS_PARENT]->(p) "
+            "OPTIONAL MATCH (p)-[:NEXT]->(next_p:ParentChunk) "
+            "OPTIONAL MATCH (prev_p:ParentChunk)-[:NEXT]->(p) "
+            "RETURN p.id AS parent_id, "
+            "       coalesce(d.id, '') AS document_id, "
+            "       coalesce(d.name, '') AS document_name, "
+            "       p.header_path AS header_path, "
+            "       p.content AS parent_content, "
+            "       fused_score AS relevance_score, "
+            "       prev_p.id AS prev_chunk_id, "
+            "       next_p.id AS next_chunk_id, "
+            "       is_seed AS is_seed, "
+            "       collect(DISTINCT CASE WHEN e1 IS NOT NULL AND r IS NOT NULL AND "
+            "e2 IS NOT NULL THEN (coalesce(e1.name, e1.id, '') + ' ' + type(r) + ' ' + "
+            "coalesce(e2.name, e2.id, '')) ELSE null END)[0..5] AS related_triples, "
+            "       collect(DISTINCT {type: labels(e1)[0], "
+            "properties: properties(e1)}) AS related_entities "
             "ORDER BY relevance_score DESC"
         )
+
         try:
-            res = graph_handle.query(query, {"top_k": top_k, "query_vec": query_embedding})
-        except Exception:
+            res = graph_handle.query(
+                query,
+                {
+                    "candidate_k": candidate_k,
+                    "top_k": top_k,
+                    "query_vec": query_embedding,
+                },
+            )
+        except Exception as e:
+            logger.error("Failed to query hybrid search in FalkorDB: %s", e, exc_info=True)
             return []
 
         results: list[HybridSearchResult] = []
         for row in res.result_set:
-            # row: [parent_id, header_path, parent_content, related_entities, relevance_score]
-            if len(row) >= 5:
+            if len(row) >= 11:
                 parent_id = str(row[0])
-                header_path = str(row[1]) if row[1] is not None else ""
-                parent_content = str(row[2]) if row[2] is not None else ""
-                raw_entities = row[3] if isinstance(row[3], list) else []
-                # filter out empty null entities resulting from OPTIONAL MATCH
+                doc_id = str(row[1]) if row[1] is not None else ""
+                doc_name = str(row[2]) if row[2] is not None else ""
+                header_path = str(row[3]) if row[3] is not None else ""
+                parent_content = str(row[4]) if row[4] is not None else ""
+                relevance_score = float(row[5]) if row[5] is not None else 0.0
+                prev_id = str(row[6]) if row[6] is not None else None
+                next_id = str(row[7]) if row[7] is not None else None
+                is_seed = bool(row[8]) if row[8] is not None else True
+                raw_triples = row[9] if isinstance(row[9], list) else []
+                raw_entities = row[10] if isinstance(row[10], list) else []
+
+                # Filter clean triples and entities
+                triples: list[str] = [
+                    str(t)
+                    for t in raw_triples
+                    if t and str(t) != "None" and not str(t).startswith("None")
+                ]
                 entities: list[dict[str, Any]] = [
                     e for e in raw_entities if isinstance(e, dict) and e.get("type") is not None
                 ]
-                relevance_score = float(row[4]) if row[4] is not None else 0.0
 
                 results.append(
                     HybridSearchResult(
                         parent_chunk_id=parent_id,
+                        document_id=doc_id,
+                        document_name=doc_name,
                         header_path=header_path,
                         parent_content=parent_content,
                         relevance_score=relevance_score,
+                        retrieval_source="vector_match" if is_seed else "graph_expansion",
+                        prev_chunk_id=prev_id,
+                        next_chunk_id=next_id,
+                        related_triples=triples,
                         related_entities=entities,
                     )
                 )
@@ -283,6 +370,12 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         return await asyncio.to_thread(self._query_subgraph_sync, kb_id, query, top_k)
 
     async def query_hybrid(
-        self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
+        self,
+        kb_id: UUID,
+        query_embedding: list[float],
+        top_k: int = 5,
+        candidate_k: int = 20,
     ) -> list[HybridSearchResult]:
-        return await asyncio.to_thread(self._query_hybrid_sync, kb_id, query_embedding, top_k)
+        return await asyncio.to_thread(
+            self._query_hybrid_sync, kb_id, query_embedding, top_k, candidate_k
+        )

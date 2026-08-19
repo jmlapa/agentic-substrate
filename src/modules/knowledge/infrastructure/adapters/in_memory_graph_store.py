@@ -68,19 +68,31 @@ class InMemoryGraphStore(IGraphStore):
         ]
 
     async def query_hybrid(
-        self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
+        self,
+        kb_id: UUID,
+        query_embedding: list[float],
+        top_k: int = 5,
+        candidate_k: int = 20,
     ) -> list[HybridSearchResult]:
         results: list[HybridSearchResult] = []
         docs = self._structural_docs.get(kb_id, [])
         for doc in docs:
-            for parent in doc.parents:
+            for idx, parent in enumerate(doc.parents):
                 entities = self._parent_mentions[kb_id].get(parent.id, [])
+                prev_id = doc.parents[idx - 1].id if idx > 0 else None
+                next_id = doc.parents[idx + 1].id if idx < len(doc.parents) - 1 else None
                 results.append(
                     HybridSearchResult(
                         parent_chunk_id=parent.id,
+                        document_id=str(doc.document_id),
+                        document_name=doc.document_name,
                         header_path=parent.header_path,
                         parent_content=parent.content,
                         relevance_score=0.92,
+                        retrieval_source="vector_match",
+                        prev_chunk_id=prev_id,
+                        next_chunk_id=next_id,
+                        related_triples=[],
                         related_entities=entities,
                     )
                 )
