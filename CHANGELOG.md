@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-08-19
+
+### Added
+- **Natural Parent Deduplication, 50-Candidate Oversampling & Bounded Multiplicative Decay in GraphRAG (ADR-0009)**:
+  - **Eliminação do Afunilamento Precoce de Sementes (*Seed Pool Starvation*)**:
+    - Remoção do `LIMIT` intermediário na seleção de sementes vetoriais na consulta Cypher do `FalkorDbGraphStoreAdapter`.
+    - Deduplicação natural de todos os `ParentChunk`s derivados dos 50 melhores filhos do índice HNSW.
+    - Expansão de vizinhos ontológicos ampliada de 2 para até 5 vizinhos mais conectados (`[0..5]`) por semente.
+    - Aplicação estrita do `LIMIT $top_k` apenas após o cálculo do `fused_score` e ordenação global, garantindo invariância e máxima relevância na posição #1 independentemente do `top_k` solicitado.
+  - **Reranking com *Bounded Multiplicative Graph Decay***:
+    - Substituição da fórmula aditiva vulnerável a nós hub/índices por decaimento proporcional relativo: sementes diretas preservam seu score vetorial de cosseno ($1.0 - distance$) e vizinhos entram com decaimento de salto ($0.70\times$) e bônus proporcional limitado ($\le 25\%$):
+      `fused_score = base_score * (1.0 + (min(shared_entities, 5) * 0.05))`.
+    - Eliminação completa de inflação por páginas de índice remissivo e glossários em documentos legais extensos.
+  - **Oversampling Mínimo Expandido**:
+    - `candidate_k` no `QueryKnowledgeUseCase` padronizado como $\max(top\_k \times 4, 50)$ (mínimo de 50 `ChildChunk`s).
+  - **Busca Semântica Assimétrica (`embed_query`)**:
+    - `QueryKnowledgeUseCase` agora invoca `IEmbeddingService.embed_query` com a instrução oficial do Gemini 2 (`task: search result | query: ...`) para máxima precisão pergunta-resposta.
+  - **Testes de Invariância Top-1 e Documentação**:
+    - Suíte de testes atualizada comprovando que `top_k=1` avalia todo o pool de sementes e retorna o mesmo nó campeão que `top_k=3` ou `top_k=5`.
+    - Criação do `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`.
+
 ## [0.3.8] - 2026-08-19
 
 ### Added

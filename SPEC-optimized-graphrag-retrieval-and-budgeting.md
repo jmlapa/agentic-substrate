@@ -159,48 +159,40 @@ class QueryKnowledgeResponse(BaseModel):
 
 ## 4. Query Cypher Unificada de Alta Eficiência (FalkorDB)
 
-A consulta é executada em uma **única transação atômica** no FalkorDB, combinando busca vetorial com oversampling, casamento de entidades e expansão relacional:
+A consulta é executada em uma **única transação atômica** no FalkorDB, combinando busca vetorial com oversampling ($candidate\_k = \max(top\_k \times 4, 50)$), deduplicação natural de todos os `ParentChunk`s derivados dos filhos (sem afunilamento precoce), expansão de até 5 vizinhos ontológicos por semente e reranking global pelo `FusedScore`:
 
 ```cypher
-// 1. Sementes Vetoriais com Oversampling de Filhos (candidate_k = top_k * 4)
+// 1. Sementes Vetoriais com Oversampling de Filhos (candidate_k = max(top_k * 4, 50))
 CALL db.idx.vector.queryNodes('ChildChunk', 'embedding', $candidate_k, vecf32($query_vec)) 
 YIELD node AS child, score AS vec_score
 MATCH (p_seed:ParentChunk)-[:CONTAINS_CHILD]->(child)
 WITH p_seed, max(1.0 - vec_score) AS seed_score
 ORDER BY seed_score DESC
-LIMIT $top_k
 
-// 2. Expansão de Subgrafo: busca até 2 vizinhos por semente via entidades ontológicas dinâmicas
+// 2. Expansão de Subgrafo: busca até 5 vizinhos por semente via entidades ontológicas dinâmicas
 OPTIONAL MATCH (p_seed)-[:MENTIONS]->(e)<-[:MENTIONS]-(p_neighbor:ParentChunk)
 WHERE p_neighbor <> p_seed
 WITH p_seed, seed_score, p_neighbor, count(DISTINCT e) AS shared_entities
 ORDER BY shared_entities DESC
-WITH p_seed, seed_score, collect(DISTINCT {parent: p_neighbor, shared_entities: shared_entities})[0..2] AS top_neighbors
+WITH p_seed, seed_score, collect(DISTINCT {parent: p_neighbor, shared_entities: shared_entities})[0..5] AS top_neighbors
 
-// 3. Montagem do Universo de Candidatos (Até 3 sementes + 6 vizinhos = 9 candidatos)
-WITH collect(DISTINCT {
-    parent: p_seed, 
-    base_score: seed_score, 
-    is_seed: true, 
-    shared_entities: 0
-}) + 
-reduce(acc = [], n IN collect(top_neighbors) | acc + [x IN n WHERE x.parent IS NOT NULL | {
-    parent: x.parent,
-    base_score: seed_score * 0.7,
-    is_seed: false,
-    shared_entities: x.shared_entities
-}]) AS raw_candidates
-
+// 3. Montagem do Universo de Candidatos
+UNWIND (CASE WHEN size(top_neighbors) > 0 THEN top_neighbors 
+             ELSE [{parent: null, shared_entities: 0}] END) AS tn
+WITH collect(DISTINCT {parent: p_seed, base_score: seed_score, is_seed: true, shared_entities: 0}) + 
+     collect(DISTINCT {parent: tn.parent, base_score: seed_score * 0.7, is_seed: false, shared_entities: tn.shared_entities}) AS raw_candidates
 UNWIND raw_candidates AS c
-WITH c.parent AS p, max(c.base_score) AS base_score, max(c.shared_entities) AS shared_entities, c.is_seed AS is_seed
+WITH c.parent AS p, max(c.base_score) AS base_score, max(c.shared_entities) AS shared_entities, max(c.is_seed) AS is_seed
 WHERE p IS NOT NULL
 
-// 4. Reranking Global Unificado no Universo de 9 Candidatos
+// 4. Reranking Global Unificado (Bounded Multiplicative Decay)
 WITH p,
-     (base_score + (shared_entities * 0.10)) AS fused_score,
+     CASE WHEN is_seed THEN base_score 
+          ELSE (base_score * (1.0 + (CASE WHEN shared_entities > 5 THEN 5 ELSE shared_entities END * 0.05)))
+     END AS fused_score,
      is_seed
 ORDER BY fused_score DESC
-LIMIT $top_k  // <-- Seleciona os TOP 3 campeões absolutos do universo de 9
+LIMIT $top_k  // <-- Único corte de LIMIT, garantindo a seleção dos TOP K campeões absolutos
 
 // 5. Coleta de Triplas, Entidades e Navegação Linear dos Campeões
 OPTIONAL MATCH (p)-[:MENTIONS]->(e1)
@@ -210,14 +202,17 @@ OPTIONAL MATCH (p)-[:NEXT]->(next_p:ParentChunk)
 OPTIONAL MATCH (prev_p:ParentChunk)-[:NEXT]->(p)
 
 RETURN p.id AS parent_id,
-       d.id AS document_id,
-       d.name AS document_name,
+       coalesce(d.id, '') AS document_id,
+       coalesce(d.name, '') AS document_name,
        p.header_path AS header_path,
        p.content AS parent_content,
        fused_score AS relevance_score,
        prev_p.id AS prev_chunk_id,
        next_p.id AS next_chunk_id,
-       collect(DISTINCT (e1.name + ' ' + type(r) + ' ' + e2.name))[0..5] AS related_triples,
+       is_seed AS is_seed,
+       collect(DISTINCT CASE WHEN e1 IS NOT NULL AND r IS NOT NULL AND e2 IS NOT NULL 
+            THEN (coalesce(e1.name, e1.id, '') + ' ' + type(r) + ' ' + coalesce(e2.name, e2.id, '')) 
+            ELSE null END)[0..5] AS related_triples,
        collect(DISTINCT {type: labels(e1)[0], properties: properties(e1)}) AS related_entities
 ORDER BY relevance_score DESC
 ```

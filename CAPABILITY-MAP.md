@@ -33,6 +33,7 @@
 - `docs/decisions/0006-cqrs-read-model-projections.md`
 - `docs/decisions/0007-openrouter-gemma-4-fact-dense-rag-synthesis.md`
 - `docs/decisions/0008-optimized-graphrag-retrieval-and-budgeting.md`
+- `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
@@ -43,6 +44,6 @@
 6. **Marco 1.12 (Concluído - v0.3.1):** `knowledge:cqrs-consolidated-read-model-projections` (Event-Driven Projector, Migration 0006, O(1) Relational Queries)
 7. **Marco 1.13 (Concluído - v0.3.2):** `knowledge:openrouter-gemma-4-fact-dense-rag-synthesis` (Google Gemma 4 via OpenRouter, Fact-Dense Markdown, Dual-Mode synthesis/retrieve)
 8. **Marco 1.14 (Concluído - v0.3.3):** `knowledge:synthetic-toc-and-parallel-vlm-ocr` (Stateful Rolling Window ToC, Parallel Two-Pass OCR, Concurrency & Rate Limiting)
-9. **Marco 1.15 (Concluído - v0.3.4):** `knowledge:optimized-graphrag-retrieval-and-budgeting` (FalkorDB Cypher, 9-Candidate Expansion, 32k Dynamic Budgeting, XML Context Injection Defense)
+9. **Marco 1.15 (Concluído - v0.3.9):** `knowledge:optimized-graphrag-retrieval-and-budgeting` (FalkorDB Cypher, Deduplicação Natural de Sementes, Bounded Multiplicative Decay, 32k Dynamic Budgeting, XML Context Injection Defense)
 10. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 

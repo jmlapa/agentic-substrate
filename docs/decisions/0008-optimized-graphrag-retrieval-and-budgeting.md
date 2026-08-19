@@ -1,7 +1,7 @@
 # ADR-0008: Optimized GraphRAG Retrieval, Candidate Fusion & Dynamic Token Budgeting
 
 ## Status
-Accepted
+Accepted (Candidate fusion & scoring amended by [ADR-0009](file:///Users/insider/personal/agentic-substrate/docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md))
 
 ## Date
 2026-08-18
