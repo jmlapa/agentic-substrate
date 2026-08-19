@@ -34,5 +34,9 @@ class IGraphStore(Protocol):
     ) -> tuple[int, int]: ...
 
     async def query_hybrid(
-        self, kb_id: UUID, query_embedding: list[float], top_k: int = 5
+        self,
+        kb_id: UUID,
+        query_embedding: list[float],
+        top_k: int = 5,
+        candidate_k: int = 20,
     ) -> list[HybridSearchResult]: ...

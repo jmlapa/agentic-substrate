@@ -140,6 +140,8 @@ async def query_knowledge_base(
             query=payload.query,
             top_k=payload.top_k,
             mode=payload.mode,
+            max_tokens_budget=payload.max_tokens_budget,
+            include_graph_triples=payload.include_graph_triples,
         )
     )
     if isinstance(res, Err):
