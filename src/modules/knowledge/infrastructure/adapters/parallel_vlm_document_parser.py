@@ -35,7 +35,7 @@ class ParallelVlmDocumentParser(IDocumentParser):
         openai_client: Any | None = None,
         toc_extractor: ISyntheticTocExtractor | None = None,
         page_renderer: PdfPageRenderer | None = None,
-        vision_model: str = "qwen/qwen3-vl-30b-a3b-instruct",
+        vision_model: str = "qwen/qwen3-vl-32b-instruct",
         default_prompt: str | None = None,
         max_concurrency: int = 5,
         rate_limiter: AsyncTokenBucketLimiter | None = None,
@@ -158,6 +158,16 @@ class ParallelVlmDocumentParser(IDocumentParser):
                         {"role": "user", "content": user_content},
                     ],
                     temperature=0.0,
+                    extra_body={
+                        "provider": {
+                            "sort": "throughput",
+                            "allow_fallbacks": True,
+                        },
+                        "reasoning": {
+                            "effort": "none",
+                            "exclude": True,
+                        },
+                    },
                 )
                 page_md = str(response.choices[0].message.content or "").strip()
 

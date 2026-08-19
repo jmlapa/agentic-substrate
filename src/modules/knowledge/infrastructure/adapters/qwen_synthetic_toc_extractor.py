@@ -39,7 +39,7 @@ class QwenSyntheticTocExtractor(ISyntheticTocExtractor):
         self,
         openai_client: Any,
         page_renderer: PdfPageRenderer | None = None,
-        vision_model: str = "qwen/qwen3-vl-30b-a3b-instruct",
+        vision_model: str = "qwen/qwen3-vl-32b-instruct",
         rate_limiter: AsyncTokenBucketLimiter | None = None,
         checkpoint_storage: TocCheckpointStorage | None = None,
     ) -> None:
@@ -188,6 +188,16 @@ class QwenSyntheticTocExtractor(ISyntheticTocExtractor):
                     {"role": "user", "content": content_payload},
                 ],
                 temperature=0.0,
+                extra_body={
+                    "provider": {
+                        "sort": "throughput",
+                        "allow_fallbacks": True,
+                    },
+                    "reasoning": {
+                        "effort": "none",
+                        "exclude": True,
+                    },
+                },
             )
 
             raw_response = response.choices[0].message.content or ""

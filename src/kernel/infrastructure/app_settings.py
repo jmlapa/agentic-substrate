@@ -72,7 +72,7 @@ class AppSettings(BaseSettings):
         alias="OPENROUTER_SYNTHESIS_MAX_TOKENS",
     )
     ocr_vision_model_name: str = Field(
-        default="qwen/qwen3-vl-30b-a3b-instruct",
+        default="qwen/qwen3-vl-32b-instruct",
         alias="OCR_VISION_MODEL_NAME",
     )
     ocr_max_concurrency: int = Field(default=5, alias="OCR_MAX_CONCURRENCY")
