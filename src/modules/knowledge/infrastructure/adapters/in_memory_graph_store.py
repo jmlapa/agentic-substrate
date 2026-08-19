@@ -72,7 +72,7 @@ class InMemoryGraphStore(IGraphStore):
         kb_id: UUID,
         query_embedding: list[float],
         top_k: int = 5,
-        candidate_k: int = 20,
+        candidate_k: int = 50,
     ) -> list[HybridSearchResult]:
         results: list[HybridSearchResult] = []
         docs = self._structural_docs.get(kb_id, [])

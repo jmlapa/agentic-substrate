@@ -80,9 +80,8 @@ class QueryKnowledgeUseCase:
     async def execute(
         self, request: QueryKnowledgeRequest
     ) -> Result[QueryKnowledgeResponse, DomainError]:
-        candidate_k = max(request.top_k * 4, 20)
-        embeddings = await self._embedding_service.embed_texts([request.query])
-        query_vec = embeddings[0] if embeddings else []
+        candidate_k = max(request.top_k * 4, 50)
+        query_vec = await self._embedding_service.embed_query(request.query)
 
         raw_results = await self._graph_store.query_hybrid(
             request.kb_id, query_vec, request.top_k, candidate_k

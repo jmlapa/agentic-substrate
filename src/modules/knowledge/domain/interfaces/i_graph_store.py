@@ -38,5 +38,5 @@ class IGraphStore(Protocol):
         kb_id: UUID,
         query_embedding: list[float],
         top_k: int = 5,
-        candidate_k: int = 20,
+        candidate_k: int = 50,
     ) -> list[HybridSearchResult]: ...

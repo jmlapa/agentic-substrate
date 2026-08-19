@@ -233,7 +233,7 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         kb_id: UUID,
         query_embedding: list[float],
         top_k: int = 5,
-        candidate_k: int = 20,
+        candidate_k: int = 50,
     ) -> list[HybridSearchResult]:
         if not query_embedding:
             return []
@@ -246,14 +246,13 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             "MATCH (p_seed:ParentChunk)-[:CONTAINS_CHILD]->(child) "
             "WITH p_seed, max(1.0 - vec_score) AS seed_score "
             "ORDER BY seed_score DESC "
-            "LIMIT $top_k "
             "OPTIONAL MATCH (p_seed)-[:MENTIONS]->(e)<-[:MENTIONS]-(p_neighbor:ParentChunk) "
             "WHERE p_neighbor <> p_seed "
             "WITH p_seed, seed_score, p_neighbor, count(DISTINCT e) AS shared_entities "
             "ORDER BY shared_entities DESC "
             "WITH p_seed, seed_score, "
             "collect(DISTINCT {parent: p_neighbor, "
-            "shared_entities: shared_entities})[0..2] AS top_neighbors "
+            "shared_entities: shared_entities})[0..5] AS top_neighbors "
             "UNWIND (CASE WHEN size(top_neighbors) > 0 THEN top_neighbors "
             "ELSE [{parent: null, shared_entities: 0}] END) AS tn "
             "WITH collect(DISTINCT {parent: p_seed, base_score: seed_score, "
@@ -264,7 +263,12 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             "WITH c.parent AS p, max(c.base_score) AS base_score, "
             "max(c.shared_entities) AS shared_entities, max(c.is_seed) AS is_seed "
             "WHERE p IS NOT NULL "
-            "WITH p, (base_score + (shared_entities * 0.10)) AS fused_score, is_seed "
+            "WITH p, "
+            "     CASE WHEN is_seed THEN base_score "
+            "          ELSE (base_score * (1.0 + (CASE WHEN shared_entities > 5 "
+            "THEN 5 ELSE shared_entities END * 0.05))) "
+            "     END AS fused_score, "
+            "     is_seed "
             "ORDER BY fused_score DESC "
             "LIMIT $top_k "
             "OPTIONAL MATCH (p)-[:MENTIONS]->(e1) "
@@ -284,8 +288,8 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             "       collect(DISTINCT CASE WHEN e1 IS NOT NULL AND r IS NOT NULL AND "
             "e2 IS NOT NULL THEN (coalesce(e1.name, e1.id, '') + ' ' + type(r) + ' ' + "
             "coalesce(e2.name, e2.id, '')) ELSE null END)[0..5] AS related_triples, "
-            "       collect(DISTINCT {type: labels(e1)[0], "
-            "properties: properties(e1)}) AS related_entities "
+            "       collect(DISTINCT CASE WHEN e1 IS NOT NULL THEN {type: labels(e1)[0], "
+            "properties: properties(e1)} ELSE null END) AS related_entities "
             "ORDER BY relevance_score DESC"
         )
 
@@ -374,7 +378,7 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         kb_id: UUID,
         query_embedding: list[float],
         top_k: int = 5,
-        candidate_k: int = 20,
+        candidate_k: int = 50,
     ) -> list[HybridSearchResult]:
         return await asyncio.to_thread(
             self._query_hybrid_sync, kb_id, query_embedding, top_k, candidate_k
