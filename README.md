@@ -206,8 +206,12 @@ agentic-substrate/
 - [ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization](docs/decisions/0003-pydantic-ai-graph-extractor-and-rate-limiter.md)
 - [ADR-0004: Universal Structure-Tolerant Markdown Chunker](docs/decisions/0004-universal-structure-tolerant-chunker.md)
 - [ADR-0005: Configurable Multimodal OCR, OpenRouter VLM and PydanticAI OpenAI Provider](docs/decisions/0005-configurable-ocr-and-openrouter-vlm.md)
+- [ADR-0006: CQRS Consolidated Read Model Projections and O(1) Relational Query Engine](docs/decisions/0006-cqrs-read-model-projections.md)
+- [ADR-0007: OpenRouter Gemma 4 Fact-Dense RAG Synthesis & Dual-Mode Query Architecture](docs/decisions/0007-openrouter-gemma-4-fact-dense-rag-synthesis.md)
+- [ADR-0008: Optimized GraphRAG Retrieval, Candidate Fusion & Dynamic Token Budgeting](docs/decisions/0008-optimized-graphrag-retrieval-and-budgeting.md)
 
 ---
 
 ## ⚖️ License
 MIT License. Created for the **Agentic Substrate** initiative.
+

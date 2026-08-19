@@ -3,7 +3,7 @@
 | Module id | Responsibility | Depends on | Status |
 |---|---|---|---|
 | `kernel` | Primitivas compartilhadas puras (Entity, ValueObject, AggregateRoot, DomainEvent, Result/Either), contratos de Event Sourcing, interfaces de EventBus, PostgresEventStore com concorrência otimista, controle de vazão (AsyncTokenBucketLimiter) e abstrações base. | — | Completed (v0.2.0) |
-| `knowledge` | Pipeline assíncrono GraphRAG: ingestão particionada por KB em Local FileSystem Storage, Saga coreografada com Event Sourcing, parser MarkItDown (com fast-path nativo zero-cost e OCR multimodal via OpenRouter/Qwen3-VL), chunking hierárquico tolerante à estrutura (StructureTolerantMarkdownChunker), embeddings Gemini 2 com MRL (768d), extração ontológica com PydanticAI v2 (OpenRouter/DeepSeek-V4-Flash e Gemini), rate limiting (300 RPM / 1M TPM), canonização cumulativa de entidades e indexação híbrida no FalkorDB. | `kernel` | Completed (v0.3.0) |
+| `knowledge` | Pipeline assíncrono GraphRAG: ingestão particionada por KB em Local FileSystem Storage, Saga coreografada com Event Sourcing, parser MarkItDown (com fast-path nativo zero-cost e OCR multimodal via OpenRouter/Qwen3-VL), chunking hierárquico tolerante à estrutura (StructureTolerantMarkdownChunker), embeddings Gemini 2 com MRL (768d), extração ontológica com PydanticAI v2 (OpenRouter/Google Gemma 4 e Gemini), rate limiting (300 RPM / 1M TPM), canonização cumulativa de entidades e indexação híbrida no FalkorDB. | `kernel` | Completed (v0.3.0) |
 | `api-gateway` | Exposição HTTP/REST assíncrona (FastAPI), container de injeção de dependências (IoC), orquestração de endpoints para gerenciamento de KBs, templates de ontologia, upload particionado com opções de OCR e consultas híbridas GraphRAG com subgrafos e nós ontológicos. | `kernel`, `knowledge` | Completed (v0.3.0) |
 | `frontend-console` | Console SPA leve (Vite, React, TypeScript, Tailwind CSS) para gestão de ontologias, criação e listagem de KBs, upload de documentos com toggle de OCR e instruções customizadas de Markdown, monitoramento visual em tempo real por etapas de pipeline e playground de consulta RAG com LLM. | `api-gateway` | Completed (v0.3.0) |
 | `memory` | Memória de curto/longo prazo para agentes, histórico de diálogos, grafos de memória episódica/semântica. | `kernel` | Backlog (v0.4.0) |
@@ -19,9 +19,10 @@
 - `SPEC-frontend-console.md` (Marco 1.10 - Frontend Console SPA & RAG Query Playground) — Concluído
 - `SPEC-configurable-ocr-and-visual-ingestion.md` (Marco 1.11 - OCR Multimodal Configurável, OpenRouter & MarkItDown Custom Structure) — Concluído (v0.3.0)
 - `SPEC-consolidated-read-model-projections.md` (Marco 1.12 - CQRS Consolidated Read Model & Event-Driven Projections) — Concluído (v0.3.1)
-- `SPEC-deepseek-v4-fact-dense-rag-synthesis.md` (Marco 1.13 - DeepSeek-V4-Flash Fact-Dense RAG Synthesis & Dual-Mode Retrieval) — Concluído (v0.3.2)
+- `SPEC-gemma-4-fact-dense-rag-synthesis.md` (Marco 1.13 - OpenRouter Gemma 4 Fact-Dense RAG Synthesis & Dual-Mode Retrieval) — Concluído (v0.3.2)
 - `SPEC-synthetic-toc-and-parallel-vlm-ocr.md` (Marco 1.14 - Stateful Synthetic ToC & Resilient Parallel VLM OCR) — Concluído (v0.3.3)
-- `SPEC-resilient-saga-reprocessing-and-job-queues.md` (Marco 1.15 - Resilient Saga Reprocessing, Redis Job Queues & Zero-Token-Waste Checkpoints) — Planejado (v0.3.4)
+- `SPEC-optimized-graphrag-retrieval-and-budgeting.md` (Marco 1.15 - Optimized GraphRAG Retrieval, Candidate Fusion & 32k Token Budgeting) — Concluído (v0.3.4)
+- `SPEC-resilient-saga-reprocessing-and-job-queues.md` (Marco 1.16 - Resilient Saga Reprocessing, Redis Job Queues & Zero-Token-Waste Checkpoints) — Planejado (v0.3.5)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -30,15 +31,18 @@
 - `docs/decisions/0004-universal-structure-tolerant-chunker.md`
 - `docs/decisions/0005-configurable-ocr-and-openrouter-vlm.md`
 - `docs/decisions/0006-cqrs-read-model-projections.md`
-- `docs/decisions/0007-deepseek-v4-fact-dense-rag-synthesis.md`
+- `docs/decisions/0007-openrouter-gemma-4-fact-dense-rag-synthesis.md`
+- `docs/decisions/0008-optimized-graphrag-retrieval-and-budgeting.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
 2. **Marco 1.6 & 1.7 (Concluído):** `knowledge:chunking-and-embeddings` & `knowledge:falkordb-hybrid-graphrag`
 3. **Marco 1.8 & 1.9 (Concluído):** `knowledge:structure-tolerant-chunker` ──→ `knowledge:pydantic-ai-extractor-and-rate-limiter`
 4. **Marco 1.10 (Concluído):** `frontend-console` (Vite+React SPA, Ontologias, KBs, Monitor de Pipeline, Playground RAG)
-5. **Marco 1.11 (Concluído - v0.3.0):** `knowledge:configurable-ocr-and-visual-ingestion` (OpenRouter, Fast-Path MarkItDown, Qwen3-VL, DeepSeek-V4-Flash)
+5. **Marco 1.11 (Concluído - v0.3.0):** `knowledge:configurable-ocr-and-visual-ingestion` (OpenRouter, Fast-Path MarkItDown, Qwen3-VL, Gemma 4)
 6. **Marco 1.12 (Concluído - v0.3.1):** `knowledge:cqrs-consolidated-read-model-projections` (Event-Driven Projector, Migration 0006, O(1) Relational Queries)
-7. **Marco 1.13 (Concluído - v0.3.2):** `knowledge:deepseek-v4-fact-dense-rag-synthesis` (DeepSeek-V4-Flash via OpenRouter, Fact-Dense Markdown, Dual-Mode synthesis/retrieve)
+7. **Marco 1.13 (Concluído - v0.3.2):** `knowledge:openrouter-gemma-4-fact-dense-rag-synthesis` (Google Gemma 4 via OpenRouter, Fact-Dense Markdown, Dual-Mode synthesis/retrieve)
 8. **Marco 1.14 (Concluído - v0.3.3):** `knowledge:synthetic-toc-and-parallel-vlm-ocr` (Stateful Rolling Window ToC, Parallel Two-Pass OCR, Concurrency & Rate Limiting)
-9. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+9. **Marco 1.15 (Concluído - v0.3.4):** `knowledge:optimized-graphrag-retrieval-and-budgeting` (FalkorDB Cypher, 9-Candidate Expansion, 32k Dynamic Budgeting, XML Context Injection Defense)
+10. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+

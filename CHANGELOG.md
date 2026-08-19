@@ -5,7 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-08-19
+
+### Added
+- **Optimized GraphRAG Retrieval, Candidate Fusion & 32k Dynamic Token Budgeting (Marco 1.15)**:
+  - **FalkorDB Cypher Candidate Expansion (Fórmula $K + 2K$)**:
+    - Expansão atômica de até 2 nós vizinhos por semente vetorial via entidades compartilhadas (`[0..2]`), gerando universo de 9 candidatos para `top_k=3`.
+    - Fusão de scores no Cypher (`fused_score = base_score + shared_entities * 0.10`) com cálculo de similaridade por distância de cosseno (`1.0 - vec_score`).
+    - Navegação linear entre chunks pais com arestas `[:NEXT]` criadas em batch (`prev_chunk_id` e `next_chunk_id`).
+  - **Dynamic Token Budgeting (50 a 32k Tokens)**:
+    - Truncamento proporcional inteligente no `QueryKnowledgeUseCase` garantindo inclusão obrigatória do Chunk #1 e descarte de micro-fragmentos (<50 tokens).
+    - Teto configurável ampliado para até **32.000 tokens** (`max_tokens_budget`).
+  - **Defesa Contra Indirect Prompt Injection**:
+    - Encapsulamento estrito das evidências e triplas recuperadas em tags XML `<evidence>` estruturadas.
+  - **Padronização Oficial no Google Gemma 4**:
+    - `OpenRouterRagSynthesizer` e `PydanticAiGraphExtractor` padronizados para utilizar **Google Gemma 4 (`google/gemma-4-26b-a4b-it`)** via OpenRouter como modelo padrão de síntese fact-dense e extração ontológica.
+    - Criação dos ADRs 0007 e 0008 e atualização completa de todas as especificações técnicas.
+
 ## [0.3.7] - 2026-08-18
+
 
 ### Added
 - **Rich Markdown Renderer for RAG Playground & Evidence Inspector (Marco 1.18)**:
