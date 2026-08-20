@@ -200,9 +200,10 @@ def create_app_container(
     parent_graph_checkpoint = ParentGraphCheckpointStorage(storage=storage)
 
     # Rate Limiter & Entity Registry (Global per process)
+    is_openrouter = bool(cfg.openrouter_api_key)
     limiter = AsyncTokenBucketLimiter(
-        max_rpm=cfg.gemini_max_rpm,
-        max_tpm=cfg.gemini_max_tpm,
+        max_rpm=cfg.openrouter_max_rpm if is_openrouter else cfg.gemini_max_rpm,
+        max_tpm=cfg.openrouter_max_tpm if is_openrouter else cfg.gemini_max_tpm,
     )
     entity_registry = ExistingEntityRegistry()
 
@@ -266,7 +267,7 @@ def create_app_container(
             base_url=cfg.openrouter_base_url,
             app_title=cfg.openrouter_app_title,
             app_referer=cfg.openrouter_app_referer,
-            max_concurrency=cfg.gemini_max_concurrency,
+            max_concurrency=cfg.openrouter_graph_max_concurrency,
         )
     else:
         extractor = PydanticAiGraphExtractor(

@@ -71,11 +71,16 @@ class AppSettings(BaseSettings):
         default=800,
         alias="OPENROUTER_SYNTHESIS_MAX_TOKENS",
     )
+    openrouter_max_rpm: int = Field(default=1500, alias="OPENROUTER_MAX_RPM")
+    openrouter_max_tpm: int = Field(default=10_000_000, alias="OPENROUTER_MAX_TPM")
+    openrouter_graph_max_concurrency: int = Field(
+        default=35, alias="OPENROUTER_GRAPH_MAX_CONCURRENCY"
+    )
     ocr_vision_model_name: str = Field(
         default="qwen/qwen3-vl-32b-instruct",
         alias="OCR_VISION_MODEL_NAME",
     )
-    ocr_max_concurrency: int = Field(default=5, alias="OCR_MAX_CONCURRENCY")
+    ocr_max_concurrency: int = Field(default=50, alias="OCR_MAX_CONCURRENCY")
     ocr_toc_batch_size: int = Field(default=25, alias="OCR_TOC_BATCH_SIZE")
     ocr_low_res_scale: float = Field(default=1.0, alias="OCR_LOW_RES_SCALE")
     ocr_high_res_scale: float = Field(default=2.0, alias="OCR_HIGH_RES_SCALE")
