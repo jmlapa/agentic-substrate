@@ -24,7 +24,8 @@ services:
     ports:
       - "6380:6379"
     volumes:
-      - ../data/falkordb:/var/lib/falkordb/data
+      - ../data/falkordb:/data
+    command: ["--save", "60", "1", "--appendonly", "yes", "--dir", "/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
