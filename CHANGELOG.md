@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-19
+
+### Added
+- **Exclusão em Cascata de Knowledge Bases, Documentos e Ontologias**:
+  - **Exclusão Atômica de Documentos (`DELETE /api/v1/knowledge/bases/{kb_id}/documents/{doc_id}`)**:
+    - Remoção física dos arquivos em disco (`raw`, `processed`, `checkpoints`).
+    - Exclusão do subgrafo Cypher no FalkorDB via `DETACH DELETE (d:Document), (p:ParentChunk), (c:ChildChunk)`.
+    - Emissão de `DocumentDeletedEvent` no aggregate e projeção no repositório relacional.
+  - **Exclusão Completa de Knowledge Base (`DELETE /api/v1/knowledge/bases/{kb_id}`)**:
+    - Limpeza de diretórios e partições no Local Storage.
+    - Exclusão do grafo FalkorDB dedicado (`kb_{kb_id}`).
+    - Emissão de `KnowledgeBaseDeletedEvent` e remoção do repositório PostgreSQL/In-Memory.
+  - **Exclusão de Ontologias com Proteção de Integridade Referencial (`DELETE /api/v1/ontologies/{ontology_id}`)**:
+    - Verificação de dependências (`count_usages`); retorno HTTP 409 Conflict se estiver vinculada a Knowledge Bases ativas.
+  - **Integração no Frontend**:
+    - React Query mutations em `useKnowledgeBases.ts` e `useOntologies.ts`.
+    - Botões de lixeira e modais de confirmação em `KnowledgeBasesListPage`, `KnowledgeBaseDetailPage`, `OntologiesListPage` e `OntologyDetailPage`.
+    - Melhorias na seleção e validação de múltiplos tipos de arquivo em `DocumentUploadModal.tsx`.
+
 ## [0.3.9] - 2026-08-19
 
 ### Added
