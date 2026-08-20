@@ -7,7 +7,7 @@ Como garantir que os grafos de conhecimento e índices vetoriais no FalkorDB sob
 Adotamos uma estratégia em dois níveis de resiliência:
 1. **Nível 1 (Persistência Nativa do Docker/FalkorDB):**
    - Correção do ponto de montagem do volume para o diretório `/data` do contêiner.
-   - Ativação do *Append-Only File (AOF)* e snapshots periódicos RDB com a diretiva `command: ["--save", "60", "1", "--appendonly", "yes", "--dir", "/data"]`.
+   - Ativação do *Append-Only File (AOF)* com sincronização por segundo e snapshots RDB em tempo real com a diretiva `command: ["--save", "1", "1", "--appendonly", "yes", "--appendfsync", "everysec", "--dir", "/data"]`.
 2. **Nível 2 (Reidratação de Desastre a Custo Zero via Checkpoints):**
    - O banco relacional PostgreSQL (Event Store) permanece como a única fonte de verdade imutável.
    - Como os checkpoints de grafos (`graph_cache/{doc_id}/`) e chunks estruturais (`chunks/{doc_id}_chunks.json`) já são gravados no storage local em disco durante a ingestão, o grafo pode ser reconstruído integralmente no FalkorDB em caso de perda catastrófica de dados sem nenhuma chamada a APIs pagas de LLM ($0.00).

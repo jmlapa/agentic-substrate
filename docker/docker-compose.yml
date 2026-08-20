@@ -25,7 +25,7 @@ services:
       - "6380:6379"
     volumes:
       - ../data/falkordb:/data
-    command: ["--save", "60", "1", "--appendonly", "yes", "--dir", "/data"]
+    command: ["--save", "1", "1", "--appendonly", "yes", "--appendfsync", "everysec", "--dir", "/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
