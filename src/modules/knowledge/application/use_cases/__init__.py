@@ -8,6 +8,21 @@ from src.modules.knowledge.application.use_cases.create_knowledge_base import (
     CreateKnowledgeBaseResponse,
     CreateKnowledgeBaseUseCase,
 )
+from src.modules.knowledge.application.use_cases.delete_document import (
+    DeleteDocumentRequest,
+    DeleteDocumentResponse,
+    DeleteDocumentUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_knowledge_base import (
+    DeleteKnowledgeBaseRequest,
+    DeleteKnowledgeBaseResponse,
+    DeleteKnowledgeBaseUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_ontology_template import (
+    DeleteOntologyTemplateRequest,
+    DeleteOntologyTemplateResponse,
+    DeleteOntologyTemplateUseCase,
+)
 from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
     KnowledgeBaseSummaryDTO,
     ListKnowledgeBasesRequest,
@@ -32,6 +47,15 @@ __all__ = [
     "CreateKnowledgeBaseRequest",
     "CreateKnowledgeBaseResponse",
     "CreateKnowledgeBaseUseCase",
+    "DeleteDocumentRequest",
+    "DeleteDocumentResponse",
+    "DeleteDocumentUseCase",
+    "DeleteKnowledgeBaseRequest",
+    "DeleteKnowledgeBaseResponse",
+    "DeleteKnowledgeBaseUseCase",
+    "DeleteOntologyTemplateRequest",
+    "DeleteOntologyTemplateResponse",
+    "DeleteOntologyTemplateUseCase",
     "KnowledgeBaseSummaryDTO",
     "ListKnowledgeBasesRequest",
     "ListKnowledgeBasesResponse",
