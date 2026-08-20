@@ -28,3 +28,10 @@ class InMemoryOntologyRepository(IOntologyRepository):
 
     async def list_all(self) -> list[OntologyTemplate]:
         return list(self._templates.values())
+
+    async def delete_by_id(self, id: UUID) -> None:
+        self._templates.pop(id, None)
+
+    async def count_usages(self, ontology_id: UUID) -> int:
+        # Defaults to 0 in mock/in-memory unless mocked
+        return 0

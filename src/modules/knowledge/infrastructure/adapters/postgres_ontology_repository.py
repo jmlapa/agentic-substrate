@@ -94,6 +94,17 @@ class PostgresOntologyRepository(IOntologyRepository):
             rows = await conn.fetch(query)
             return [self._row_to_entity(r) for r in rows]
 
+    async def delete_by_id(self, id: UUID) -> None:
+        query = "DELETE FROM ontology_templates WHERE id = $1;"
+        async with self._pool.acquire() as conn:
+            await conn.execute(query, id)
+
+    async def count_usages(self, ontology_id: UUID) -> int:
+        query = "SELECT COUNT(*) FROM knowledge_bases WHERE ontology_id = $1;"
+        async with self._pool.acquire() as conn:
+            count = await conn.fetchval(query, ontology_id)
+            return int(count) if count is not None else 0
+
     def _row_to_entity(self, row: asyncpg.Record) -> OntologyTemplate:
         raw_nodes = row["node_types"]
         raw_rels = row["relationship_types"]

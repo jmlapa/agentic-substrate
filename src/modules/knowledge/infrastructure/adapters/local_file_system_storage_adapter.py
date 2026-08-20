@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import aiofiles
@@ -50,3 +51,29 @@ class LocalFileSystemStorageAdapter(IObjectStorage):
     async def generate_upload_url(self, path: str) -> str:
         target_path = self._resolve_path(path)
         return target_path.as_uri()
+
+    async def delete_object(self, path: str) -> None:
+        target_path = self._resolve_path(path)
+        if target_path.is_file():
+            target_path.unlink(missing_ok=True)
+        elif target_path.is_dir():
+            shutil.rmtree(target_path, ignore_errors=True)
+
+    async def delete_prefix(self, prefix: str) -> None:
+        target_path = self._resolve_path(prefix)
+        if target_path.exists():
+            if target_path.is_dir():
+                shutil.rmtree(target_path, ignore_errors=True)
+            elif target_path.is_file():
+                target_path.unlink(missing_ok=True)
+        else:
+            # Check for partial prefix matching in parent directory
+            parent = target_path.parent
+            if parent.exists() and parent.is_dir():
+                prefix_name = target_path.name
+                for child in parent.iterdir():
+                    if child.name.startswith(prefix_name):
+                        if child.is_dir():
+                            shutil.rmtree(child, ignore_errors=True)
+                        else:
+                            child.unlink(missing_ok=True)

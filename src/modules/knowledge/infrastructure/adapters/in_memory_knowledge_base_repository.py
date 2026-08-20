@@ -20,3 +20,10 @@ class InMemoryKnowledgeBaseRepository(IKnowledgeBaseRepository):
 
     async def list_all(self) -> list[KnowledgeBaseAggregate]:
         return list(self._kbs.values())
+
+    async def delete_by_id(self, id: UUID) -> None:
+        self._kbs.pop(id, None)
+
+    async def delete_document(self, kb_id: UUID, document_id: UUID) -> None:
+        if kb_id in self._kbs:
+            self._kbs[kb_id].documents.pop(document_id, None)

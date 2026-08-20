@@ -10,6 +10,9 @@ from src.modules.knowledge.domain.events.document_attached_event import (
 from src.modules.knowledge.domain.events.document_chunked_event import (
     DocumentChunkedEvent,
 )
+from src.modules.knowledge.domain.events.document_deleted_event import (
+    DocumentDeletedEvent,
+)
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -28,6 +31,9 @@ from src.modules.knowledge.domain.events.graph_extracted_from_document_event imp
 )
 from src.modules.knowledge.domain.events.knowledge_base_created_event import (
     KnowledgeBaseCreatedEvent,
+)
+from src.modules.knowledge.domain.events.knowledge_base_deleted_event import (
+    KnowledgeBaseDeletedEvent,
 )
 
 
@@ -50,7 +56,9 @@ class KnowledgeBaseProjector:
 
     def _register_listeners(self, bus: EventBus) -> None:
         bus.subscribe(KnowledgeBaseCreatedEvent, self.handle_knowledge_base_created)
+        bus.subscribe(KnowledgeBaseDeletedEvent, self.handle_knowledge_base_deleted)
         bus.subscribe(DocumentAttachedEvent, self.handle_document_attached)
+        bus.subscribe(DocumentDeletedEvent, self.handle_document_deleted)
         bus.subscribe(DocumentStoredEvent, self.handle_document_stored)
         bus.subscribe(DocumentProgressUpdatedEvent, self.handle_document_progress_updated)
         bus.subscribe(DocumentParsedToMarkdownEvent, self.handle_document_parsed)
@@ -62,8 +70,12 @@ class KnowledgeBaseProjector:
     async def project_event(self, event: DomainEvent) -> None:
         if isinstance(event, KnowledgeBaseCreatedEvent):
             await self.handle_knowledge_base_created(event)
+        elif isinstance(event, KnowledgeBaseDeletedEvent):
+            await self.handle_knowledge_base_deleted(event)
         elif isinstance(event, DocumentAttachedEvent):
             await self.handle_document_attached(event)
+        elif isinstance(event, DocumentDeletedEvent):
+            await self.handle_document_deleted(event)
         elif isinstance(event, DocumentStoredEvent):
             await self.handle_document_stored(event)
         elif isinstance(event, DocumentProgressUpdatedEvent):
@@ -115,6 +127,32 @@ class KnowledgeBaseProjector:
                 event.description,
                 event.storage_partition,
                 ontology_id,
+            )
+
+    async def handle_knowledge_base_deleted(self, event: DomainEvent) -> None:
+        if not isinstance(event, KnowledgeBaseDeletedEvent):
+            return
+
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM attached_documents WHERE kb_id = $1;",
+                    event.aggregate_id,
+                )
+                await conn.execute(
+                    "DELETE FROM knowledge_bases WHERE id = $1;",
+                    event.aggregate_id,
+                )
+
+    async def handle_document_deleted(self, event: DomainEvent) -> None:
+        if not isinstance(event, DocumentDeletedEvent):
+            return
+
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM attached_documents WHERE id = $1 AND kb_id = $2;",
+                event.document_id,
+                event.aggregate_id,
             )
 
     async def handle_document_attached(self, event: DomainEvent) -> None:

@@ -97,3 +97,24 @@ class InMemoryGraphStore(IGraphStore):
                     )
                 )
         return results[:top_k]
+
+    async def delete_document_subgraph(self, kb_id: UUID, document_id: UUID) -> None:
+        if kb_id in self._structural_docs:
+            docs = self._structural_docs[kb_id]
+            removed_parents: set[str] = set()
+            new_docs: list[StructuralGraphDocument] = []
+            for doc in docs:
+                if doc.document_id == document_id:
+                    for p in doc.parents:
+                        removed_parents.add(p.id)
+                else:
+                    new_docs.append(doc)
+            self._structural_docs[kb_id] = new_docs
+            if kb_id in self._parent_mentions:
+                for p_id in removed_parents:
+                    self._parent_mentions[kb_id].pop(p_id, None)
+
+    async def delete_graph(self, kb_id: UUID) -> None:
+        self._graphs.pop(kb_id, None)
+        self._structural_docs.pop(kb_id, None)
+        self._parent_mentions.pop(kb_id, None)

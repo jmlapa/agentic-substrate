@@ -241,6 +241,20 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
 
             return aggregates
 
+    async def delete_by_id(self, id: UUID) -> None:
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("DELETE FROM attached_documents WHERE kb_id = $1;", id)
+                await conn.execute("DELETE FROM knowledge_bases WHERE id = $1;", id)
+
+    async def delete_document(self, kb_id: UUID, document_id: UUID) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM attached_documents WHERE id = $1 AND kb_id = $2;",
+                document_id,
+                kb_id,
+            )
+
     def _build_aggregate(
         self, kb_row: asyncpg.Record, doc_rows: list[asyncpg.Record]
     ) -> KnowledgeBaseAggregate:

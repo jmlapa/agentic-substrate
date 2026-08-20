@@ -383,3 +383,33 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         return await asyncio.to_thread(
             self._query_hybrid_sync, kb_id, query_embedding, top_k, candidate_k
         )
+
+    def _delete_document_subgraph_sync(self, kb_id: UUID, document_id: UUID) -> None:
+        graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
+        doc_id_str = str(document_id)
+        query = (
+            "MATCH (d:Document {id: $doc_id}) "
+            "OPTIONAL MATCH (d)-[:HAS_PARENT]->(p:ParentChunk) "
+            "OPTIONAL MATCH (p)-[:CONTAINS_CHILD]->(c:ChildChunk) "
+            "DETACH DELETE d, p, c"
+        )
+        try:
+            graph_handle.query(query, {"doc_id": doc_id_str})
+        except Exception as e:
+            logger.warning(
+                "Failed to delete document subgraph for doc %s in FalkorDB: %s", doc_id_str, e
+            )
+
+    def _delete_graph_sync(self, kb_id: UUID) -> None:
+        graph_name = self._get_graph_name(kb_id)
+        try:
+            graph_handle = self._client.select_graph(graph_name)
+            graph_handle.delete()
+        except Exception as e:
+            logger.warning("Failed to delete graph %s in FalkorDB: %s", graph_name, e)
+
+    async def delete_document_subgraph(self, kb_id: UUID, document_id: UUID) -> None:
+        await asyncio.to_thread(self._delete_document_subgraph_sync, kb_id, document_id)
+
+    async def delete_graph(self, kb_id: UUID) -> None:
+        await asyncio.to_thread(self._delete_graph_sync, kb_id)
