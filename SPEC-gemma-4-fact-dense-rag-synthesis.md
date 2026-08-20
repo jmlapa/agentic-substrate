@@ -66,4 +66,4 @@ O endpoint de consulta híbrida (`POST /api/v1/knowledge/bases/{kb_id}/query`) a
 * **Configuração:** Temperatura 0.1, `max_tokens: 800`.
 * **Roteamento de Provedor & Throughput:** `provider: {"sort": "throughput", "allow_fallbacks": True}`, roteando dinamicamente para os clusters mais rápidos da OpenRouter (ex: Parasail/Cloudflare a ~95 tok/s).
 * **Supressão de Reasoning:** `reasoning: {"effort": "none", "exclude": True}`, garantindo zero tokens e latência oculta de raciocínio.
-* **Prompt System:** Formatação estrita Fact-Dense em tópicos, proibindo enrolações conversacionais e forçando citações explícitas de proveniência (`[^chunk:<id>]`).
+* **Prompt System:** Formatação estrita Fact-Dense em tópicos, proibindo enrolações conversacionais, forçando citações explícitas de proveniência (`[^chunk:<id>]`) e proibindo categoricamente o uso de conhecimento prévio externo caso as evidências recuperadas sejam insuficientes ou irrelevantes (emitindo declaração explícita de ausência de informações).

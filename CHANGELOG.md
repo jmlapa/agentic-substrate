@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Substituição do modelo padrão de visão de `qwen/qwen3-vl-30b-a3b-instruct` para `qwen/qwen3-vl-32b-instruct`.
     - Ganho de ~30% em velocidade de OCR por página (~65 tokens/s vs ~40 tokens/s) com redução de 20% no custo por token.
     - Injeção de roteamento `provider: {"sort": "throughput"}` e supressão de reasoning em `ParallelVlmDocumentParser` e `QwenSyntheticTocExtractor`.
+  - **Grounding Estrito e Ausência de Dados nos Sintetizadores RAG**:
+    - Reforço das instruções de sistema em `OpenRouterRagSynthesizer` e `GeminiRagSynthesizer` proibindo expressamente o uso de conhecimento prévio e forçando a declaração padronizada de ausência de informações caso o contexto recuperado seja insuficiente ou irrelevante.
   - **Testes de Invariância Top-1 e Documentação**:
     - Suíte de testes atualizada comprovando que `top_k=1` avalia todo o pool de sementes e retorna o mesmo nó campeão que `top_k=3` ou `top_k=5`.
     - Criação do `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`.

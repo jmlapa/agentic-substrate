@@ -20,6 +20,7 @@ Accepted
 2. **Prompting Fact-Dense & Citações Estritas**:
    - Respostas em Markdown direto ao ponto, estruturadas em tópicos densos.
    - Inclusão obrigatória de referências rastreáveis `[^chunk:<id>]` e `[^entidade:<tipo>:<nome>]`.
+   - Regra inegociável de ancoragem estrita: proibição categórica do uso de conhecimento prévio ou inferências quando o contexto for insuficiente ou irrelevante, forçando a declaração padronizada de ausência de informações na Knowledge Base.
 3. **Otimização de Throughput & Supressão de Raciocínio (Reasoning)**:
    - Configuração de roteamento prioritário na OpenRouter via `provider: {"sort": "throughput", "allow_fallbacks": True}` para garantir provedores com maior vazão de tokens (ex: Parasail/Cloudflare a ~95 tok/s).
    - Supressão explícita de tokens de raciocínio com `reasoning: {"effort": "none", "exclude": True}` para evitar latência oculta.
