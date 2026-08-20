@@ -42,13 +42,15 @@ class DeleteDocumentUseCase:
     async def execute(
         self, request: DeleteDocumentRequest
     ) -> Result[DeleteDocumentResponse, DomainError]:
-        kb = await self._repo.get_by_id(request.kb_id)
-        if not kb and self._store:
+        if self._store:
             events = await self._store.get_events(request.kb_id)
             if events:
-                aggregate = KnowledgeBaseAggregate(id=request.kb_id)
-                aggregate.load_from_history(events)
-                kb = aggregate
+                kb = KnowledgeBaseAggregate(id=request.kb_id)
+                kb.load_from_history(events)
+            else:
+                kb = await self._repo.get_by_id(request.kb_id)
+        else:
+            kb = await self._repo.get_by_id(request.kb_id)
 
         if not kb:
             return Err(
