@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GitFork, Plus, ArrowRight, CircleDot } from 'lucide-react';
-import { useOntologies } from '../../hooks/useOntologies';
+import { GitFork, Plus, ArrowRight, CircleDot, Trash2, AlertTriangle } from 'lucide-react';
+import { useOntologies, useDeleteOntology } from '../../hooks/useOntologies';
+import { OntologyTemplate } from '../../api/types';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { ErrorBanner } from '../../components/feedback/ErrorBanner';
@@ -13,6 +15,24 @@ import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 export const OntologiesListPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: ontologies, isLoading, isError, error, refetch } = useOntologies();
+  const deleteOntologyMutation = useDeleteOntology();
+
+  const [deletingOntology, setDeletingOntology] = useState<OntologyTemplate | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingOntology) return;
+    setDeleteError(null);
+    try {
+      await deleteOntologyMutation.mutateAsync(deletingOntology.id);
+      setDeletingOntology(null);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data
+          ?.detail?.message || 'Falha ao excluir ontologia.';
+      setDeleteError(msg);
+    }
+  };
 
   return (
     <PageContainer
@@ -52,7 +72,7 @@ export const OntologiesListPage: React.FC = () => {
             <Card
               key={ont.id}
               hoverable
-              className="cursor-pointer flex flex-col justify-between group"
+              className="cursor-pointer flex flex-col justify-between group relative"
               onClick={() => navigate(`/ontologies/${ont.id}`)}
             >
               <div>
@@ -65,7 +85,20 @@ export const OntologiesListPage: React.FC = () => {
                       {ont.name}
                     </h3>
                   </div>
-                  <Badge variant="purple">v{ont.version}</Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="purple">v{ont.version}</Badge>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteError(null);
+                        setDeletingOntology(ont);
+                      }}
+                      className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                      title="Excluir Ontologia"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <p className="mt-3 text-xs text-zinc-400 line-clamp-2 leading-relaxed">
@@ -91,6 +124,57 @@ export const OntologiesListPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingOntology}
+        onClose={() => {
+          setDeletingOntology(null);
+          setDeleteError(null);
+        }}
+        title="Confirmar Exclusão de Ontologia"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-rose-300">Ação irreversível</p>
+              <p className="text-zinc-300">
+                Tem certeza que deseja excluir o template de ontologia <strong>&ldquo;{deletingOntology?.name}&rdquo;</strong>?
+              </p>
+              <p className="text-zinc-400">
+                Se esta ontologia estiver vinculada a alguma Knowledge Base ativa, a exclusão será bloqueada para manter a integridade referencial.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && <ErrorBanner message={deleteError} />}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeletingOntology(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteOntologyMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              isLoading={deleteOntologyMutation.isPending}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              Excluir Definitivamente
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PageContainer>
   );
 };

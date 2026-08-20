@@ -83,4 +83,27 @@ export const knowledgeApi = {
     );
     return response.data;
   },
+
+  async deleteBase(
+    kbId: string
+  ): Promise<{ kb_id: string; success: boolean; message: string }> {
+    const response = await apiClient.delete<{
+      kb_id: string;
+      success: boolean;
+      message: string;
+    }>(`/api/v1/knowledge/bases/${kbId}`);
+    return response.data;
+  },
+
+  async deleteDocument(
+    kbId: string,
+    documentId: string
+  ): Promise<{ document_id: string; success: boolean; message: string }> {
+    const response = await apiClient.delete<{
+      document_id: string;
+      success: boolean;
+      message: string;
+    }>(`/api/v1/knowledge/bases/${kbId}/documents/${documentId}`);
+    return response.data;
+  },
 };

@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, GitFork, CircleDot, Copy, Check, Code, Layers } from 'lucide-react';
-import { useOntologyDetail } from '../../hooks/useOntologies';
+import {
+  ArrowLeft,
+  GitFork,
+  CircleDot,
+  Copy,
+  Check,
+  Code,
+  Layers,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react';
+import { useOntologyDetail, useDeleteOntology } from '../../hooks/useOntologies';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner';
 import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 
@@ -13,15 +24,32 @@ export const OntologyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: ontology, isLoading, isError, error, refetch } = useOntologyDetail(id);
+  const deleteOntologyMutation = useDeleteOntology();
 
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'json'>('visual');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleCopyJson = () => {
     if (!ontology) return;
     navigator.clipboard.writeText(JSON.stringify(ontology, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!id) return;
+    setDeleteError(null);
+    try {
+      await deleteOntologyMutation.mutateAsync(id);
+      navigate('/ontologies');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data
+          ?.detail?.message || 'Falha ao excluir template de ontologia.';
+      setDeleteError(msg);
+    }
   };
 
   return (
@@ -43,6 +71,16 @@ export const OntologyDetailPage: React.FC = () => {
             leftIcon={copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           >
             {copied ? 'Copiado!' : 'Copiar JSON'}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setDeleteError(null);
+              setIsDeleteModalOpen(true);
+            }}
+            leftIcon={<Trash2 className="w-4 h-4" />}
+          >
+            Excluir Ontologia
           </Button>
         </>
       }
@@ -221,6 +259,57 @@ export const OntologyDetailPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteError(null);
+        }}
+        title="Confirmar Exclusão de Ontologia"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-rose-300">Ação irreversível</p>
+              <p className="text-zinc-300">
+                Tem certeza que deseja excluir o template de ontologia <strong>&ldquo;{ontology?.name}&rdquo;</strong>?
+              </p>
+              <p className="text-zinc-400">
+                Se esta ontologia estiver vinculada a alguma Knowledge Base ativa, a exclusão será bloqueada para manter a integridade referencial.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && <ErrorBanner message={deleteError} />}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeleteError(null);
+              }}
+              disabled={deleteOntologyMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              isLoading={deleteOntologyMutation.isPending}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              Excluir Definitivamente
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PageContainer>
   );
 };

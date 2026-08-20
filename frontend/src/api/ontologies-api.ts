@@ -27,4 +27,15 @@ export const ontologiesApi = {
     );
     return response.data;
   },
+
+  async delete(
+    id: string
+  ): Promise<{ ontology_id: string; success: boolean; message: string }> {
+    const response = await apiClient.delete<{
+      ontology_id: string;
+      success: boolean;
+      message: string;
+    }>(`/api/v1/ontologies/${id}`);
+    return response.data;
+  },
 };

@@ -1,11 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Plus, FileText, ArrowRight, HardDrive, CheckCircle2 } from 'lucide-react';
-import { useKnowledgeBases } from '../../hooks/useKnowledgeBases';
+import {
+  Database,
+  Plus,
+  FileText,
+  ArrowRight,
+  HardDrive,
+  CheckCircle2,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react';
+import { useKnowledgeBases, useDeleteKnowledgeBase } from '../../hooks/useKnowledgeBases';
+import { KnowledgeBaseSummary } from '../../api/types';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { ErrorBanner } from '../../components/feedback/ErrorBanner';
@@ -13,8 +24,26 @@ import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 export const KnowledgeBasesListPage: React.FC = () => {
   const navigate = useNavigate();
   const { data, isLoading, isError, error, refetch } = useKnowledgeBases();
+  const deleteKbMutation = useDeleteKnowledgeBase();
+
+  const [deletingKb, setDeletingKb] = useState<KnowledgeBaseSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const kbs = data?.knowledge_bases || [];
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingKb) return;
+    setDeleteError(null);
+    try {
+      await deleteKbMutation.mutateAsync(deletingKb.id);
+      setDeletingKb(null);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data
+          ?.detail?.message || 'Falha ao excluir Knowledge Base.';
+      setDeleteError(msg);
+    }
+  };
 
   return (
     <PageContainer
@@ -54,7 +83,7 @@ export const KnowledgeBasesListPage: React.FC = () => {
             <Card
               key={kb.id}
               hoverable
-              className="cursor-pointer flex flex-col justify-between group"
+              className="cursor-pointer flex flex-col justify-between group relative"
               onClick={() => navigate(`/knowledge-bases/${kb.id}`)}
             >
               <div>
@@ -67,10 +96,23 @@ export const KnowledgeBasesListPage: React.FC = () => {
                       {kb.name}
                     </h3>
                   </div>
-                  <Badge variant={kb.status === 'ACTIVE' ? 'success' : 'default'}>
-                    <CheckCircle2 className="w-3 h-3" />
-                    {kb.status}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={kb.status === 'ACTIVE' ? 'success' : 'default'}>
+                      <CheckCircle2 className="w-3 h-3" />
+                      {kb.status}
+                    </Badge>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteError(null);
+                        setDeletingKb(kb);
+                      }}
+                      className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                      title="Excluir Knowledge Base"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <p className="mt-3 text-xs text-zinc-400 line-clamp-2 leading-relaxed">
@@ -99,6 +141,57 @@ export const KnowledgeBasesListPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingKb}
+        onClose={() => {
+          setDeletingKb(null);
+          setDeleteError(null);
+        }}
+        title="Confirmar Exclusão de Knowledge Base"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-rose-300">Ação irreversível</p>
+              <p className="text-zinc-300">
+                Tem certeza que deseja excluir a Knowledge Base <strong>&ldquo;{deletingKb?.name}&rdquo;</strong>?
+              </p>
+              <p className="text-zinc-400">
+                Todos os documentos, partições de armazenamento em disco e grafos/índices no FalkorDB serão permanentemente destruídos.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && <ErrorBanner message={deleteError} />}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeletingKb(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteKbMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              isLoading={deleteKbMutation.isPending}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              Excluir Definitivamente
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PageContainer>
   );
 };

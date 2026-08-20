@@ -12,6 +12,27 @@ export interface DocumentUploadModalProps {
   kbId: string;
 }
 
+export const ALLOWED_DOCUMENT_EXTENSIONS = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.markdown',
+  '.docx',
+  '.xlsx',
+  '.pptx',
+  '.csv',
+  '.json',
+  '.html',
+  '.htm',
+] as const;
+
+export const ACCEPTED_FILE_TYPES_STRING = ALLOWED_DOCUMENT_EXTENSIONS.join(',');
+
+const isFileAllowed = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  return ALLOWED_DOCUMENT_EXTENSIONS.some((ext) => name.endsWith(ext));
+};
+
 export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   isOpen,
   onClose,
@@ -27,18 +48,48 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  const processFiles = (files: File[]) => {
+    const validFiles: File[] = [];
+    const rejectedFiles: string[] = [];
+
+    for (const file of files) {
+      if (isFileAllowed(file)) {
+        validFiles.push(file);
+      } else {
+        rejectedFiles.push(file.name);
+      }
+    }
+
+    if (rejectedFiles.length > 0) {
+      setErrorMsg(
+        `Formato não suportado: ${rejectedFiles.join(', ')}. Os formatos aceitos são: PDF, TXT, MD, DOCX, XLSX, PPTX, CSV, JSON e HTML.`
+      );
+    } else {
+      setErrorMsg('');
+    }
+
+    if (validFiles.length > 0) {
+      setSelectedFiles((prev) => {
+        const existingKeys = new Set(prev.map((f) => `${f.name}-${f.size}`));
+        const newUnique = validFiles.filter((f) => !existingKeys.has(`${f.name}-${f.size}`));
+        return [...prev, ...newUnique];
+      });
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setSelectedFiles(Array.from(e.target.files));
-      setErrorMsg('');
+      processFiles(Array.from(e.target.files));
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setSelectedFiles(Array.from(e.dataTransfer.files));
-      setErrorMsg('');
+      processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -78,23 +129,32 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Upload de Documentos"
-      description="Envie arquivos (PDF, TXT, MD, DOCX) para processamento assíncrono pelo pipeline GraphRAG."
+      description="Envie arquivos (PDF, TXT, MD, DOCX, XLSX, PPTX, CSV, JSON, HTML) para processamento assíncrono pelo pipeline GraphRAG."
     >
       <div className="space-y-5">
         {errorMsg && <ErrorBanner message={errorMsg} />}
 
         {/* Dropzone */}
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Selecionar ou soltar arquivos para upload"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 hover:border-indigo-500 bg-zinc-950/60 p-8 text-center cursor-pointer transition-colors"
+          className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 hover:border-indigo-500 bg-zinc-950/60 p-8 text-center cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
         >
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.txt,.md,.markdown,.docx,.json"
+            accept={ACCEPTED_FILE_TYPES_STRING}
             onChange={handleFileChange}
             className="hidden"
           />
@@ -105,7 +165,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             Clique ou arraste arquivos aqui
           </p>
           <p className="mt-1 text-xs text-zinc-500">
-            PDF, TXT, Markdown, DOCX ou JSON (máx. 50MB por arquivo)
+            PDF, TXT, Markdown, DOCX, XLSX, PPTX, CSV, JSON ou HTML (máx. 50MB por arquivo)
           </p>
         </div>
 

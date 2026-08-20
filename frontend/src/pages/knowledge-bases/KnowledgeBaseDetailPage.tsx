@@ -14,13 +14,18 @@ import {
   Layers,
   Eye,
   Tag,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { usePipelineMonitor } from '../../hooks/usePipelineMonitor';
+import { useDeleteKnowledgeBase, useDeleteDocument } from '../../hooks/useKnowledgeBases';
 import { knowledgeApi } from '../../api/knowledge-api';
+import { DocumentSummary } from '../../api/types';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner';
 import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 import { EmptyState } from '../../components/feedback/EmptyState';
@@ -31,9 +36,44 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
   const { kbId } = useParams<{ kbId: string }>();
   const navigate = useNavigate();
   const { data: kb, isLoading, isError, error, refetch, isFetching } = usePipelineMonitor(kbId);
+  const deleteKbMutation = useDeleteKnowledgeBase();
+  const deleteDocMutation = useDeleteDocument(kbId || '');
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [reprocessingDocId, setReprocessingDocId] = useState<string | null>(null);
+
+  const [isDeleteKbModalOpen, setIsDeleteKbModalOpen] = useState(false);
+  const [deletingDoc, setDeletingDoc] = useState<DocumentSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteKbConfirm = async () => {
+    if (!kbId) return;
+    setDeleteError(null);
+    try {
+      await deleteKbMutation.mutateAsync(kbId);
+      navigate('/knowledge-bases');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data
+          ?.detail?.message || 'Falha ao excluir Knowledge Base.';
+      setDeleteError(msg);
+    }
+  };
+
+  const handleDeleteDocConfirm = async () => {
+    if (!deletingDoc) return;
+    setDeleteError(null);
+    try {
+      await deleteDocMutation.mutateAsync(deletingDoc.id);
+      setDeletingDoc(null);
+      await refetch();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data
+          ?.detail?.message || 'Falha ao excluir Documento.';
+      setDeleteError(msg);
+    }
+  };
 
   const handleReprocess = async (docId: string) => {
     if (!kbId) return;
@@ -88,6 +128,16 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
             leftIcon={<Sparkles className="w-4 h-4" />}
           >
             Abrir Playground
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setDeleteError(null);
+              setIsDeleteKbModalOpen(true);
+            }}
+            leftIcon={<Trash2 className="w-4 h-4" />}
+          >
+            Excluir Base
           </Button>
         </>
       }
@@ -308,6 +358,16 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
                             Retomar Ingestão
                           </Button>
                         )}
+                        <button
+                          onClick={() => {
+                            setDeleteError(null);
+                            setDeletingDoc(doc);
+                          }}
+                          className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                          title="Excluir Documento"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
 
@@ -381,6 +441,108 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
           kbId={kbId}
         />
       )}
+
+      {/* Delete KB Modal */}
+      <Modal
+        isOpen={isDeleteKbModalOpen}
+        onClose={() => {
+          setIsDeleteKbModalOpen(false);
+          setDeleteError(null);
+        }}
+        title="Confirmar Exclusão de Knowledge Base"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-rose-300">Ação irreversível</p>
+              <p className="text-zinc-300">
+                Tem certeza que deseja excluir esta Knowledge Base (<strong>&ldquo;{kb?.name}&rdquo;</strong>)?
+              </p>
+              <p className="text-zinc-400">
+                Todos os {docs.length} documento(s), arquivos locais em disco e grafos indexados no FalkorDB serão destruídos.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && <ErrorBanner message={deleteError} />}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsDeleteKbModalOpen(false);
+                setDeleteError(null);
+              }}
+              disabled={deleteKbMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteKbConfirm}
+              isLoading={deleteKbMutation.isPending}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              Excluir Definitivamente
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Document Modal */}
+      <Modal
+        isOpen={!!deletingDoc}
+        onClose={() => {
+          setDeletingDoc(null);
+          setDeleteError(null);
+        }}
+        title="Confirmar Exclusão de Documento"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-rose-300">Ação irreversível</p>
+              <p className="text-zinc-300">
+                Tem certeza que deseja excluir o documento <strong>&ldquo;{deletingDoc?.file_name}&rdquo;</strong>?
+              </p>
+              <p className="text-zinc-400">
+                Os chunks hierárquicos, embeddings e subgrafos extraídos deste documento no FalkorDB serão removidos.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && <ErrorBanner message={deleteError} />}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeletingDoc(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteDocMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteDocConfirm}
+              isLoading={deleteDocMutation.isPending}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              Excluir Documento
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PageContainer>
   );
 };

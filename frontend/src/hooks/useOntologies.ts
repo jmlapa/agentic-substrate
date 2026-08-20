@@ -27,3 +27,14 @@ export const useCreateOntology = () => {
     },
   });
 };
+
+export const useDeleteOntology = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => ontologiesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ontologies'] });
+    },
+  });
+};

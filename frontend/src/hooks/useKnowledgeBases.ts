@@ -49,3 +49,26 @@ export const useUploadDocument = (kbId: string) => {
     },
   });
 };
+
+export const useDeleteKnowledgeBase = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (kbId: string) => knowledgeApi.deleteBase(kbId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+    },
+  });
+};
+
+export const useDeleteDocument = (kbId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentId: string) => knowledgeApi.deleteDocument(kbId, documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledge-bases', kbId] });
+      queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+    },
+  });
+};
