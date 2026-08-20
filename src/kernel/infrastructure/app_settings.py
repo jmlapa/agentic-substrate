@@ -74,7 +74,7 @@ class AppSettings(BaseSettings):
     openrouter_max_rpm: int = Field(default=1500, alias="OPENROUTER_MAX_RPM")
     openrouter_max_tpm: int = Field(default=10_000_000, alias="OPENROUTER_MAX_TPM")
     openrouter_graph_max_concurrency: int = Field(
-        default=35, alias="OPENROUTER_GRAPH_MAX_CONCURRENCY"
+        default=50, alias="OPENROUTER_GRAPH_MAX_CONCURRENCY"
     )
     ocr_vision_model_name: str = Field(
         default="qwen/qwen3-vl-32b-instruct",
