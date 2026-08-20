@@ -138,3 +138,32 @@ async def test_api_e2e_flow() -> None:
         assert len(retrieve_data["results"]) >= 1
         assert "Modo retrieve:" in retrieve_data["answer"]
         assert retrieve_data["retrieval_trace"]["mode"] == "retrieve"
+
+        # 7. Exclusão de Documento individual
+        doc1_id = upload_data["document_id"]
+        del_doc_resp = await client.delete(f"/api/v1/knowledge/bases/{kb_id}/documents/{doc1_id}")
+        assert del_doc_resp.status_code == 200
+        del_doc_data = del_doc_resp.json()
+        assert del_doc_data["success"] is True
+
+        get_kb_after_del_doc = await client.get(f"/api/v1/knowledge/bases/{kb_id}")
+        assert get_kb_after_del_doc.status_code == 200
+        assert len(get_kb_after_del_doc.json()["documents"]) == 1
+
+        # 8. Exclusão da Knowledge Base
+        del_kb_resp = await client.delete(f"/api/v1/knowledge/bases/{kb_id}")
+        assert del_kb_resp.status_code == 200
+        del_kb_data = del_kb_resp.json()
+        assert del_kb_data["success"] is True
+
+        get_kb_after_del = await client.get(f"/api/v1/knowledge/bases/{kb_id}")
+        assert get_kb_after_del.status_code == 404
+
+        # 9. Exclusão do Template de Ontologia
+        del_ont_resp = await client.delete(f"/api/v1/ontologies/{ont_id}")
+        assert del_ont_resp.status_code == 200
+        del_ont_data = del_ont_resp.json()
+        assert del_ont_data["success"] is True
+
+        get_ont_after_del = await client.get(f"/api/v1/ontologies/{ont_id}")
+        assert get_ont_after_del.status_code == 404

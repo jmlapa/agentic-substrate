@@ -16,6 +16,14 @@ from src.modules.knowledge.application.use_cases.create_knowledge_base import (
     CreateKnowledgeBaseRequest,
     CreateKnowledgeBaseResponse,
 )
+from src.modules.knowledge.application.use_cases.delete_document import (
+    DeleteDocumentRequest,
+    DeleteDocumentResponse,
+)
+from src.modules.knowledge.application.use_cases.delete_knowledge_base import (
+    DeleteKnowledgeBaseRequest,
+    DeleteKnowledgeBaseResponse,
+)
 from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
     ListKnowledgeBasesRequest,
     ListKnowledgeBasesResponse,
@@ -192,9 +200,10 @@ async def get_knowledge_base(
         if events:
             aggregate = KnowledgeBaseAggregate(id=kb_id)
             aggregate.load_from_history(events)
-            kb = aggregate
+            if aggregate.status != KnowledgeBaseStatus.ARCHIVED:
+                kb = aggregate
 
-    if not kb:
+    if not kb or kb.status == KnowledgeBaseStatus.ARCHIVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Knowledge Base not found",
@@ -243,3 +252,44 @@ async def get_knowledge_base(
             for doc in kb.documents.values()
         ],
     }
+
+
+@router.delete("/bases/{kb_id}", response_model=DeleteKnowledgeBaseResponse)
+async def delete_knowledge_base(
+    kb_id: UUID,
+    container: AppContainer = Depends(get_container),
+) -> DeleteKnowledgeBaseResponse:
+    res = await container.delete_kb_use_case.execute(DeleteKnowledgeBaseRequest(kb_id=kb_id))
+    if isinstance(res, Err):
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value
+
+
+@router.delete("/bases/{kb_id}/documents/{doc_id}", response_model=DeleteDocumentResponse)
+async def delete_document(
+    kb_id: UUID,
+    doc_id: UUID,
+    container: AppContainer = Depends(get_container),
+) -> DeleteDocumentResponse:
+    res = await container.delete_doc_use_case.execute(
+        DeleteDocumentRequest(kb_id=kb_id, document_id=doc_id)
+    )
+    if isinstance(res, Err):
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value

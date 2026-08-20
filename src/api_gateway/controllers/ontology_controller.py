@@ -10,6 +10,10 @@ from src.kernel.domain.result import Err
 from src.modules.knowledge.application.use_cases.create_ontology_template import (
     CreateOntologyTemplateRequest,
 )
+from src.modules.knowledge.application.use_cases.delete_ontology_template import (
+    DeleteOntologyTemplateRequest,
+    DeleteOntologyTemplateResponse,
+)
 from src.modules.knowledge.application.use_cases.get_ontology_template import (
     GetOntologyTemplateRequest,
 )
@@ -74,3 +78,29 @@ async def get_ontology_template_by_id(
             detail={"code": res.error.code, "message": res.error.message},
         )
     return res.value.model_dump()
+
+
+@ontology_router.delete("/{ontology_id}", response_model=DeleteOntologyTemplateResponse)
+async def delete_ontology_template(
+    ontology_id: UUID,
+    cont: AppContainer = Depends(get_container),
+) -> DeleteOntologyTemplateResponse:
+    res = await cont.delete_ontology_use_case.execute(
+        DeleteOntologyTemplateRequest(ontology_id=ontology_id)
+    )
+    if isinstance(res, Err):
+        if res.error.code == "CONFLICT":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value

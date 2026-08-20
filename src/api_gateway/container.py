@@ -24,6 +24,15 @@ from src.modules.knowledge.application.use_cases.create_knowledge_base import (
 from src.modules.knowledge.application.use_cases.create_ontology_template import (
     CreateOntologyTemplateUseCase,
 )
+from src.modules.knowledge.application.use_cases.delete_document import (
+    DeleteDocumentUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_knowledge_base import (
+    DeleteKnowledgeBaseUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_ontology_template import (
+    DeleteOntologyTemplateUseCase,
+)
 from src.modules.knowledge.application.use_cases.get_ontology_template import (
     GetOntologyTemplateUseCase,
 )
@@ -154,6 +163,9 @@ class AppContainer:
     create_ontology_use_case: CreateOntologyTemplateUseCase
     get_ontology_use_case: GetOntologyTemplateUseCase
     list_ontologies_use_case: ListOntologyTemplatesUseCase
+    delete_kb_use_case: DeleteKnowledgeBaseUseCase
+    delete_doc_use_case: DeleteDocumentUseCase
+    delete_ontology_use_case: DeleteOntologyTemplateUseCase
     job_queue: IJobQueue | None = None
     projector: KnowledgeBaseProjector | None = None
     settings: AppSettings | None = None
@@ -343,6 +355,22 @@ def create_app_container(
     get_ont = GetOntologyTemplateUseCase(ontology_repo)
     list_ont = ListOntologyTemplatesUseCase(ontology_repo)
 
+    delete_kb = DeleteKnowledgeBaseUseCase(
+        repository=repo,
+        object_storage=storage,
+        graph_store=graph_store,
+        event_store=store,
+        event_bus=bus,
+    )
+    delete_doc = DeleteDocumentUseCase(
+        repository=repo,
+        object_storage=storage,
+        graph_store=graph_store,
+        event_store=store,
+        event_bus=bus,
+    )
+    delete_ont = DeleteOntologyTemplateUseCase(repository=ontology_repo)
+
     projector: KnowledgeBaseProjector | None = None
     if postgres_pool is not None:
         projector = KnowledgeBaseProjector(pool=postgres_pool, event_bus=bus)
@@ -375,6 +403,9 @@ def create_app_container(
         create_ontology_use_case=create_ont,
         get_ontology_use_case=get_ont,
         list_ontologies_use_case=list_ont,
+        delete_kb_use_case=delete_kb,
+        delete_doc_use_case=delete_doc,
+        delete_ontology_use_case=delete_ont,
         job_queue=job_queue,
         projector=projector,
         settings=cfg,
