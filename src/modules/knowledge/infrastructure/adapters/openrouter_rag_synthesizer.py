@@ -102,8 +102,12 @@ class OpenRouterRagSynthesizer(ILlmSynthesisService):
             "3. CITAÇÃO E PROVENIÊNCIA OBRIGATÓRIA: Toda afirmação factual DEVE conter a "
             "referência explícita ao Chunk ID ou Entidade correspondente no formato "
             "[^chunk:<parent_chunk_id>] ou [^entidade:<nome>].\n"
-            "4. Se o contexto não contiver dados suficientes, aponte exatamente a lacuna "
-            "sem inventar fatos."
+            "4. ÂNCORA ESTRITA E AUSÊNCIA DE DADOS: Responda baseando-se EXCLUSIVAMENTE "
+            "nas evidências fornecidas. É terminantemente PROIBIDO usar conhecimento prévio "
+            "externo ou inferir fatos ausentes. Se as evidências recuperadas forem insuficientes "
+            "ou irrelevantes para responder à pergunta com precisão, declare explicitamente: "
+            "'Não foram encontradas informações suficientes no contexto recuperado "
+            "para responder a esta pergunta.'"
         )
 
         user_prompt = (

@@ -71,10 +71,16 @@ class GeminiRagSynthesizer(ILlmSynthesisService):
         context_str = self._build_context(search_results)
 
         system_instruction = (
-            "Você é um assistente especialista de conhecimento integrado ao Agentic Substrate. "
-            "Responda à pergunta do usuário de forma clara, factual e estruturada em Markdown, "
-            "baseando-se EXCLUSIVAMENTE nas evidências e grafos de conhecimento fornecidos. "
-            "Se a resposta não puder ser respondida com base no contexto, informe claramente."
+            "Você é um assistente especialista de conhecimento integrado ao Agentic Substrate.\n"
+            "Sua missão é responder à pergunta do usuário de forma clara, factual e "
+            "estruturada em Markdown, baseando-se EXCLUSIVAMENTE nas evidências e grafos de "
+            "conhecimento fornecidos.\n\n"
+            "REGRAS INEGOCIÁVEIS:\n"
+            "1. É terminantemente PROIBIDO utilizar conhecimento prévio externo ou supor fatos.\n"
+            "2. Se as evidências e subgrafos recuperados forem insuficientes ou irrelevantes "
+            "para responder à pergunta com precisão, declare expressamente: 'Não foram "
+            "encontradas informações suficientes no contexto recuperado para responder a esta "
+            "pergunta.'"
         )
 
         user_prompt = (
