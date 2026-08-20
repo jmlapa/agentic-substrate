@@ -2,6 +2,9 @@ from src.modules.knowledge.domain.events.document_attached_event import Document
 from src.modules.knowledge.domain.events.document_chunked_event import (
     DocumentChunkedEvent,
 )
+from src.modules.knowledge.domain.events.document_deleted_event import (
+    DocumentDeletedEvent,
+)
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -21,10 +24,14 @@ from src.modules.knowledge.domain.events.graph_extracted_from_document_event imp
 from src.modules.knowledge.domain.events.knowledge_base_created_event import (
     KnowledgeBaseCreatedEvent,
 )
+from src.modules.knowledge.domain.events.knowledge_base_deleted_event import (
+    KnowledgeBaseDeletedEvent,
+)
 
 __all__ = [
     "DocumentAttachedEvent",
     "DocumentChunkedEvent",
+    "DocumentDeletedEvent",
     "DocumentKnowledgeIndexedEvent",
     "DocumentParsedToMarkdownEvent",
     "DocumentProcessingFailedEvent",
@@ -32,4 +39,5 @@ __all__ = [
     "DocumentStoredEvent",
     "GraphExtractedFromDocumentEvent",
     "KnowledgeBaseCreatedEvent",
+    "KnowledgeBaseDeletedEvent",
 ]

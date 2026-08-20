@@ -6,6 +6,9 @@ from src.modules.knowledge.domain.events.document_attached_event import Document
 from src.modules.knowledge.domain.events.document_chunked_event import (
     DocumentChunkedEvent,
 )
+from src.modules.knowledge.domain.events.document_deleted_event import (
+    DocumentDeletedEvent,
+)
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -21,6 +24,9 @@ from src.modules.knowledge.domain.events.graph_extracted_from_document_event imp
 )
 from src.modules.knowledge.domain.events.knowledge_base_created_event import (
     KnowledgeBaseCreatedEvent,
+)
+from src.modules.knowledge.domain.events.knowledge_base_deleted_event import (
+    KnowledgeBaseDeletedEvent,
 )
 from src.modules.knowledge.domain.ontology.ontology_schema import OntologySchema
 from src.modules.knowledge.domain.value_objects.document_status import DocumentStatus
@@ -162,12 +168,37 @@ class KnowledgeBaseAggregate(AggregateRoot):
             )
         )
 
+    def remove_document(self, document_id: UUID) -> None:
+        if document_id in self.documents:
+            self.record_event(
+                DocumentDeletedEvent(
+                    aggregate_id=self.id,
+                    aggregate_type="KnowledgeBaseAggregate",
+                    document_id=document_id,
+                )
+            )
+
+    def delete(self) -> None:
+        self.record_event(
+            KnowledgeBaseDeletedEvent(
+                aggregate_id=self.id,
+                aggregate_type="KnowledgeBaseAggregate",
+            )
+        )
+
     def _apply_knowledge_base_created_event(self, event: KnowledgeBaseCreatedEvent) -> None:
         self.name = event.name
         self.description = event.description
         self.ontology = event.ontology
         self.storage_partition = event.storage_partition
         self.status = KnowledgeBaseStatus.ACTIVE
+
+    def _apply_knowledge_base_deleted_event(self, event: KnowledgeBaseDeletedEvent) -> None:
+        self.status = KnowledgeBaseStatus.ARCHIVED
+        self.documents.clear()
+
+    def _apply_document_deleted_event(self, event: DocumentDeletedEvent) -> None:
+        self.documents.pop(event.document_id, None)
 
     def _apply_document_attached_event(self, event: DocumentAttachedEvent) -> None:
         self.documents[event.document_id] = {
