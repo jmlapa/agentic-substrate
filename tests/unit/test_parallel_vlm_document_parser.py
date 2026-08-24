@@ -330,3 +330,36 @@ async def test_transcribe_system_prompt_contains_continuity_rules(
     assert "Continuidade de Hierarquia" in system_message
     assert "Continuidade de Texto" in system_message
     assert "Tabelas Inter-Página" in system_message
+
+
+@pytest.mark.asyncio
+async def test_transcribe_system_prompt_enforces_document_language_for_generated_descriptions(
+    sample_pdf_bytes: bytes,
+) -> None:
+    import asyncio
+
+    mock_client = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Page content"
+    mock_client.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+
+    parser = ParallelVlmDocumentParser(openai_client=mock_client)
+    semaphore = asyncio.Semaphore(1)
+
+    await parser._transcribe_single_page(
+        raw_bytes=sample_pdf_bytes,
+        page_num=1,
+        total_pages=2,
+        hierarchy_hint="Section 1",
+        effective_prompt="Default prompt",
+        semaphore=semaphore,
+    )
+
+    mock_client.chat.completions.create.assert_called_once()
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    messages = call_kwargs["messages"]
+    system_message = next(msg["content"] for msg in messages if msg["role"] == "system")
+
+    # Regra obrigatória: descrições geradas devem usar o mesmo idioma do documento original
+    assert "Idioma do Documento" in system_message
+    assert "mesmo idioma" in system_message

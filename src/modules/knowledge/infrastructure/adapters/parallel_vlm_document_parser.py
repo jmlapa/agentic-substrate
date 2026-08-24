@@ -204,7 +204,11 @@ class ParallelVlmDocumentParser(IDocumentParser):
                 "7. Tabelas Inter-Página:\n"
                 "   - Se esta página exibir linhas de uma tabela que começou em página anterior, "
                 "repita o cabeçalho de colunas (| Col1 | Col2 | e |---|---|) antes das linhas "
-                "de dados."
+                "de dados.\n"
+                "8. Idioma do Documento e Conteúdo Gerado:\n"
+                "   - Todas as descrições de elementos visuais, gráficos, diagramas ou qualquer "
+                "texto que você precise gerar/descrever (ao invés de apenas transcrever) DEVEM "
+                "ser redigidos rigorosamente no mesmo idioma predominante do próprio documento."
             )
 
             user_content: list[dict[str, Any]] = [
