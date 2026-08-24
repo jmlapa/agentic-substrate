@@ -60,7 +60,7 @@ class AppSettings(BaseSettings):
         alias="GRAPH_EXTRACTOR_PROVIDER",
     )
     openrouter_graph_model_name: str = Field(
-        default="google/gemma-4-26b-a4b-it",
+        default="meta-llama/llama-3.1-8b-instruct",
         alias="OPENROUTER_GRAPH_MODEL_NAME",
     )
     openrouter_synthesis_model_name: str = Field(

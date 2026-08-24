@@ -33,6 +33,9 @@ from src.modules.knowledge.application.use_cases.delete_knowledge_base import (
 from src.modules.knowledge.application.use_cases.delete_ontology_template import (
     DeleteOntologyTemplateUseCase,
 )
+from src.modules.knowledge.application.use_cases.get_document_content import (
+    GetDocumentContentUseCase,
+)
 from src.modules.knowledge.application.use_cases.get_ontology_template import (
     GetOntologyTemplateUseCase,
 )
@@ -44,6 +47,9 @@ from src.modules.knowledge.application.use_cases.list_ontology_templates import 
 )
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeUseCase,
+)
+from src.modules.knowledge.application.use_cases.quick_search_notes import (
+    QuickSearchNotesUseCase,
 )
 from src.modules.knowledge.application.use_cases.reprocess_document import (
     ReprocessDocumentUseCase,
@@ -69,6 +75,9 @@ from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.composite_document_parser import (
+    CompositeDocumentParser,
 )
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
@@ -103,6 +112,9 @@ from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory imp
 from src.modules.knowledge.infrastructure.adapters.openrouter_rag_synthesizer import (
     OpenRouterRagSynthesizer,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_whisper_audio_document_parser import (
+    OpenRouterWhisperAudioDocumentParser,
+)
 from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
     PageCheckpointStorage,
 )
@@ -127,8 +139,14 @@ from src.modules.knowledge.infrastructure.adapters.qwen_synthetic_toc_extractor 
 from src.modules.knowledge.infrastructure.adapters.toc_checkpoint_storage import (
     TocCheckpointStorage,
 )
+from src.modules.knowledge.infrastructure.adapters.vlm_image_document_parser import (
+    VlmImageDocumentParser,
+)
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
+)
+from src.modules.knowledge.infrastructure.extractors.direct_openrouter_graph_extractor import (
+    DirectOpenRouterGraphExtractor,
 )
 from src.modules.knowledge.infrastructure.extractors.existing_entity_registry import (
     ExistingEntityRegistry,
@@ -160,6 +178,8 @@ class AppContainer:
     attach_doc_use_case: AttachAndStoreDocumentUseCase
     reprocess_document_use_case: ReprocessDocumentUseCase
     query_knowledge_use_case: QueryKnowledgeUseCase
+    get_document_content_use_case: GetDocumentContentUseCase
+    quick_search_notes_use_case: QuickSearchNotesUseCase
     create_ontology_use_case: CreateOntologyTemplateUseCase
     get_ontology_use_case: GetOntologyTemplateUseCase
     list_ontologies_use_case: ListOntologyTemplatesUseCase
@@ -242,7 +262,7 @@ def create_app_container(
         if openrouter_client
         else None
     )
-    parser: IDocumentParser = ParallelVlmDocumentParser(
+    doc_parser = ParallelVlmDocumentParser(
         openai_client=openrouter_client,
         toc_extractor=toc_extractor,
         page_renderer=renderer,
@@ -251,6 +271,20 @@ def create_app_container(
         max_concurrency=cfg.ocr_max_concurrency,
         rate_limiter=limiter,
         checkpoint_storage=page_checkpoint,
+    )
+    image_parser = VlmImageDocumentParser(
+        api_key=openrouter_key,
+        base_url=cfg.openrouter_base_url,
+        model=cfg.ocr_vision_model_name,
+    )
+    audio_parser = OpenRouterWhisperAudioDocumentParser(
+        api_key=openrouter_key,
+        base_url=cfg.openrouter_base_url,
+    )
+    parser: IDocumentParser = CompositeDocumentParser(
+        document_parser=doc_parser,
+        image_parser=image_parser,
+        audio_parser=audio_parser,
     )
 
     # Markdown Chunker
@@ -266,14 +300,12 @@ def create_app_container(
     else:
         embedding_service = InMemoryEmbeddingService()
 
-    # Graph Extractor (PydanticAI with OpenRouter or Gemini)
+    # Graph Extractor (Direct OpenRouter or PydanticAI with Gemini)
     extractor_provider = cfg.graph_extractor_provider
     extractor: IGraphExtractor
     if extractor_provider == "openrouter" and openrouter_key:
-        extractor = PydanticAiGraphExtractor(
+        extractor = DirectOpenRouterGraphExtractor(
             rate_limiter=limiter,
-            entity_registry=entity_registry,
-            provider_type="openrouter",
             model_name=cfg.openrouter_graph_model_name,
             api_key=openrouter_key,
             base_url=cfg.openrouter_base_url,
@@ -350,6 +382,14 @@ def create_app_container(
         embedding_service=embedding_service,
         synthesis_service=synthesis_service,
     )
+    get_doc_content = GetDocumentContentUseCase(
+        kb_repository=repo,
+        storage=storage,
+    )
+    quick_search = QuickSearchNotesUseCase(
+        kb_repository=repo,
+        storage=storage,
+    )
 
     create_ont = CreateOntologyTemplateUseCase(ontology_repo)
     get_ont = GetOntologyTemplateUseCase(ontology_repo)
@@ -400,6 +440,8 @@ def create_app_container(
         attach_doc_use_case=attach_doc,
         reprocess_document_use_case=reprocess_doc,
         query_knowledge_use_case=query_kb,
+        get_document_content_use_case=get_doc_content,
+        quick_search_notes_use_case=quick_search,
         create_ontology_use_case=create_ont,
         get_ontology_use_case=get_ont,
         list_ontologies_use_case=list_ont,
