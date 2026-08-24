@@ -13,6 +13,7 @@ export interface DocumentUploadModalProps {
 }
 
 export const ALLOWED_DOCUMENT_EXTENSIONS = [
+  // Documentos
   '.pdf',
   '.txt',
   '.md',
@@ -24,6 +25,25 @@ export const ALLOWED_DOCUMENT_EXTENSIONS = [
   '.json',
   '.html',
   '.htm',
+  // Imagens
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.heic',
+  '.heif',
+  // Áudios
+  '.mp3',
+  '.m4a',
+  '.ogg',
+  '.opus',
+  '.oga',
+  '.webm',
+  '.wav',
+  '.aac',
+  '.caf',
+  '.amr',
+  '.3gp',
 ] as const;
 
 export const ACCEPTED_FILE_TYPES_STRING = ALLOWED_DOCUMENT_EXTENSIONS.join(',');
@@ -62,7 +82,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
     if (rejectedFiles.length > 0) {
       setErrorMsg(
-        `Formato não suportado: ${rejectedFiles.join(', ')}. Os formatos aceitos são: PDF, TXT, MD, DOCX, XLSX, PPTX, CSV, JSON e HTML.`
+        `Formato não suportado: ${rejectedFiles.join(', ')}. Os formatos aceitos incluem: Documentos (PDF, TXT, MD, DOCX, XLSX, PPTX, CSV, JSON, HTML), Imagens (PNG, JPG, WebP, HEIC) e Áudios (MP3, WAV, M4A, OGG, WebM, AAC).`
       );
     } else {
       setErrorMsg('');
@@ -128,8 +148,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Upload de Documentos"
-      description="Envie arquivos (PDF, TXT, MD, DOCX, XLSX, PPTX, CSV, JSON, HTML) para processamento assíncrono pelo pipeline GraphRAG."
+      title="Upload de Arquivos Multimodais"
+      description="Envie documentos, imagens ou gravações de áudio para transcrição, OCR e indexação no pipeline GraphRAG."
     >
       <div className="space-y-5">
         {errorMsg && <ErrorBanner message={errorMsg} />}
@@ -165,7 +185,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             Clique ou arraste arquivos aqui
           </p>
           <p className="mt-1 text-xs text-zinc-500">
-            PDF, TXT, Markdown, DOCX, XLSX, PPTX, CSV, JSON ou HTML (máx. 50MB por arquivo)
+            Documentos (PDF, DOCX, TXT, MD), Imagens (PNG, JPG, WebP) ou Áudios (MP3, WAV, M4A)
           </p>
         </div>
 
@@ -216,7 +236,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                   OCR & Análise Visual Multimodal
                 </p>
                 <p className="text-[11px] text-zinc-400">
-                  Extrai texto de imagens, diagramas e tabelas complexas via Qwen3-VL.
+                  Extrai texto de imagens, diagramas e tabelas complexas via Visão Computacional.
                 </p>
               </div>
             </div>
@@ -235,7 +255,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
           {!enableOcr ? (
             <div className="flex items-center gap-1.5 text-[11px] text-emerald-400/90 bg-emerald-950/30 border border-emerald-900/40 rounded-lg px-2.5 py-1.5">
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span>Modo Fast-Path ativo: parsing nativo instantâneo em CPU com custo zero de tokens.</span>
+              <span>Modo Fast-Path ativo: parsing nativo instantâneo com classificação automática de proveniência.</span>
             </div>
           ) : (
             <div className="pt-2 border-t border-zinc-800/80 space-y-2">
@@ -248,12 +268,13 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 onChange={(e) => setOcrInstructions(e.target.value)}
                 disabled={uploading}
                 rows={2}
-                placeholder="Ex: Transcreva tabelas em formato GFM, forneça descrição de gráficos com tags '> [Figura X: ...]' e preserve equações..."
-                className="w-full text-xs bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
+                placeholder="Ex: Formatar diagramas como tópicos hierárquicos e tabelas em GFM..."
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               />
             </div>
           )}
         </div>
+
 
         {/* Upload progress */}
         {uploading && (

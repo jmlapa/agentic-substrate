@@ -9,6 +9,7 @@ import { OntologiesListPage } from './pages/ontologies/OntologiesListPage';
 import { CreateOntologyPage } from './pages/ontologies/CreateOntologyPage';
 import { OntologyDetailPage } from './pages/ontologies/OntologyDetailPage';
 import { QueryPlaygroundView } from './pages/playground/QueryPlaygroundView';
+import { NotesPortalPage } from './pages/notes/NotesPortalPage';
 
 export const App: React.FC = () => {
   return (
@@ -21,8 +22,11 @@ export const App: React.FC = () => {
         <Header />
 
         <Routes>
-          <Route path="/" element={<Navigate to="/knowledge-bases" replace />} />
+          <Route path="/" element={<Navigate to="/notes" replace />} />
           
+          {/* Notes Portal Explorer */}
+          <Route path="/notes" element={<NotesPortalPage />} />
+
           {/* Knowledge Bases Routes */}
           <Route path="/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge-bases/new" element={<CreateKnowledgeBasePage />} />
@@ -37,7 +41,7 @@ export const App: React.FC = () => {
           <Route path="/playground" element={<QueryPlaygroundView />} />
 
           {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/knowledge-bases" replace />} />
+          <Route path="*" element={<Navigate to="/notes" replace />} />
         </Routes>
       </div>
     </div>

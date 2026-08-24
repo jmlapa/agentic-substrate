@@ -105,11 +105,28 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
                   </span>
                   <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                   <span className="text-xs font-medium text-zinc-200 truncate">
-                    {res.header_path || 'Conteúdo Geral'}
+                    {res.document_name ? `${res.document_name} ➔ ` : ''}{res.header_path || 'Conteúdo Geral'}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  {res.source_type && (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                        res.source_type === 'audio'
+                          ? 'bg-amber-950/80 border border-amber-800/80 text-amber-300'
+                          : res.source_type === 'image'
+                          ? 'bg-purple-950/80 border border-purple-800/80 text-purple-300'
+                          : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
+                      }`}
+                    >
+                      {res.source_type === 'audio'
+                        ? '🎙️ Áudio'
+                        : res.source_type === 'image'
+                        ? '🖼️ Imagem'
+                        : '📄 Doc'}
+                    </span>
+                  )}
                   <Badge variant={res.relevance_score > 0.8 ? 'success' : 'default'}>
                     Score: {res.relevance_score.toFixed(3)}
                   </Badge>
@@ -120,6 +137,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({
                   )}
                 </div>
               </div>
+
 
               {/* Collapsible content */}
               {isExpanded && (

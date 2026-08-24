@@ -146,8 +146,9 @@ export const CreateOntologyPage: React.FC = () => {
   return (
     <PageContainer
       title="Nova Ontologia"
-      description="Modele as entidades e relacionamentos que a IA (Gemma 4 / OpenRouter) extrairá dos documentos."
+      description="Modele as entidades e relacionamentos que o extrator de grafo estruturado identificará nos documentos."
       actions={
+
         <Button
           variant="outline"
           onClick={() => navigate('/ontologies')}

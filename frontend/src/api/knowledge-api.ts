@@ -106,4 +106,28 @@ export const knowledgeApi = {
     }>(`/api/v1/knowledge/bases/${kbId}/documents/${documentId}`);
     return response.data;
   },
+
+  async getDocumentContent(
+    kbId: string,
+    documentId: string
+  ): Promise<import('./types').DocumentContentResponse> {
+    const response = await apiClient.get<import('./types').DocumentContentResponse>(
+      `/api/v1/knowledge/bases/${kbId}/documents/${documentId}/content`
+    );
+    return response.data;
+  },
+
+  async quickSearchNotes(
+    kbId: string,
+    query: string,
+    limit: number = 10
+  ): Promise<import('./types').QuickSearchResponse> {
+    const response = await apiClient.get<import('./types').QuickSearchResponse>(
+      `/api/v1/knowledge/bases/${kbId}/quick-search`,
+      {
+        params: { q: query, limit },
+      }
+    );
+    return response.data;
+  },
 };

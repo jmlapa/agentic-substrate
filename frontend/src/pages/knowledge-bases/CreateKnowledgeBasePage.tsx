@@ -159,8 +159,9 @@ export const CreateKnowledgeBasePage: React.FC = () => {
               />
             )}
             <p className="text-xs text-zinc-500">
-              A ontologia instrui a IA (Gemma 4 / OpenRouter) a extrair as entidades e conexões certas para o FalkorDB.
+              A ontologia instrui o extrator semântico a extrair as entidades e conexões certas para o grafo.
             </p>
+
           </div>
         </Card>
 

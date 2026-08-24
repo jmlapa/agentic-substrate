@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Sparkles, Sliders, Database, Cpu, ShieldCheck } from 'lucide-react';
+import { Sparkles, Sliders, Database, Cpu } from 'lucide-react';
 import { useKnowledgeBases } from '../../hooks/useKnowledgeBases';
 import { useRagQuery } from '../../hooks/useRagQuery';
 import { QueryKnowledgeResponse } from '../../api/types';
@@ -65,12 +65,13 @@ export const QueryPlaygroundView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [topK, setTopK] = useState(3);
   const [mode, setMode] = useState<'synthesis' | 'retrieve'>('synthesis');
+  const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>([]);
   const [queryResponse, setQueryResponse] = useState<QueryKnowledgeResponse | null>(null);
   const [lastSubmittedQuery, setLastSubmittedQuery] = useState('');
 
   const kbs = kbsData?.knowledge_bases || [];
   const currentBudget = getSafeTokenBudgetForTopK(topK);
-  const currentConfig = TOP_K_CONFIGS.find((c) => c.topK === topK);
+
 
   useEffect(() => {
     if (urlKbId) {
@@ -84,6 +85,12 @@ export const QueryPlaygroundView: React.FC = () => {
     setSelectedKbId(newKbId);
     setSearchParams({ kbId: newKbId });
     setQueryResponse(null);
+  };
+
+  const toggleSourceType = (type: string) => {
+    setSelectedSourceTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
   };
 
   const handleExecuteQuery = async (e?: React.FormEvent) => {
@@ -101,6 +108,7 @@ export const QueryPlaygroundView: React.FC = () => {
           top_k: Number(topK) || 3,
           mode,
           max_tokens_budget: tokenBudget,
+          source_types: selectedSourceTypes.length > 0 ? selectedSourceTypes : undefined,
         },
       });
       setQueryResponse(res);
@@ -124,7 +132,7 @@ export const QueryPlaygroundView: React.FC = () => {
   return (
     <PageContainer
       title="RAG Query Playground"
-      description="Faça perguntas em linguagem natural e receba respostas sintetizadas com evidências recuperadas do FalkorDB GraphRAG."
+      description="Faça perguntas em linguagem natural e receba respostas sintetizadas com evidências recuperadas do GraphRAG."
     >
       <div className="space-y-8 max-w-5xl">
         {/* Controls Card */}
@@ -157,7 +165,7 @@ export const QueryPlaygroundView: React.FC = () => {
                 onChange={(e) => setMode(e.target.value as 'synthesis' | 'retrieve')}
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
-                <option value="synthesis">Síntese Fact-Dense (Gemma 4 / OpenRouter)</option>
+                <option value="synthesis">Síntese Fact-Dense Grounded</option>
                 <option value="retrieve">Apenas Recuperação (Raw Fast-Path)</option>
               </select>
             </div>
@@ -181,23 +189,67 @@ export const QueryPlaygroundView: React.FC = () => {
             </div>
           </div>
 
-          {/* Token Budget Info Banner */}
-          <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 text-zinc-300">
-              <Cpu className="w-4 h-4 text-indigo-400 shrink-0" />
+          {/* Source Type Filter Chips */}
+          <div className="pt-2 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mr-1">
+                Filtro de Origem:
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedSourceTypes([])}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  selectedSourceTypes.length === 0
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleSourceType('document')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  selectedSourceTypes.includes('document')
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                📄 Documentos
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleSourceType('image')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  selectedSourceTypes.includes('image')
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                🖼️ Imagens (OCR)
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleSourceType('audio')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  selectedSourceTypes.includes('audio')
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                🎙️ Áudios (Transcrição)
+              </button>
+            </div>
+
+            {/* Token Budget Info Banner */}
+            <div className="flex items-center gap-2 text-xs text-zinc-300">
+              <Cpu className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
               <span>
-                Orçamento de Retrieval:{' '}
+                Orçamento:{' '}
                 <strong className="text-zinc-100 font-mono">
                   {currentBudget.toLocaleString()} tokens
                 </strong>
-                <span className="text-zinc-500 ml-1.5">
-                  ({currentConfig?.description || `${topK} chunks com margem segura`})
-                </span>
               </span>
-            </div>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-400/90 shrink-0 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Margem anti-truncamento ativa</span>
             </div>
           </div>
 
@@ -235,11 +287,12 @@ export const QueryPlaygroundView: React.FC = () => {
           <LoadingSpinner
             message={
               mode === 'retrieve'
-                ? 'Recuperando subgrafos e chunks estruturados no FalkorDB...'
-                : 'Buscando no FalkorDB e sintetizando resposta factual com Gemma 4 (OpenRouter)...'
+                ? 'Recuperando subgrafos e chunks estruturados no Grafo de Conhecimento...'
+                : 'Buscando evidências no grafo e sintetizando resposta factual...'
             }
           />
         )}
+
 
         {/* Error Banner */}
         {ragMutation.isError && (

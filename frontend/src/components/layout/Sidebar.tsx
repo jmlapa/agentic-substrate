@@ -6,10 +6,17 @@ import {
   Sparkles,
   GitFork,
   Cpu,
+  BookOpen,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const navItems = [
+    {
+      to: '/notes',
+      label: 'Portal de Notas',
+      icon: BookOpen,
+      badge: 'Explorer',
+    },
     {
       to: '/knowledge-bases',
       label: 'Knowledge Bases',
@@ -25,7 +32,7 @@ export const Sidebar: React.FC = () => {
       to: '/playground',
       label: 'RAG Playground',
       icon: Sparkles,
-      badge: 'Gemma 4',
+      badge: 'GraphRAG',
     },
   ];
 
@@ -39,7 +46,7 @@ export const Sidebar: React.FC = () => {
           </div>
           <div>
             <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-              Substrate <span className="text-[10px] uppercase font-semibold bg-indigo-950 text-indigo-400 border border-indigo-800/60 rounded px-1.5 py-0.2">v0.2.1</span>
+              Substrate <span className="text-[10px] uppercase font-semibold bg-indigo-950 text-indigo-400 border border-indigo-800/60 rounded px-1.5 py-0.2">v0.5.0</span>
             </h1>
             <p className="text-[11px] text-zinc-500 font-mono">GraphRAG Platform</p>
           </div>
@@ -89,9 +96,10 @@ export const Sidebar: React.FC = () => {
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
         </div>
         <p className="mt-1.5 text-[11px] text-zinc-500 font-mono">
-          FalkorDB + Gemma 4 (OpenRouter)
+          Graph Store + Neural Retrieval
         </p>
       </div>
+
     </aside>
   );
 };

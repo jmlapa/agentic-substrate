@@ -329,12 +329,29 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
                         <span className="font-semibold text-sm text-zinc-100">{doc.file_name}</span>
                         <span className="text-[11px] font-mono text-zinc-500">({doc.id})</span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Media badge */}
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                            doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
+                              ? 'bg-amber-950/80 border border-amber-800/80 text-amber-300'
+                              : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
+                              ? 'bg-purple-950/80 border border-purple-800/80 text-purple-300'
+                              : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          {doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
+                            ? '🎙️ Áudio'
+                            : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
+                            ? '🖼️ Imagem'
+                            : '📄 Doc'}
+                        </span>
                         {doc.enable_ocr && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800 text-emerald-300">
                             <Eye className="w-3 h-3 text-emerald-400" /> OCR Vision Ativo
                           </span>
                         )}
+
                         <Badge
                           variant={
                             doc.status === 'INDEXED'

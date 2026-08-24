@@ -1,7 +1,17 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 
 from src.api_gateway.container import AppContainer
 from src.api_gateway.dtos.create_knowledge_base_dto import (
@@ -24,6 +34,10 @@ from src.modules.knowledge.application.use_cases.delete_knowledge_base import (
     DeleteKnowledgeBaseRequest,
     DeleteKnowledgeBaseResponse,
 )
+from src.modules.knowledge.application.use_cases.get_document_content import (
+    GetDocumentContentRequest,
+    GetDocumentContentResponse,
+)
 from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
     ListKnowledgeBasesRequest,
     ListKnowledgeBasesResponse,
@@ -31,6 +45,10 @@ from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
+)
+from src.modules.knowledge.application.use_cases.quick_search_notes import (
+    QuickSearchNotesRequest,
+    QuickSearchNotesResponse,
 )
 from src.modules.knowledge.application.use_cases.reprocess_document import (
     ReprocessDocumentRequest,
@@ -150,6 +168,10 @@ async def query_knowledge_base(
             mode=payload.mode,
             max_tokens_budget=payload.max_tokens_budget,
             include_graph_triples=payload.include_graph_triples,
+            source_types=payload.source_types,
+            time_from=payload.time_from,
+            time_to=payload.time_to,
+            document_id=payload.document_id,
         )
     )
     if isinstance(res, Err):
@@ -281,6 +303,59 @@ async def delete_document(
 ) -> DeleteDocumentResponse:
     res = await container.delete_doc_use_case.execute(
         DeleteDocumentRequest(kb_id=kb_id, document_id=doc_id)
+    )
+    if isinstance(res, Err):
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value
+
+
+@router.get(
+    "/bases/{kb_id}/documents/{doc_id}/content",
+    response_model=GetDocumentContentResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_document_content(
+    kb_id: UUID,
+    doc_id: UUID,
+    container: AppContainer = Depends(get_container),
+) -> GetDocumentContentResponse:
+    res = await container.get_document_content_use_case.execute(
+        GetDocumentContentRequest(kb_id=kb_id, document_id=doc_id)
+    )
+    if isinstance(res, Err):
+        if res.error.code == "NOT_FOUND":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+    return res.value
+
+
+@router.get(
+    "/bases/{kb_id}/quick-search",
+    response_model=QuickSearchNotesResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def quick_search_notes(
+    kb_id: UUID,
+    q: str = Query(..., min_length=1, description="Termo de busca rápida"),
+    limit: int = Query(default=10, ge=1, le=50, description="Limite de resultados"),
+    container: AppContainer = Depends(get_container),
+) -> QuickSearchNotesResponse:
+    res = await container.quick_search_notes_use_case.execute(
+        QuickSearchNotesRequest(kb_id=kb_id, query=q, limit=limit)
     )
     if isinstance(res, Err):
         if res.error.code == "NOT_FOUND":

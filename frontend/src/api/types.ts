@@ -78,10 +78,14 @@ export interface DocumentProcessingError {
   message?: string;
 }
 
+export type DocumentSourceType = 'document' | 'image' | 'audio';
+
 export interface DocumentSummary {
   id: string;
   file_name: string;
   status: DocumentProcessingStatus | string;
+  source_type?: DocumentSourceType;
+  ingested_at?: number | null;
   enable_ocr?: boolean;
   ocr_instructions?: string | null;
   total_parents?: number | null;
@@ -139,9 +143,17 @@ export interface DocumentUploadResponse {
 
 export interface HybridSearchResult {
   parent_chunk_id: string;
+  document_id?: string;
+  document_name?: string;
+  source_type?: DocumentSourceType | string;
+  ingested_at?: number | null;
   header_path: string;
   parent_content: string;
   relevance_score: number;
+  retrieval_source?: string;
+  prev_chunk_id?: string | null;
+  next_chunk_id?: string | null;
+  related_triples?: string[];
   related_entities: Record<string, unknown>[];
 }
 
@@ -155,6 +167,9 @@ export interface RetrievalTrace {
   results_count?: number;
   synthesis_error?: boolean;
   retrieval_sources?: string[];
+  source_types?: string[] | null;
+  time_from?: number | null;
+  time_to?: number | null;
   [key: string]: unknown;
 }
 
@@ -164,6 +179,10 @@ export interface QueryKnowledgeRequest {
   mode?: 'synthesis' | 'retrieve';
   max_tokens_budget?: number;
   include_graph_triples?: boolean;
+  source_types?: DocumentSourceType[] | string[] | null;
+  time_from?: number | null;
+  time_to?: number | null;
+  document_id?: string | null;
 }
 
 export interface QueryKnowledgeResponse {
@@ -172,3 +191,37 @@ export interface QueryKnowledgeResponse {
   total_tokens_estimated?: number;
   retrieval_trace?: RetrievalTrace;
 }
+
+export interface TocItem {
+  level: number;
+  title: string;
+  anchor: string;
+}
+
+export interface DocumentContentResponse {
+  document_id: string;
+  kb_id: string;
+  file_name: string;
+  source_type: string;
+  status: string;
+  total_parents: number;
+  total_children: number;
+  markdown_content: string;
+  toc_tree: TocItem[];
+  ingested_at?: number | null;
+}
+
+export interface QuickSearchResult {
+  document_id: string;
+  document_name: string;
+  match_type: 'title' | 'header' | 'content';
+  matched_title: string;
+  anchor: string;
+  preview: string;
+}
+
+export interface QuickSearchResponse {
+  query: string;
+  results: QuickSearchResult[];
+}
+

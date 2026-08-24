@@ -30,8 +30,9 @@ export const AnswerView: React.FC<AnswerViewProps> = ({ answer }) => {
               Síntese Fact-Dense Grounded
             </h3>
             <p className="text-[11px] text-zinc-400 font-mono">
-              Gemma 4 26B A4B (OpenRouter) • Temperatura 0.1 • Proveniência Estrita
+              Síntese Neural de Alta Fidelidade • Temperatura 0.1 • Proveniência Estrita
             </p>
+
           </div>
         </div>
 
