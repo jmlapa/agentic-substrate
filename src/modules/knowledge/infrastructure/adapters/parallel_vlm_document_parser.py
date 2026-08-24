@@ -42,7 +42,7 @@ class ParallelVlmDocumentParser(IDocumentParser):
         openai_client: Any | None = None,
         toc_extractor: ISyntheticTocExtractor | None = None,
         page_renderer: PdfPageRenderer | None = None,
-        vision_model: str = "qwen/qwen3-vl-32b-instruct",
+        vision_model: str = "qwen/qwen3-vl-8b-instruct",
         default_prompt: str | None = None,
         max_concurrency: int = 5,
         rate_limiter: AsyncTokenBucketLimiter | None = None,

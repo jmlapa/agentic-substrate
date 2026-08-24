@@ -18,7 +18,7 @@ class MarkItDownDocumentParser(IDocumentParser):
     def __init__(
         self,
         openrouter_client: Any | None = None,
-        vision_model: str = "qwen/qwen3-vl-32b-instruct",
+        vision_model: str = "qwen/qwen3-vl-8b-instruct",
         default_prompt: str | None = None,
         markitdown_instance: Any | None = None,
         markitdown_factory: Any | None = None,
@@ -109,8 +109,10 @@ class MarkItDownDocumentParser(IDocumentParser):
         doc_id: Any = None,
         kb_partition: str | None = None,
         progress_callback: Any = None,
+        ingested_at: float | None = None,
         **kwargs: Any,
     ) -> str:
+
         file_extension = self._infer_extension(file_name, content_type)
         return await asyncio.to_thread(
             self._convert_sync,

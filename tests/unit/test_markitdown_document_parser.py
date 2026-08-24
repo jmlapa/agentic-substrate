@@ -70,7 +70,7 @@ async def test_markitdown_parser_with_openrouter_ocr_enabled_uses_custom_prompt(
 
     parser = MarkItDownDocumentParser(
         openrouter_client=mock_client,
-        vision_model="qwen/qwen3-vl-32b-instruct",
+        vision_model="qwen/qwen3-vl-8b-instruct",
         markitdown_factory=lambda **kwargs: mock_md,
     )
 

@@ -39,7 +39,7 @@ class QwenSyntheticTocExtractor(ISyntheticTocExtractor):
         self,
         openai_client: Any,
         page_renderer: PdfPageRenderer | None = None,
-        vision_model: str = "qwen/qwen3-vl-32b-instruct",
+        vision_model: str = "qwen/qwen3-vl-8b-instruct",
         rate_limiter: AsyncTokenBucketLimiter | None = None,
         checkpoint_storage: TocCheckpointStorage | None = None,
     ) -> None:
