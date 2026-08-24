@@ -164,6 +164,27 @@ async def test_parallel_vlm_parser_fast_path_when_all_pages_cached(
     assert "100% recuperado" in progress_calls[0][2]
 
 
+def test_dedup_removes_identical_adjacent() -> None:
+    parser = ParallelVlmDocumentParser()
+    input_md = "## Intro\n\n## Intro\n\nSome content"
+    expected = "## Intro\n\nSome content"
+    assert parser._dedup_adjacent_headers(input_md) == expected
+
+
+def test_dedup_preserves_distinct_adjacent() -> None:
+    parser = ParallelVlmDocumentParser()
+    input_md = "## Intro\n\n## Methods\n\nContent"
+    # Both headings should remain
+    assert parser._dedup_adjacent_headers(input_md) == input_md
+
+
+def test_dedup_ignores_non_adjacent() -> None:
+    parser = ParallelVlmDocumentParser()
+    input_md = "## Intro\n\nParagraph text here.\n\n## Intro\n\nMore content"
+    # Since a non‑heading line separates them, both should stay
+    assert parser._dedup_adjacent_headers(input_md) == input_md
+
+
 @pytest.mark.asyncio
 async def test_parallel_vlm_parser_monotonic_progress_callback(
     sample_pdf_bytes: bytes, mock_toc: SyntheticDocumentToc

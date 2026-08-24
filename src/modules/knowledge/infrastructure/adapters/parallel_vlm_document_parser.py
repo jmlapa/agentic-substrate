@@ -13,6 +13,14 @@ from src.kernel.infrastructure.async_token_bucket_limiter import (
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
+
+import re
+
+# Regex constants for markdown continuity normalizer
+_PAGE_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*PAGE\s*\d+\s*-->")
+_ERROR_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*\[Erro no OCR.*?\]\s*-->", re.DOTALL)
+_EXCESS_NEWLINES_RE: re.Pattern[str] = re.compile(r"\n{3,}")
+_HEADING_RE: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
     ISyntheticTocExtractor,
 )
@@ -56,6 +64,45 @@ class ParallelVlmDocumentParser(IDocumentParser):
         self._limiter = rate_limiter
         self._native_markitdown = native_markitdown or MarkItDown()
         self._checkpoint_storage = checkpoint_storage
+
+    def _dedup_adjacent_headers(self, text: str) -> str:
+        """Remove adjacent duplicate markdown headings.
+
+        Two headings are considered duplicate if their normalized text (lower‑cased,
+        without leading ``#`` characters and surrounding whitespace) is identical
+        and they appear consecutively, i.e. only blank lines or page‑markers may
+        intervene between them.  When a duplicate is removed, any trailing blank
+        lines accumulated between the two headings are also removed to avoid
+        leaving orphaned whitespace.
+        """
+        lines = text.splitlines()
+        result: list[str] = []
+        prev_heading_norm: str | None = None
+        in_heading_gap: bool = False  # True while only blanks/markers follow the last heading
+        for line in lines:
+            match = _HEADING_RE.match(line)
+            is_blank = line.strip() == ""
+            is_marker = bool(
+                _PAGE_MARKER_RE.match(line.strip()) or _ERROR_MARKER_RE.match(line.strip())
+            )
+            if match:
+                norm = match.group(2).strip().lower()
+                if in_heading_gap and prev_heading_norm == norm:
+                    # Duplicate: remove orphaned trailing blanks/markers between headings
+                    while result and (result[-1].strip() == "" or _PAGE_MARKER_RE.match(result[-1].strip()) or _ERROR_MARKER_RE.match(result[-1].strip())):
+                        result.pop()
+                    continue
+                prev_heading_norm = norm
+                in_heading_gap = True
+                result.append(line)
+            elif is_blank or is_marker:
+                # Transparent separators: do not break adjacency
+                result.append(line)
+            else:
+                # Real content line: break adjacency
+                in_heading_gap = False
+                result.append(line)
+        return "\n".join(result)
 
     def _infer_extension(self, file_name: str, content_type: str) -> str:
         ext = Path(file_name).suffix.lower()
@@ -191,7 +238,9 @@ class ParallelVlmDocumentParser(IDocumentParser):
         doc_id: Any = None,
         kb_partition: str | None = None,
         progress_callback: (Callable[[int, int, str], Coroutine[Any, Any, None]] | None) = None,
+        ingested_at: float | None = None,
     ) -> str:
+
         file_extension = self._infer_extension(file_name, content_type)
         is_pdf = file_extension == ".pdf" or content_type.lower() == "application/pdf"
 
