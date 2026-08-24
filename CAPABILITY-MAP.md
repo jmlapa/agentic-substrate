@@ -23,6 +23,9 @@
 - `SPEC-synthetic-toc-and-parallel-vlm-ocr.md` (Marco 1.14 - Stateful Synthetic ToC & Resilient Parallel VLM OCR) — Concluído (v0.3.3)
 - `SPEC-optimized-graphrag-retrieval-and-budgeting.md` (Marco 1.15 - Optimized GraphRAG Retrieval, Candidate Fusion & 32k Token Budgeting) — Concluído (v0.3.4)
 - `SPEC-resilient-saga-reprocessing-and-job-queues.md` (Marco 1.16 - Resilient Saga Reprocessing, Redis Job Queues & Zero-Token-Waste Checkpoints) — Planejado (v0.3.5)
+- `SPEC-multimodal-ingestion-and-source-filtering.md` (Marco 1.17 - Multimodal Ingestion Audio/Image, Source & Temporal Filtering) — Em Andamento (v0.3.6)
+- `SPEC-notes-portal-explorer.md` (Marco 1.18 - Smart Notes Portal & Document Explorer) — Especificado (v0.3.7)
+- `SPEC-markdown-continuity-normalizer.md` (Marco 1.19 - Markdown Continuity Normalizer) — Concluído (v0.3.8)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -45,5 +48,7 @@
 7. **Marco 1.13 (Concluído - v0.3.2):** `knowledge:openrouter-gemma-4-fact-dense-rag-synthesis` (Google Gemma 4 via OpenRouter, Fact-Dense Markdown, Dual-Mode synthesis/retrieve)
 8. **Marco 1.14 (Concluído - v0.3.3):** `knowledge:synthetic-toc-and-parallel-vlm-ocr` (Stateful Rolling Window ToC, Parallel Two-Pass OCR, Concurrency & Rate Limiting)
 9. **Marco 1.15 (Concluído - v0.3.9):** `knowledge:optimized-graphrag-retrieval-and-budgeting` (FalkorDB Cypher, Deduplicação Natural de Sementes, Bounded Multiplicative Decay, 32k Dynamic Budgeting, XML Context Injection Defense)
-10. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+10. **Marco 1.19 (Concluído - v0.3.8):** `knowledge:markdown-continuity-normalizer` (Continuous Markdown Normalizer, Header Deduplication, Inter-Page Continuity Rules)
+11. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+
 

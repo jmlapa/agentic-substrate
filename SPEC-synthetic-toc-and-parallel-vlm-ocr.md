@@ -41,8 +41,8 @@ sequenceDiagram
             VLM-->>Parser: Retorna Markdown GFM limpo com tabelas e figuras
         end
 
-        Parser->>Parser: Concatena páginas ordenadas (<!-- PAGE N -->)
-        Parser-->>Saga: Retorna Markdown Estruturado Completo
+        Parser->>Parser: Concatena páginas e normaliza (_normalize_markdown)
+        Parser-->>Saga: Retorna Markdown Estruturado Completo e Contínuo
     end
 ```
 
@@ -130,3 +130,5 @@ OCR_REASONING_EFFORT=none
 - [x] **Continuidade de Hierarquia:** Injeção determinística de `#`, `##`, `###` e tags de figuras `> **[Figura X: ...]**`.
 - [x] **Zero-Token ToC & OCR Resume:** Checkpoints granulares para lotes de ToC e páginas individuais de OCR.
 - [x] **Telemetria Monotônica:** Barra de progresso suave e estritamente crescente no frontend.
+- [x] **Markdown Contínuo:** Saída de `parse_to_markdown` sem marcadores `<!-- PAGE` ou `<!-- [Erro`.
+- [x] **Headers sem Duplicatas:** Headers idênticos adjacentes entre páginas são automaticamente deduplicados.
