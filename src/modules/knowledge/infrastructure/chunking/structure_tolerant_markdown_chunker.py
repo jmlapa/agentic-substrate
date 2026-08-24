@@ -1,4 +1,5 @@
 import re
+from typing import Any
 from uuid import UUID
 
 from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
@@ -11,6 +12,9 @@ from src.modules.knowledge.domain.value_objects.atomic_block_type import (
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.document_chunk_collection import (
     DocumentChunkCollection,
+)
+from src.modules.knowledge.domain.value_objects.document_source_type import (
+    DocumentSourceType,
 )
 from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
 from src.modules.knowledge.infrastructure.chunking.atomic_block_lexer import (
@@ -50,6 +54,8 @@ class StructureTolerantMarkdownChunker(IMarkdownChunker):
         document_id: UUID,
         document_name: str,
         markdown_text: str,
+        source_type: DocumentSourceType | None = None,
+        ingested_at: float | None = None,
     ) -> DocumentChunkCollection:
         clean_text = markdown_text.strip()
         if not clean_text:
@@ -98,17 +104,24 @@ class StructureTolerantMarkdownChunker(IMarkdownChunker):
             if not had_explicit_headers:
                 header_path = f"[Doc: {document_name}] > Part {parent_counter}"
 
+            p_meta: dict[str, Any] = {
+                "document_id": str(document_id),
+                "document_name": document_name,
+                "parent_index": parent_counter,
+            }
+            if source_type is not None:
+                st_val = source_type.value if hasattr(source_type, "value") else str(source_type)
+                p_meta["source_type"] = st_val
+            if ingested_at is not None:
+                p_meta["ingested_at"] = ingested_at
+
             parent_chunks.append(
                 ParentChunk(
                     id=parent_id,
                     header_path=header_path,
                     content=joined_content,
                     token_count=self._estimate_tokens(joined_content),
-                    metadata={
-                        "document_id": str(document_id),
-                        "document_name": document_name,
-                        "parent_index": parent_counter,
-                    },
+                    metadata=p_meta,
                 )
             )
             current_blocks = []
@@ -133,31 +146,40 @@ class StructureTolerantMarkdownChunker(IMarkdownChunker):
                     if len(sub_contents) > 1:
                         sub_header = f"{current_header_path} (Part {idx + 1}/{len(sub_contents)})"
 
+                    p_meta_overflow: dict[str, Any] = {
+                        "document_id": str(document_id),
+                        "document_name": document_name,
+                        "parent_index": parent_counter,
+                        "part": idx + 1,
+                        "total_parts": len(sub_contents),
+                    }
+                    if source_type is not None:
+                        st_val = (
+                            source_type.value if hasattr(source_type, "value") else str(source_type)
+                        )
+                        p_meta_overflow["source_type"] = st_val
+                    if ingested_at is not None:
+                        p_meta_overflow["ingested_at"] = ingested_at
+
                     parent_chunks.append(
                         ParentChunk(
                             id=parent_id,
                             header_path=sub_header,
                             content=sub_txt,
                             token_count=self._estimate_tokens(sub_txt),
-                            metadata={
-                                "document_id": str(document_id),
-                                "document_name": document_name,
-                                "parent_index": parent_counter,
-                                "part": idx + 1,
-                                "total_parts": len(sub_contents),
-                            },
+                            metadata=p_meta_overflow,
                         )
                     )
                 continue
 
             # Empacotamento normal
-            if current_tokens + block.estimated_tokens <= self._max_parent_tokens:
+            if current_tokens + block.estimated_tokens > self._max_parent_tokens and current_blocks:
+                flush_current_parent()
                 current_blocks.append(block)
                 current_tokens += block.estimated_tokens
             else:
-                flush_current_parent()
-                current_blocks = [block]
-                current_tokens = block.estimated_tokens
+                current_blocks.append(block)
+                current_tokens += block.estimated_tokens
 
         flush_current_parent()
 
@@ -173,6 +195,19 @@ class StructureTolerantMarkdownChunker(IMarkdownChunker):
             )
             for idx, child_text in enumerate(child_texts):
                 child_id = f"{parent.id}-c{idx + 1}"
+                c_meta: dict[str, Any] = {
+                    "document_id": str(document_id),
+                    "document_name": document_name,
+                    "parent_chunk_id": parent.id,
+                }
+                if source_type is not None:
+                    st_val = (
+                        source_type.value if hasattr(source_type, "value") else str(source_type)
+                    )
+                    c_meta["source_type"] = st_val
+                if ingested_at is not None:
+                    c_meta["ingested_at"] = ingested_at
+
                 child_chunks.append(
                     ChildChunk(
                         id=child_id,
@@ -180,11 +215,7 @@ class StructureTolerantMarkdownChunker(IMarkdownChunker):
                         chunk_index=child_global_index,
                         header_path=parent.header_path,
                         content=child_text,
-                        metadata={
-                            "document_id": str(document_id),
-                            "document_name": document_name,
-                            "parent_chunk_id": parent.id,
-                        },
+                        metadata=c_meta,
                     )
                 )
                 child_global_index += 1

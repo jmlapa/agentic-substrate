@@ -1,4 +1,5 @@
 import re
+from typing import Any
 from uuid import UUID
 
 from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
@@ -41,7 +42,10 @@ class MarkdownParentChildChunker(IMarkdownChunker):
         document_id: UUID,
         document_name: str,
         markdown_text: str,
+        source_type: Any = None,
+        ingested_at: float | None = None,
     ) -> DocumentChunkCollection:
+
         clean_text = markdown_text.strip()
         if not clean_text:
             return DocumentChunkCollection(

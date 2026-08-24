@@ -135,3 +135,32 @@ Ninguém será submetido a tortura nem a tratamento desumano ou degradante.
         assert child.chunk_index == idx
         assert child.header_path == result.parents[0].header_path
         assert len(child.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_chunk_with_source_type_and_ingested_at() -> None:
+    from src.modules.knowledge.domain.value_objects.document_source_type import DocumentSourceType
+
+    chunker = StructureTolerantMarkdownChunker()
+    doc_id = uuid4()
+    text = "# Title\n\nParagraph content here."
+    t0 = 1787238000.0
+
+    collection = await chunker.chunk(
+        document_id=doc_id,
+        document_name="note.md",
+        markdown_text=text,
+        source_type=DocumentSourceType.AUDIO,
+        ingested_at=t0,
+    )
+
+    assert len(collection.parents) > 0
+    assert len(collection.children) > 0
+
+    for p in collection.parents:
+        assert p.metadata.get("source_type") == "audio"
+        assert p.metadata.get("ingested_at") == t0
+
+    for c in collection.children:
+        assert c.metadata.get("source_type") == "audio"
+        assert c.metadata.get("ingested_at") == t0
