@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 
@@ -7,6 +8,29 @@ export interface MarkdownRendererProps {
   content: string;
   className?: string;
 }
+
+const getNodeText = (node: React.ReactNode): string => {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getNodeText).join('');
+  if (React.isValidElement(node) && (node.props as { children?: React.ReactNode })?.children) {
+    return getNodeText((node.props as { children?: React.ReactNode }).children);
+  }
+  return '';
+};
+
+const getSlug = (node: React.ReactNode): string => {
+  const text = getNodeText(node);
+  return (
+    text
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/[-\s]+/g, '-') || 'section'
+  );
+};
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
@@ -18,24 +42,47 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
+          sub: ({ children }) => (
+            <sub className="text-[0.8em] font-normal leading-none text-zinc-300 align-sub">
+              {children}
+            </sub>
+          ),
+          sup: ({ children }) => (
+            <sup className="text-[0.8em] font-medium leading-none text-indigo-400 align-super">
+              {children}
+            </sup>
+          ),
           h1: ({ children }) => (
-            <h1 className="mt-5 mb-3 border-b border-zinc-800/80 pb-2 text-xl font-bold text-zinc-100 first:mt-0">
+            <h1
+              id={getSlug(children)}
+              className="mt-5 mb-3 border-b border-zinc-800/80 pb-2 text-xl font-bold text-zinc-100 first:mt-0 scroll-mt-20"
+            >
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mt-4 mb-2 text-lg font-semibold text-zinc-100 first:mt-0">
+            <h2
+              id={getSlug(children)}
+              className="mt-4 mb-2 text-lg font-semibold text-zinc-100 first:mt-0 scroll-mt-20"
+            >
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mt-3.5 mb-1.5 text-base font-medium text-zinc-200 first:mt-0">
+            <h3
+              id={getSlug(children)}
+              className="mt-3.5 mb-1.5 text-base font-medium text-zinc-200 first:mt-0 scroll-mt-20"
+            >
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className="mt-3 mb-1 text-sm font-medium text-zinc-300 first:mt-0">
+            <h4
+              id={getSlug(children)}
+              className="mt-3 mb-1 text-sm font-medium text-zinc-300 first:mt-0 scroll-mt-20"
+            >
               {children}
             </h4>
           ),
