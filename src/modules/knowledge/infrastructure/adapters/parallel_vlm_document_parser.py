@@ -289,8 +289,8 @@ class ParallelVlmDocumentParser(IDocumentParser):
                 cached_blocks: list[str] = []
                 for p in range(1, total_pages + 1):
                     p_content = await self._checkpoint_storage.get_page(kb_partition, doc_id, p)
-                    cached_blocks.append(f"<!-- PAGE {p} -->\n{p_content or ''}")
-                return "\n\n".join(cached_blocks)
+                    cached_blocks.append(p_content or "")
+                return self._normalize_markdown("\n\n".join(cached_blocks))
 
         # Passo 1: Descoberta Estrutural (Synthetic ToC com Checkpoints)
         toc = None
@@ -359,6 +359,6 @@ class ParallelVlmDocumentParser(IDocumentParser):
         # Concatenação e montagem final em ordem estritamente crescente
         output_blocks: list[str] = []
         for page_num in range(1, total_pages + 1):
-            output_blocks.append(f"<!-- PAGE {page_num} -->\n{page_results.get(page_num, '')}")
+            output_blocks.append(page_results.get(page_num, ""))
 
-        return "\n\n".join(output_blocks)
+        return self._normalize_markdown("\n\n".join(output_blocks))

@@ -102,8 +102,8 @@ async def test_parallel_vlm_ocr_success(
 
     assert "## 1. Introduction" in markdown
     assert "## 2. Methods" in markdown
-    assert "<!-- PAGE 1 -->" in markdown
-    assert "<!-- PAGE 2 -->" in markdown
+    assert "<!-- PAGE 1 -->" not in markdown
+    assert "<!-- PAGE 2 -->" not in markdown
     assert mock_toc_extractor.extract_toc.called
 
 
