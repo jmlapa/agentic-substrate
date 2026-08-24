@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-24
+
+### Added
+- **Extrator Ontológico Direto & Suíte de Avaliação de Modelos (Marco 1.20 / ADR-0010)**:
+  - **`DirectOpenRouterGraphExtractor`**:
+    - Implementação de alta velocidade de `IGraphExtractor` com chamadas diretas de completion via OpenRouter (`response_format: {"type": "json_object"}`).
+    - Eliminação do overhead de frameworks agênticos (`PydanticAI`) e injeção de prompts inchados.
+    - Filtro ativo de integridade referencial: descarte de arestas órfãs antes da persistência no grafo.
+    - Normalização polimórfica resiliente via validadores Pydantic v2.
+  - **Suíte de Benchmark & Avaliação (`scripts/eval_graph_extractors.py`)**:
+    - Cenários de teste automatizados em 3 níveis de complexidade (Baixa, Média e Alta).
+    - Medição empírica de latência (ms), integridade referencial de arestas (%) e aderência ao schema (%).
+  - **Documentação de Arquitetura & Decisões**:
+    - Criação do [ADR-0010: Lean 7B/8B Structured Extractor](file:///Users/insider/personal/agentic-substrate/docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md).
+    - Criação de [SPEC-lean-7b-direct-openrouter-structured-extractor.md](file:///Users/insider/personal/agentic-substrate/SPEC-lean-7b-direct-openrouter-structured-extractor.md).
+    - Registro do estudo comparativo em [docs/ideas/lean-7b-ontology-extractor.md](file:///Users/insider/personal/agentic-substrate/docs/ideas/lean-7b-ontology-extractor.md).
+
+### Changed
+- **Eleição do Modelo Padrão de Extração**:
+  - `OPENROUTER_GRAPH_MODEL_NAME` alterado de `google/gemma-4-26b-a4b-it` para `meta-llama/llama-3.1-8b-instruct`.
+  - Injeção do `DirectOpenRouterGraphExtractor` no `AppContainer` (`src/api_gateway/container.py`).
+  - Redução de latência de extração por chunk em até 30x (de ~15s para ~0.5s).
+
 ## [0.5.1] - 2026-08-24
 
 ### Added
