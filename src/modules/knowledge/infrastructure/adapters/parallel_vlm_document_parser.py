@@ -17,6 +17,9 @@ from src.modules.knowledge.domain.interfaces.i_document_parser import (
 from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
     ISyntheticTocExtractor,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
     PageCheckpointStorage,
 )
@@ -241,16 +244,7 @@ class ParallelVlmDocumentParser(IDocumentParser):
                         {"role": "user", "content": user_content},
                     ],
                     temperature=0.0,
-                    extra_body={
-                        "provider": {
-                            "sort": "throughput",
-                            "allow_fallbacks": True,
-                        },
-                        "reasoning": {
-                            "effort": "none",
-                            "exclude": True,
-                        },
-                    },
+                    extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
                 )
                 page_md = str(response.choices[0].message.content or "").strip()
 

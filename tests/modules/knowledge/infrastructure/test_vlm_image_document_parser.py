@@ -87,3 +87,6 @@ async def test_vlm_image_parser_prompt_enforces_image_language() -> None:
         payload = call_kwargs["json"]
         text_prompt = payload["messages"][0]["content"][0]["text"]
         assert "mesmo idioma" in text_prompt
+        assert payload.get("provider", {}).get("sort") == "throughput"
+        assert payload.get("provider", {}).get("allow_fallbacks") is True
+        assert payload.get("reasoning", {}).get("effort") == "none"

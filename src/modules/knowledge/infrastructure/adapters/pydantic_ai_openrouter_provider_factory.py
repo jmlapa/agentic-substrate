@@ -11,6 +11,9 @@ from src.kernel.infrastructure.async_token_bucket_limiter import (
 from src.kernel.infrastructure.rate_limited_async_transport import (
     RateLimitedAsyncTransport,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 
 
 class PydanticAiOpenRouterProviderFactory:
@@ -33,14 +36,15 @@ class PydanticAiOpenRouterProviderFactory:
         transport = RateLimitedAsyncTransport(rate_limiter=limiter)
         http_client = httpx.AsyncClient(transport=transport, timeout=timeout)
 
+        headers = OpenRouterProviderDefaults.get_headers(
+            app_referer=app_referer,
+            app_title=app_title,
+        )
         custom_openai_client = AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
             http_client=cast(Any, http_client),
-            default_headers={
-                "HTTP-Referer": app_referer,
-                "X-Title": app_title,
-            },
+            default_headers=headers,
         )
 
         provider = OpenAIProvider(openai_client=custom_openai_client)

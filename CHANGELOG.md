@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-24
+
+### Added
+- **Configuração Centralizada de Provedor OpenRouter (`OpenRouterProviderDefaults`)**:
+  - Centralização de políticas de roteamento com priorização estrita de `sort: "throughput"`, `allow_fallbacks: True` e supressão de raciocínio não-estruturado (`reasoning: {effort: "none", exclude: True}`).
+  - Métodos utilitários para injeção de `extra_body` em clientes OpenAI/AsyncOpenAI e cabeçalhos governados (`HTTP-Referer` e `X-Title`).
+
+### Changed
+- **Padronização Global de Throughput em Chamadas OpenRouter**:
+  - `DirectOpenRouterGraphExtractor`: Injeção de `extra_body` com throughput routing na extração direta de grafos.
+  - `ParallelVlmDocumentParser` & `QwenSyntheticTocExtractor`: Migração das diretivas inline para `OpenRouterProviderDefaults`.
+  - `OpenRouterRagSynthesizer` & `VlmImageDocumentParser`: Headers e payload padronizados via `OpenRouterProviderDefaults`.
+  - `OpenRouterClientFactory` & `PydanticAiOpenRouterProviderFactory`: Reutilização centralizada dos cabeçalhos canônicos e atalho `get_throughput_extra_body()`.
+
 ## [0.6.0] - 2026-08-24
 
 ### Added

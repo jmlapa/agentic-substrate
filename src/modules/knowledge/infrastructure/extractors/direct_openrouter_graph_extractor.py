@@ -21,6 +21,9 @@ from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
 from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory import (
     OpenRouterClientFactory,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
     StructuredPydanticGraphExtractor,
 )
@@ -223,6 +226,7 @@ class DirectOpenRouterGraphExtractor(IGraphExtractor):
                     ],
                     temperature=self._temperature,
                     response_format={"type": "json_object"},
+                    extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
                 )
 
                 choice = response.choices[0]

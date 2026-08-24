@@ -1,10 +1,15 @@
 from typing import Any
 
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
+
 
 class OpenRouterClientFactory:
     """
     Factory para instanciação de cliente OpenAI compatível com OpenRouter.
-    Configura headers padrão como HTTP-Referer e X-Title para ranking e governança.
+    Configura headers padrão como HTTP-Referer e X-Title para ranking e governança
+    e disponibiliza configurações padronizadas de throughput.
     """
 
     @staticmethod
@@ -35,13 +40,14 @@ class OpenRouterClientFactory:
         try:
             from openai import AsyncOpenAI
 
+            headers = OpenRouterProviderDefaults.get_headers(
+                app_referer=app_referer,
+                app_title=app_title,
+            )
             return AsyncOpenAI(
                 api_key=api_key.strip(),
                 base_url=base_url,
-                default_headers={
-                    "HTTP-Referer": app_referer,
-                    "X-Title": app_title,
-                },
+                default_headers=headers,
             )
         except ImportError:
             return None
@@ -59,13 +65,19 @@ class OpenRouterClientFactory:
         try:
             from openai import OpenAI
 
+            headers = OpenRouterProviderDefaults.get_headers(
+                app_referer=app_referer,
+                app_title=app_title,
+            )
             return OpenAI(
                 api_key=api_key.strip(),
                 base_url=base_url,
-                default_headers={
-                    "HTTP-Referer": app_referer,
-                    "X-Title": app_title,
-                },
+                default_headers=headers,
             )
         except ImportError:
             return None
+
+    @staticmethod
+    def get_throughput_extra_body() -> dict[str, Any]:
+        """Atalho de conveniência para obter o extra_body de throughput do provedor OpenRouter."""
+        return OpenRouterProviderDefaults.get_throughput_extra_body()

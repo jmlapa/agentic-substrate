@@ -15,6 +15,9 @@ except ImportError:
 
 
 from src.modules.knowledge.domain.interfaces.i_document_parser import IDocumentParser
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +99,14 @@ class VlmImageDocumentParser(IDocumentParser):
             "anotação, preserve a ordem e os interlocutores identificáveis."
         )
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "HTTP-Referer": "https://github.com/agentic-substrate",
-            "X-Title": "Agentic Substrate VLM Image Parser",
-        }
+        headers = OpenRouterProviderDefaults.get_headers(
+            app_referer="https://github.com/agentic-substrate",
+            app_title="Agentic Substrate VLM Image Parser",
+            api_key=self._api_key,
+        )
+        headers["Content-Type"] = "application/json"
 
+        extra_body = OpenRouterProviderDefaults.get_throughput_extra_body()
         payload = {
             "model": self._model,
             "messages": [
@@ -114,6 +119,7 @@ class VlmImageDocumentParser(IDocumentParser):
                 }
             ],
             "temperature": 0.1,
+            **extra_body,
         }
 
         try:

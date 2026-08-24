@@ -78,6 +78,9 @@ async def test_openrouter_rag_synthesizer_success() -> None:
     payload = kwargs["json"]
     assert payload["model"] == "google/gemma-4-26b-a4b-it"
     assert payload["temperature"] == 0.1
+    assert payload["provider"]["sort"] == "throughput"
+    assert payload["provider"]["allow_fallbacks"] is True
+    assert payload["reasoning"]["effort"] == "none"
     user_prompt = payload["messages"][1]["content"]
     assert '<evidence id="chunk-123"' in user_prompt
     assert 'document="manual_seguranca.pdf"' in user_prompt

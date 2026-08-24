@@ -19,6 +19,9 @@ from src.modules.knowledge.domain.value_objects.hierarchical_toc_item import (
 from src.modules.knowledge.domain.value_objects.toc_batch_state import (
     TocBatchState,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
     PdfPageRenderer,
 )
@@ -188,16 +191,7 @@ class QwenSyntheticTocExtractor(ISyntheticTocExtractor):
                     {"role": "user", "content": content_payload},
                 ],
                 temperature=0.0,
-                extra_body={
-                    "provider": {
-                        "sort": "throughput",
-                        "allow_fallbacks": True,
-                    },
-                    "reasoning": {
-                        "effort": "none",
-                        "exclude": True,
-                    },
-                },
+                extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
             )
 
             raw_response = response.choices[0].message.content or ""

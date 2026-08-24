@@ -112,6 +112,12 @@ async def test_direct_extractor_successful_json_completion(
     kb_id = uuid4()
     graph = await extractor.extract_graph("O STF editou a Lei 8.112.", sample_ontology, kb_id)
 
+    mock_client.chat.completions.create.assert_called_once()
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert "extra_body" in call_kwargs
+    assert call_kwargs["extra_body"]["provider"]["sort"] == "throughput"
+    assert call_kwargs["extra_body"]["provider"]["allow_fallbacks"] is True
+
     assert len(graph.nodes) == 2
     assert len(graph.edges) == 1
     assert graph.nodes[0].id == "stf"

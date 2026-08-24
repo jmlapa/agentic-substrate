@@ -9,6 +9,9 @@ from src.modules.knowledge.domain.interfaces.i_llm_synthesis_service import (
 from src.modules.knowledge.domain.value_objects.hybrid_search_result import (
     HybridSearchResult,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_provider_defaults import (
+    OpenRouterProviderDefaults,
+)
 
 
 class OpenRouterRagSynthesizer(ILlmSynthesisService):
@@ -117,24 +120,19 @@ class OpenRouterRagSynthesizer(ILlmSynthesisService):
         )
 
         url = f"{self._base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "HTTP-Referer": self._app_referer,
-            "X-Title": self._app_title,
-            "Content-Type": "application/json",
-        }
+        headers = OpenRouterProviderDefaults.get_headers(
+            app_referer=self._app_referer,
+            app_title=self._app_title,
+            api_key=self._api_key,
+        )
+        headers["Content-Type"] = "application/json"
+
+        extra_body = OpenRouterProviderDefaults.get_throughput_extra_body()
         payload: dict[str, Any] = {
             "model": self._model_name,
             "temperature": self._temperature,
             "max_tokens": self._max_tokens,
-            "provider": {
-                "sort": "throughput",
-                "allow_fallbacks": True,
-            },
-            "reasoning": {
-                "effort": "none",
-                "exclude": True,
-            },
+            **extra_body,
             "messages": [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_prompt},
