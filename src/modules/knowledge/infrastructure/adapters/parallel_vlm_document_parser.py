@@ -104,6 +104,24 @@ class ParallelVlmDocumentParser(IDocumentParser):
                 result.append(line)
         return "\n".join(result)
 
+    def _normalize_markdown(self, raw: str) -> str:
+        """Normalize raw multi-page OCR output into a continuous Markdown document.
+
+        Steps applied in order:
+        1. Remove ``<!-- PAGE N -->`` markers.
+        2. Remove ``<!-- [Erro …] -->`` error markers.
+        3. Collapse sequences of three or more consecutive newlines into two.
+        4. Deduplicate adjacent identical headings.
+        5. Strip leading/trailing whitespace.
+        """
+        text = _PAGE_MARKER_RE.sub("", raw)
+        text = _ERROR_MARKER_RE.sub("", text)
+        text = _EXCESS_NEWLINES_RE.sub("\n\n", text)
+        text = self._dedup_adjacent_headers(text)
+        return text.strip()
+
+
+
     def _infer_extension(self, file_name: str, content_type: str) -> str:
         ext = Path(file_name).suffix.lower()
         if ext:
@@ -120,6 +138,7 @@ class ParallelVlmDocumentParser(IDocumentParser):
             "application/json": ".json",
         }
         return mime_map.get(content_type.lower(), ".txt")
+
 
     def _convert_fast_path_sync(self, raw_bytes: bytes, file_extension: str) -> str:
         try:

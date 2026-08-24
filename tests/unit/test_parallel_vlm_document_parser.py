@@ -185,6 +185,74 @@ def test_dedup_ignores_non_adjacent() -> None:
     assert parser._dedup_adjacent_headers(input_md) == input_md
 
 
+def test_normalize_removes_page_markers() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "<!-- PAGE 1 -->\n\nContent of page one.\n\n<!-- PAGE 2 -->\n\nContent of page two."
+    result = parser._normalize_markdown(raw)
+    assert "<!-- PAGE" not in result
+    assert "Content of page one." in result
+    assert "Content of page two." in result
+
+
+def test_normalize_removes_error_markers() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "Good content.\n\n<!-- [Erro no OCR da Página 3: timeout] -->\n\nMore content."
+    result = parser._normalize_markdown(raw)
+    assert "<!-- [Erro" not in result
+    assert "Good content." in result
+    assert "More content." in result
+
+
+def test_normalize_collapses_excess_newlines() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "Paragraph one.\n\n\n\n\nParagraph two."
+    result = parser._normalize_markdown(raw)
+    assert "\n\n\n" not in result
+    assert "Paragraph one." in result
+    assert "Paragraph two." in result
+
+
+def test_normalize_deduplicates_adjacent_headings() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "<!-- PAGE 1 -->\n\n## Introduction\n\n<!-- PAGE 2 -->\n\n## Introduction\n\nActual content."
+    result = parser._normalize_markdown(raw)
+    assert result.count("## Introduction") == 1
+    assert "Actual content." in result
+
+
+def test_normalize_dedup_is_case_insensitive() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "## INTRODUCTION\n\n## Introduction\n\nContent."
+    result = parser._normalize_markdown(raw)
+    assert result.count("INTRODUCTION") + result.count("Introduction") == 1
+    assert "Content." in result
+
+
+def test_normalize_preserves_table_rows() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = (
+        "<!-- PAGE 1 -->\n\n"
+        "## Results\n\n"
+        "| Col A | Col B |\n"
+        "|-------|-------|\n"
+        "| val1  | val2  |\n\n"
+        "<!-- PAGE 2 -->\n\n"
+        "| val3  | val4  |"
+    )
+    result = parser._normalize_markdown(raw)
+    assert "| Col A | Col B |" in result
+    assert "| val3  | val4  |" in result
+    assert "<!-- PAGE" not in result
+
+
+def test_normalize_strips_leading_trailing_whitespace() -> None:
+    parser = ParallelVlmDocumentParser()
+    raw = "\n\n<!-- PAGE 1 -->\n\nContent here.\n\n"
+    result = parser._normalize_markdown(raw)
+    assert result == result.strip()
+    assert result.startswith("Content here.")
+
+
 @pytest.mark.asyncio
 async def test_parallel_vlm_parser_monotonic_progress_callback(
     sample_pdf_bytes: bytes, mock_toc: SyntheticDocumentToc
