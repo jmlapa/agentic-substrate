@@ -12,6 +12,8 @@ class HybridSearchResult(ValueObject):
     relevance_score: float
     document_id: str = ""
     document_name: str = ""
+    source_type: str = "document"
+    ingested_at: float | None = None
     retrieval_source: str = "vector_match"
     prev_chunk_id: str | None = None
     next_chunk_id: str | None = None

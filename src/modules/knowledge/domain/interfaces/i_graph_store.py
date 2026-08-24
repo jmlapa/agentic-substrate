@@ -39,6 +39,10 @@ class IGraphStore(Protocol):
         query_embedding: list[float],
         top_k: int = 5,
         candidate_k: int = 50,
+        source_types: list[str] | None = None,
+        time_from: float | None = None,
+        time_to: float | None = None,
+        document_id: UUID | None = None,
     ) -> list[HybridSearchResult]: ...
 
     async def delete_document_subgraph(self, kb_id: UUID, document_id: UUID) -> None: ...

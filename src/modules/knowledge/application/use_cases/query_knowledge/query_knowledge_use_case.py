@@ -84,7 +84,14 @@ class QueryKnowledgeUseCase:
         query_vec = await self._embedding_service.embed_query(request.query)
 
         raw_results = await self._graph_store.query_hybrid(
-            request.kb_id, query_vec, request.top_k, candidate_k
+            kb_id=request.kb_id,
+            query_embedding=query_vec,
+            top_k=request.top_k,
+            candidate_k=candidate_k,
+            source_types=request.source_types,
+            time_from=request.time_from,
+            time_to=request.time_to,
+            document_id=request.document_id,
         )
 
         if not raw_results:
@@ -105,6 +112,9 @@ class QueryKnowledgeUseCase:
                         "token_budget_consumed": 0,
                         "budget_truncated": False,
                         "results_count": 0,
+                        "source_types": request.source_types,
+                        "time_from": request.time_from,
+                        "time_to": request.time_to,
                     },
                 )
             )
@@ -122,6 +132,9 @@ class QueryKnowledgeUseCase:
             "budget_truncated": is_truncated,
             "results_count": len(budgeted_results),
             "retrieval_sources": [r.retrieval_source for r in budgeted_results],
+            "source_types": request.source_types,
+            "time_from": request.time_from,
+            "time_to": request.time_to,
         }
 
         if request.mode == "retrieve":

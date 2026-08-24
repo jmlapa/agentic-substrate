@@ -38,15 +38,27 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         self, kb_id: UUID, dimension: int = 768, similarity_function: str = "cosine"
     ) -> None:
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
-        query = (
+        vector_query = (
             f"CREATE VECTOR INDEX FOR (c:ChildChunk) ON (c.embedding) "
             f"OPTIONS {{dimension: {dimension}, similarityFunction: '{similarity_function}'}}"
         )
         try:
-            graph_handle.query(query)
+            graph_handle.query(vector_query)
         except Exception:
-            # Ignore if index already exists
             pass
+
+        # Cria índices de range para queries filtradas de alta performance
+        range_queries = [
+            "CREATE INDEX FOR (p:ParentChunk) ON (p.source_type)",
+            "CREATE INDEX FOR (p:ParentChunk) ON (p.ingested_at)",
+            "CREATE INDEX FOR (c:ChildChunk) ON (c.source_type)",
+            "CREATE INDEX FOR (c:ChildChunk) ON (c.ingested_at)",
+        ]
+        for q in range_queries:
+            try:
+                graph_handle.query(q)
+            except Exception:
+                pass
 
     def _store_graph_sync(self, kb_id: UUID, graph: ExtractedGraph) -> tuple[int, int]:
         if not graph.nodes and not graph.edges:
@@ -109,11 +121,14 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
 
         # 2. Merge Parent Chunks & HAS_PARENT edges
         for parent in document.parents:
+            source_type = parent.metadata.get("source_type", "document")
+            ingested_at = parent.metadata.get("ingested_at")
             p_query = (
                 "MATCH (d:Document {id: $doc_id}) "
                 "MERGE (p:ParentChunk {id: $parent_id}) "
                 "SET p.kb_id = $kb_id, p.document_id = $doc_id, "
-                "p.header_path = $header_path, p.content = $content, p.token_count = $token_count "
+                "p.header_path = $header_path, p.content = $content, p.token_count = $token_count, "
+                "p.source_type = $source_type, p.ingested_at = $ingested_at "
                 "MERGE (d)-[r:HAS_PARENT]->(p)"
             )
             graph_handle.query(
@@ -125,18 +140,23 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
                     "header_path": parent.header_path,
                     "content": parent.content,
                     "token_count": parent.token_count,
+                    "source_type": source_type,
+                    "ingested_at": ingested_at,
                 },
             )
             edges_count += 1
 
         # 3. Merge Child Chunks & CONTAINS_CHILD edges
         for child in document.children:
+            child_source_type = child.metadata.get("source_type", "document")
+            child_ingested_at = child.metadata.get("ingested_at")
             c_query = (
                 "MATCH (p:ParentChunk {id: $parent_id}) "
                 "MERGE (c:ChildChunk {id: $child_id}) "
                 "SET c.kb_id = $kb_id, c.parent_chunk_id = $parent_id, "
                 "c.chunk_index = $chunk_index, c.header_path = $header_path, "
-                "c.content = $content, c.embedding = vecf32($embedding) "
+                "c.content = $content, c.embedding = vecf32($embedding), "
+                "c.source_type = $source_type, c.ingested_at = $ingested_at "
                 "MERGE (p)-[r:CONTAINS_CHILD]->(c)"
             )
             graph_handle.query(
@@ -149,6 +169,8 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
                     "header_path": child.header_path,
                     "content": child.content,
                     "embedding": child.embedding or [],
+                    "source_type": child_source_type,
+                    "ingested_at": child_ingested_at,
                 },
             )
             edges_count += 1
@@ -234,16 +256,44 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         query_embedding: list[float],
         top_k: int = 5,
         candidate_k: int = 50,
+        source_types: list[str] | None = None,
+        time_from: float | None = None,
+        time_to: float | None = None,
+        document_id: UUID | None = None,
     ) -> list[HybridSearchResult]:
         if not query_embedding:
             return []
 
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
+
+        filter_clauses: list[str] = []
+        params: dict[str, Any] = {
+            "candidate_k": candidate_k,
+            "top_k": top_k,
+            "query_vec": query_embedding,
+        }
+
+        if document_id is not None:
+            filter_clauses.append("p_seed.document_id = $document_id")
+            params["document_id"] = str(document_id)
+        if source_types:
+            filter_clauses.append("p_seed.source_type IN $source_types")
+            params["source_types"] = source_types
+        if time_from is not None:
+            filter_clauses.append("p_seed.ingested_at >= $time_from")
+            params["time_from"] = time_from
+        if time_to is not None:
+            filter_clauses.append("p_seed.ingested_at <= $time_to")
+            params["time_to"] = time_to
+
+        where_filter = f"WHERE {' AND '.join(filter_clauses)} " if filter_clauses else ""
+
         query = (
             "CALL db.idx.vector.queryNodes('ChildChunk', 'embedding', "
             "$candidate_k, vecf32($query_vec)) "
             "YIELD node AS child, score AS vec_score "
             "MATCH (p_seed:ParentChunk)-[:CONTAINS_CHILD]->(child) "
+            f"{where_filter}"
             "WITH p_seed, max(1.0 - vec_score) AS seed_score "
             "ORDER BY seed_score DESC "
             "OPTIONAL MATCH (p_seed)-[:MENTIONS]->(e)<-[:MENTIONS]-(p_neighbor:ParentChunk) "
@@ -285,6 +335,8 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             "       prev_p.id AS prev_chunk_id, "
             "       next_p.id AS next_chunk_id, "
             "       is_seed AS is_seed, "
+            "       coalesce(p.source_type, 'document') AS source_type, "
+            "       p.ingested_at AS ingested_at, "
             "       collect(DISTINCT CASE WHEN e1 IS NOT NULL AND r IS NOT NULL AND "
             "e2 IS NOT NULL THEN (coalesce(e1.name, e1.id, '') + ' ' + type(r) + ' ' + "
             "coalesce(e2.name, e2.id, '')) ELSE null END)[0..5] AS related_triples, "
@@ -294,21 +346,14 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         )
 
         try:
-            res = graph_handle.query(
-                query,
-                {
-                    "candidate_k": candidate_k,
-                    "top_k": top_k,
-                    "query_vec": query_embedding,
-                },
-            )
+            res = graph_handle.query(query, params)
         except Exception as e:
             logger.error("Failed to query hybrid search in FalkorDB: %s", e, exc_info=True)
             return []
 
         results: list[HybridSearchResult] = []
         for row in res.result_set:
-            if len(row) >= 11:
+            if len(row) >= 13:
                 parent_id = str(row[0])
                 doc_id = str(row[1]) if row[1] is not None else ""
                 doc_name = str(row[2]) if row[2] is not None else ""
@@ -318,10 +363,11 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
                 prev_id = str(row[6]) if row[6] is not None else None
                 next_id = str(row[7]) if row[7] is not None else None
                 is_seed = bool(row[8]) if row[8] is not None else True
-                raw_triples = row[9] if isinstance(row[9], list) else []
-                raw_entities = row[10] if isinstance(row[10], list) else []
+                p_source_type = str(row[9]) if row[9] is not None else "document"
+                p_ingested_at = float(row[10]) if row[10] is not None else None
+                raw_triples = row[11] if isinstance(row[11], list) else []
+                raw_entities = row[12] if isinstance(row[12], list) else []
 
-                # Filter clean triples and entities
                 triples: list[str] = [
                     str(t)
                     for t in raw_triples
@@ -336,6 +382,8 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
                         parent_chunk_id=parent_id,
                         document_id=doc_id,
                         document_name=doc_name,
+                        source_type=p_source_type,
+                        ingested_at=p_ingested_at,
                         header_path=header_path,
                         parent_content=parent_content,
                         relevance_score=relevance_score,
@@ -379,9 +427,21 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         query_embedding: list[float],
         top_k: int = 5,
         candidate_k: int = 50,
+        source_types: list[str] | None = None,
+        time_from: float | None = None,
+        time_to: float | None = None,
+        document_id: UUID | None = None,
     ) -> list[HybridSearchResult]:
         return await asyncio.to_thread(
-            self._query_hybrid_sync, kb_id, query_embedding, top_k, candidate_k
+            self._query_hybrid_sync,
+            kb_id,
+            query_embedding,
+            top_k,
+            candidate_k,
+            source_types,
+            time_from,
+            time_to,
+            document_id,
         )
 
     def _delete_document_subgraph_sync(self, kb_id: UUID, document_id: UUID) -> None:

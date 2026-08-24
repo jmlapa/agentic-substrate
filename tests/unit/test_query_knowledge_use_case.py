@@ -83,7 +83,16 @@ async def test_query_knowledge_use_case_success() -> None:
     assert "Relevant content about security." in result.value.answer
     mock_embedding_service.embed_query.assert_awaited_once_with("What are the security guidelines?")
     # Candidate oversampling: candidate_k = max(3 * 4, 50) = 50
-    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2, 0.3], 3, 50)
+    mock_graph_store.query_hybrid.assert_awaited_once_with(
+        kb_id=kb_id,
+        query_embedding=[0.1, 0.2, 0.3],
+        top_k=3,
+        candidate_k=50,
+        source_types=None,
+        time_from=None,
+        time_to=None,
+        document_id=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -130,7 +139,17 @@ async def test_query_knowledge_use_case_retrieve_mode() -> None:
     assert result.value.retrieval_trace["mode"] == "retrieve"
     assert result.value.retrieval_trace["candidate_k"] == 50  # max(1 * 4, 50) = 50
     mock_embedding_service.embed_query.assert_awaited_once_with("Raw query")
-    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.5, 0.5], 1, 50)
+    mock_graph_store.query_hybrid.assert_awaited_once_with(
+        kb_id=kb_id,
+        query_embedding=[0.5, 0.5],
+        top_k=1,
+        candidate_k=50,
+        source_types=None,
+        time_from=None,
+        time_to=None,
+        document_id=None,
+    )
+
     # Ensure synthesis_service was NOT invoked
     mock_synthesizer.synthesize_answer.assert_not_awaited()
 
@@ -415,7 +434,16 @@ async def test_query_knowledge_use_case_uses_maximum_defaults() -> None:
     assert result.value.retrieval_trace["top_k"] == 20
     assert result.value.retrieval_trace["token_budget_limit"] == 32000
     assert result.value.retrieval_trace["candidate_k"] == 80  # max(20 * 4, 50) = 80
-    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2], 20, 80)
+    mock_graph_store.query_hybrid.assert_awaited_once_with(
+        kb_id=kb_id,
+        query_embedding=[0.1, 0.2],
+        top_k=20,
+        candidate_k=80,
+        source_types=None,
+        time_from=None,
+        time_to=None,
+        document_id=None,
+    )
     mock_embedding_service.embed_query.assert_awaited_once_with("Check default max parameters")
 
 
@@ -442,5 +470,52 @@ async def test_query_knowledge_use_case_candidate_k_minimum_oversampling() -> No
     assert isinstance(result, Ok)
     assert result.value.retrieval_trace["top_k"] == 1
     assert result.value.retrieval_trace["candidate_k"] == 50  # max(1 * 4, 50) = 50
-    mock_graph_store.query_hybrid.assert_awaited_once_with(kb_id, [0.1, 0.2], 1, 50)
+    mock_graph_store.query_hybrid.assert_awaited_once_with(
+        kb_id=kb_id,
+        query_embedding=[0.1, 0.2],
+        top_k=1,
+        candidate_k=50,
+        source_types=None,
+        time_from=None,
+        time_to=None,
+        document_id=None,
+    )
     mock_embedding_service.embed_query.assert_awaited_once_with("Minimum oversampling test")
+
+
+@pytest.mark.asyncio
+async def test_query_knowledge_use_case_document_id_scoping() -> None:
+    mock_graph_store = AsyncMock(spec=IGraphStore)
+    mock_embedding_service = AsyncMock(spec=IEmbeddingService)
+    synthesizer = InMemoryRagSynthesizer()
+
+    kb_id = uuid4()
+    doc_id = uuid4()
+    mock_embedding_service.embed_query.return_value = [0.4, 0.5]
+    mock_graph_store.query_hybrid.return_value = []
+
+    use_case = QueryKnowledgeUseCase(
+        graph_store=mock_graph_store,
+        embedding_service=mock_embedding_service,
+        synthesis_service=synthesizer,
+    )
+
+    request = QueryKnowledgeRequest(
+        kb_id=kb_id,
+        document_id=doc_id,
+        query="Scoped query test",
+        top_k=5,
+    )
+    result = await use_case.execute(request)
+
+    assert isinstance(result, Ok)
+    mock_graph_store.query_hybrid.assert_awaited_once_with(
+        kb_id=kb_id,
+        query_embedding=[0.4, 0.5],
+        top_k=5,
+        candidate_k=50,
+        source_types=None,
+        time_from=None,
+        time_to=None,
+        document_id=doc_id,
+    )

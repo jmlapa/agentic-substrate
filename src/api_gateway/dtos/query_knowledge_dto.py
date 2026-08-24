@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -17,4 +19,20 @@ class QueryKnowledgeDTO(BaseModel):
     include_graph_triples: bool = Field(
         default=True,
         description="Inclui triplas relacionais estruturadas do subgrafo",
+    )
+    source_types: list[str] | None = Field(
+        default=None,
+        description="Filtro opcional por origens universais ('document', 'image', 'audio')",
+    )
+    time_from: float | None = Field(
+        default=None,
+        description="Timestamp epoch UTC inicial para filtro temporal",
+    )
+    time_to: float | None = Field(
+        default=None,
+        description="Timestamp epoch UTC final para filtro temporal",
+    )
+    document_id: UUID | None = Field(
+        default=None,
+        description="Filtro opcional para restringir a busca ao escopo de um documento específico",
     )

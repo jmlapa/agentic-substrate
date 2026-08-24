@@ -73,11 +73,27 @@ class InMemoryGraphStore(IGraphStore):
         query_embedding: list[float],
         top_k: int = 5,
         candidate_k: int = 50,
+        source_types: list[str] | None = None,
+        time_from: float | None = None,
+        time_to: float | None = None,
+        document_id: UUID | None = None,
     ) -> list[HybridSearchResult]:
         results: list[HybridSearchResult] = []
         docs = self._structural_docs.get(kb_id, [])
         for doc in docs:
+            if document_id is not None and doc.document_id != document_id:
+                continue
             for idx, parent in enumerate(doc.parents):
+                p_source = parent.metadata.get("source_type", "document")
+                p_ingested = parent.metadata.get("ingested_at")
+
+                if source_types and p_source not in source_types:
+                    continue
+                if time_from is not None and (p_ingested is None or p_ingested < time_from):
+                    continue
+                if time_to is not None and (p_ingested is None or p_ingested > time_to):
+                    continue
+
                 entities = self._parent_mentions[kb_id].get(parent.id, [])
                 prev_id = doc.parents[idx - 1].id if idx > 0 else None
                 next_id = doc.parents[idx + 1].id if idx < len(doc.parents) - 1 else None
@@ -86,6 +102,8 @@ class InMemoryGraphStore(IGraphStore):
                         parent_chunk_id=parent.id,
                         document_id=str(doc.document_id),
                         document_name=doc.document_name,
+                        source_type=p_source,
+                        ingested_at=p_ingested,
                         header_path=parent.header_path,
                         parent_content=parent.content,
                         relevance_score=0.92,

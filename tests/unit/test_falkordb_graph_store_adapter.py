@@ -80,8 +80,9 @@ async def test_falkordb_graph_store_ensure_vector_index() -> None:
 
     assert mock_client.select_graph.called
     assert mock_graph_handle.query.called
-    query_str = mock_graph_handle.query.call_args[0][0]
-    assert "CREATE VECTOR INDEX FOR (c:ChildChunk)" in query_str
+    query_strs = [call[0][0] for call in mock_graph_handle.query.call_args_list]
+    assert any("CREATE VECTOR INDEX FOR (c:ChildChunk)" in q for q in query_strs)
+    assert any("CREATE INDEX FOR (p:ParentChunk) ON (p.source_type)" in q for q in query_strs)
 
 
 @pytest.mark.asyncio
@@ -193,10 +194,13 @@ async def test_falkordb_graph_store_query_hybrid() -> None:
             "p0",
             "p2",
             True,
+            "document",
+            1787238000.0,
             ["Zone NONE REGULA Access", "Lei 14.133 REGULA Contratos"],
             [{"type": "Law", "properties": {"name": "LGPD"}}],
         ]
     ]
+
     mock_graph_handle.query.return_value = mock_res
     mock_client.select_graph.return_value = mock_graph_handle
 
