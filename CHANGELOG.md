@@ -5,7 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-24
+
+### Added
+- **Normalizador de Continuidade em Markdown & Deduplicação de Cabeçalhos no VLM OCR (Marco 1.19)**:
+  - **Deduplicação Determinística de Cabeçalhos Adjacentes (`_dedup_adjacent_headers`)**:
+    - Detecção e eliminação de cabeçalhos markdown repetidos entre transições de página (insensível a maiúsculas/minúsculas e espaçamentos).
+    - Preservação estrita de cabeçalhos legítimos não-adjacentes e conteúdos separados por parágrafos.
+  - **Orquestração de Limpeza e Normalização (`_normalize_markdown`)**:
+    - Remoção automática de marcadores de página (`<!-- PAGE N -->`) e blocos de erro (`<!-- [Erro no OCR...] -->`).
+    - Colapso de quebras de linha consecutivas redundantes (`\n{3,}` $\rightarrow$ `\n\n`) e corte de espaços residuais nas bordas.
+  - **Instruções de Continuidade Estrutural no System Prompt do OCR**:
+    - *Continuidade de Hierarquia*: Não repetição de títulos de seções já ativas no topo da página subsequente.
+    - *Continuidade de Texto*: Continuação direta de parágrafos entre páginas sem inserção de quebras artificiais.
+    - *Tabelas Inter-Página*: Re-emissão dos cabeçalhos de colunas GFM para tabelas fragmentadas entre páginas.
+
+### Changed
+- **Pipeline de Saída do `ParallelVlmDocumentParser`**:
+  - Aplicação de `_normalize_markdown` nos dois pontos de saída (`fast-path` de cache com 100% de acerto e fluxo normal de OCR paralelo), garantindo geração de documentos markdown contínuos e sem marcadores artificiais.
+
+## [0.5.0] - 2026-08-23
+
+### Added
+- **Pipeline de Ingestion Multimodal & Filtros Semânticos/Temporais no GraphRAG (Marco 1.17)**:
+  - **Classificador e Value Object de Origem (`DocumentSourceType`)**:
+    - Classificação determinística estrita em 3 origens universais (`document`, `image`, `audio`).
+    - Suporte nativo a extensões e MIME types para documentos (`.md`, `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.csv`, `.html`, `.json`), imagens (`.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`, `.heif`) e áudios (`.mp3`, `.m4a`, `.ogg`, `.opus`, `.webm`, `.wav`, `.aac`, `.caf`, `.amr`, `.3gp`).
+  - **Parsers Multimodais Especializados**:
+    - `OpenRouterWhisperAudioDocumentParser`: Transcrição de áudio assíncrona multipart via OpenRouter Whisper Large v3 (`openai/whisper-large-v3`) com segmentação temporal e formatação Markdown estruturada (`## [MM:SS - MM:SS]`).
+    - `AudioTranscriptionFormatter`: Agrupamento resiliente de timestamps e falas com tolerância a pausas de oradores.
+    - `VlmImageDocumentParser`: Conversão em memória (JPEG/PNG/WebP/HEIC) via Pillow e extração OCR descritiva e estruturada via modelos VLM (`qwen/qwen-2.5-vl-72b-instruct` / `qwen/qwen3-vl-32b-instruct`).
+    - `CompositeDocumentParser`: Dispatcher polimórfico de `IDocumentParser` para roteamento determinístico baseado na extensão/MIME type.
+  - **Metadados Temporais e de Proveniência em Todo o Grafo**:
+    - Gravação atômica de `source_type` e `ingested_at` nos eventos de domínio (`DocumentAttachedEvent`), agregados (`KnowledgeBaseAggregate`) e nós Cypher (`ParentChunk`, `ChildChunk`).
+    - Criação de índices de range no FalkorDB: `CREATE INDEX FOR (p:ParentChunk) ON (p.source_type)` e `ON (p.ingested_at)`.
+  - **Filtros de Proveniência e Janela Temporal na Busca Híbrida & API**:
+    - Parâmetros `source_types: list[str] | None`, `time_from: float | None` e `time_to: float | None` propagados do DTO HTTP (`POST /api/v1/knowledge/bases/{kb_id}/query`) até a query Cypher híbrida no FalkorDB e no motor `InMemoryGraphStore`.
+    - Enriquecimento do `retrieval_trace` e dos resultados retornados (`HybridSearchResult`) com os metadados de proveniência e tempo.
+
 ## [0.4.0] - 2026-08-19
+
 
 ### Added
 - **Exclusão em Cascata de Knowledge Bases, Documentos e Ontologias**:
