@@ -1,3 +1,4 @@
+import time
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -29,6 +30,9 @@ from src.modules.knowledge.domain.events.knowledge_base_deleted_event import (
     KnowledgeBaseDeletedEvent,
 )
 from src.modules.knowledge.domain.ontology.ontology_schema import OntologySchema
+from src.modules.knowledge.domain.value_objects.document_source_type import (
+    DocumentSourceType,
+)
 from src.modules.knowledge.domain.value_objects.document_status import DocumentStatus
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
 from src.modules.knowledge.domain.value_objects.knowledge_base_status import (
@@ -73,9 +77,15 @@ class KnowledgeBaseAggregate(AggregateRoot):
         content_type: str,
         enable_ocr: bool = False,
         ocr_instructions: str | None = None,
+        source_type: DocumentSourceType | None = None,
+        ingested_at: float | None = None,
     ) -> UUID:
         doc_id = uuid4()
         storage_path = f"{self.storage_partition}/raw/{doc_id}-{file_name}"
+        resolved_source = source_type or DocumentSourceType.infer(
+            file_name=file_name, content_type=content_type
+        )
+        resolved_ingested_at = ingested_at if ingested_at is not None else time.time()
         self.record_event(
             DocumentAttachedEvent(
                 aggregate_id=self.id,
@@ -84,6 +94,8 @@ class KnowledgeBaseAggregate(AggregateRoot):
                 file_name=file_name,
                 content_type=content_type,
                 storage_path=storage_path,
+                source_type=resolved_source,
+                ingested_at=resolved_ingested_at,
                 enable_ocr=enable_ocr,
                 ocr_instructions=ocr_instructions,
             )
@@ -206,6 +218,8 @@ class KnowledgeBaseAggregate(AggregateRoot):
             "file_name": event.file_name,
             "content_type": event.content_type,
             "storage_path": event.storage_path,
+            "source_type": event.source_type,
+            "ingested_at": event.ingested_at,
             "status": DocumentStatus.PENDING_UPLOAD,
             "enable_ocr": event.enable_ocr,
             "ocr_instructions": event.ocr_instructions,
@@ -232,6 +246,7 @@ class KnowledgeBaseAggregate(AggregateRoot):
             self.documents[event.document_id]["status"] = DocumentStatus.CHUNKED
             self.documents[event.document_id]["total_parents"] = event.total_parents
             self.documents[event.document_id]["total_children"] = event.total_children
+            self.documents[event.document_id]["chunks_summary"] = event.chunks_summary or []
 
     def _apply_graph_extracted_from_document_event(
         self, event: GraphExtractedFromDocumentEvent

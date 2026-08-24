@@ -1,3 +1,9 @@
+from src.modules.knowledge.infrastructure.adapters.audio_transcription_formatter import (
+    AudioTranscriptionFormatter,
+)
+from src.modules.knowledge.infrastructure.adapters.composite_document_parser import (
+    CompositeDocumentParser,
+)
 from src.modules.knowledge.infrastructure.adapters.deepseek_rag_synthesizer import (
     DeepSeekRagSynthesizer,
 )
@@ -37,6 +43,9 @@ from src.modules.knowledge.infrastructure.adapters.openrouter_client_factory imp
 from src.modules.knowledge.infrastructure.adapters.openrouter_rag_synthesizer import (
     OpenRouterRagSynthesizer,
 )
+from src.modules.knowledge.infrastructure.adapters.openrouter_whisper_audio_document_parser import (
+    OpenRouterWhisperAudioDocumentParser,
+)
 from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage import (
     PageCheckpointStorage,
 )
@@ -64,8 +73,13 @@ from src.modules.knowledge.infrastructure.adapters.qwen_synthetic_toc_extractor 
 from src.modules.knowledge.infrastructure.adapters.toc_checkpoint_storage import (
     TocCheckpointStorage,
 )
+from src.modules.knowledge.infrastructure.adapters.vlm_image_document_parser import (
+    VlmImageDocumentParser,
+)
 
 __all__ = [
+    "AudioTranscriptionFormatter",
+    "CompositeDocumentParser",
     "DeepSeekRagSynthesizer",
     "FalkorDbGraphStoreAdapter",
     "GeminiEmbeddingAdapter",
@@ -79,6 +93,7 @@ __all__ = [
     "MarkItDownDocumentParser",
     "OpenRouterClientFactory",
     "OpenRouterRagSynthesizer",
+    "OpenRouterWhisperAudioDocumentParser",
     "PageCheckpointStorage",
     "ParallelVlmDocumentParser",
     "ParentGraphCheckpointStorage",
@@ -88,4 +103,5 @@ __all__ = [
     "PydanticAiOpenRouterProviderFactory",
     "QwenSyntheticTocExtractor",
     "TocCheckpointStorage",
+    "VlmImageDocumentParser",
 ]

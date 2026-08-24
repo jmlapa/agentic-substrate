@@ -9,6 +9,9 @@ from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.document_chunk_collection import (
     DocumentChunkCollection,
 )
+from src.modules.knowledge.domain.value_objects.document_source_type import (
+    DocumentSourceType,
+)
 from src.modules.knowledge.domain.value_objects.document_status import DocumentStatus
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
@@ -41,6 +44,7 @@ __all__ = [
     "CanonicalEntity",
     "ChildChunk",
     "DocumentChunkCollection",
+    "DocumentSourceType",
     "DocumentStatus",
     "ExtractedGraph",
     "GraphEdge",

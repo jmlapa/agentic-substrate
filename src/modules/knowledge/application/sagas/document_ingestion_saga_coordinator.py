@@ -200,6 +200,8 @@ class DocumentIngestionSagaCoordinator:
                     ]
                 )
 
+            ingested_at = doc_info.get("ingested_at")
+
             markdown_text = await self._parser.parse_to_markdown(
                 raw_bytes=raw_bytes,
                 file_name=file_name,
@@ -209,6 +211,7 @@ class DocumentIngestionSagaCoordinator:
                 doc_id=event.document_id,
                 kb_partition=kb.storage_partition,
                 progress_callback=_on_ocr_progress,
+                ingested_at=ingested_at,
             )
             md_path = f"{kb.storage_partition}/markdown/{event.document_id}.md"
             await self._storage.put_object(md_path, markdown_text.encode("utf-8"), "text/markdown")
@@ -247,11 +250,15 @@ class DocumentIngestionSagaCoordinator:
             md_text = md_bytes.decode("utf-8")
             doc_info = kb.documents.get(event.document_id, {})
             file_name = doc_info.get("file_name", "document.md")
+            source_type = doc_info.get("source_type")
+            ingested_at = doc_info.get("ingested_at")
 
             chunk_collection = await self._chunker.chunk(
                 document_id=event.document_id,
                 document_name=file_name,
                 markdown_text=md_text,
+                source_type=source_type,
+                ingested_at=ingested_at,
             )
 
             # Persiste chunks serializados para evitar re-chunking redundante

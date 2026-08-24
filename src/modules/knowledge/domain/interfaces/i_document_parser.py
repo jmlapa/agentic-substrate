@@ -13,4 +13,5 @@ class IDocumentParser(Protocol):
         doc_id: Any = None,
         kb_partition: str | None = None,
         progress_callback: Any = None,
+        ingested_at: float | None = None,
     ) -> str: ...
