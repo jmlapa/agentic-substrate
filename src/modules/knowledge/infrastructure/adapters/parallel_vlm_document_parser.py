@@ -1,5 +1,6 @@
 import asyncio
 import io
+import re
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
@@ -13,14 +14,6 @@ from src.kernel.infrastructure.async_token_bucket_limiter import (
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
-
-import re
-
-# Regex constants for markdown continuity normalizer
-_PAGE_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*PAGE\s*\d+\s*-->")
-_ERROR_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*\[Erro no OCR.*?\]\s*-->", re.DOTALL)
-_EXCESS_NEWLINES_RE: re.Pattern[str] = re.compile(r"\n{3,}")
-_HEADING_RE: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
     ISyntheticTocExtractor,
 )
@@ -30,6 +23,12 @@ from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage impor
 from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
     PdfPageRenderer,
 )
+
+# Regex constants for markdown continuity normalizer
+_PAGE_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*PAGE\s*\d+\s*-->")
+_ERROR_MARKER_RE: re.Pattern[str] = re.compile(r"<!--\s*\[Erro no OCR.*?\]\s*-->", re.DOTALL)
+_EXCESS_NEWLINES_RE: re.Pattern[str] = re.compile(r"\n{3,}")
+_HEADING_RE: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 
 
 class ParallelVlmDocumentParser(IDocumentParser):
@@ -89,7 +88,11 @@ class ParallelVlmDocumentParser(IDocumentParser):
                 norm = match.group(2).strip().lower()
                 if in_heading_gap and prev_heading_norm == norm:
                     # Duplicate: remove orphaned trailing blanks/markers between headings
-                    while result and (result[-1].strip() == "" or _PAGE_MARKER_RE.match(result[-1].strip()) or _ERROR_MARKER_RE.match(result[-1].strip())):
+                    while result and (
+                        result[-1].strip() == ""
+                        or _PAGE_MARKER_RE.match(result[-1].strip())
+                        or _ERROR_MARKER_RE.match(result[-1].strip())
+                    ):
                         result.pop()
                     continue
                 prev_heading_norm = norm
@@ -120,8 +123,6 @@ class ParallelVlmDocumentParser(IDocumentParser):
         text = self._dedup_adjacent_headers(text)
         return text.strip()
 
-
-
     def _infer_extension(self, file_name: str, content_type: str) -> str:
         ext = Path(file_name).suffix.lower()
         if ext:
@@ -138,7 +139,6 @@ class ParallelVlmDocumentParser(IDocumentParser):
             "application/json": ".json",
         }
         return mime_map.get(content_type.lower(), ".txt")
-
 
     def _convert_fast_path_sync(self, raw_bytes: bytes, file_extension: str) -> str:
         try:
@@ -191,7 +191,20 @@ class ParallelVlmDocumentParser(IDocumentParser):
                 "   - Para cada figura ou gráfico, use a anotação:\n"
                 "     > **[Figura X: Título/Legenda]**\n"
                 "     > *Descrição visual*: [Descreva detalhadamente o gráfico e tendências].\n"
-                "4. Retorne APENAS o código Markdown sem blocos ```markdown envolventes."
+                "4. Retorne APENAS o código Markdown sem blocos ```markdown envolventes.\n"
+                "5. Continuidade de Hierarquia:\n"
+                "   - Se o topo desta página exibir um título que já está na hierarquia "
+                "ativa acima, NÃO o repita — a página é continuação de uma seção já aberta.\n"
+                "   - Só emita um cabeçalho se ele for genuinamente novo em relação à "
+                "hierarquia ativa.\n"
+                "6. Continuidade de Texto:\n"
+                "   - Se a primeira linha desta página for continuação de um parágrafo "
+                "anterior (sem título novo), continue o texto diretamente sem inserir quebra "
+                "de parágrafo forçada.\n"
+                "7. Tabelas Inter-Página:\n"
+                "   - Se esta página exibir linhas de uma tabela que começou em página anterior, "
+                "repita o cabeçalho de colunas (| Col1 | Col2 | e |---|---|) antes das linhas "
+                "de dados."
             )
 
             user_content: list[dict[str, Any]] = [

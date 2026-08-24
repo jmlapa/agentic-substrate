@@ -214,7 +214,13 @@ def test_normalize_collapses_excess_newlines() -> None:
 
 def test_normalize_deduplicates_adjacent_headings() -> None:
     parser = ParallelVlmDocumentParser()
-    raw = "<!-- PAGE 1 -->\n\n## Introduction\n\n<!-- PAGE 2 -->\n\n## Introduction\n\nActual content."
+    raw = (
+        "<!-- PAGE 1 -->\n\n"
+        "## Introduction\n\n"
+        "<!-- PAGE 2 -->\n\n"
+        "## Introduction\n\n"
+        "Actual content."
+    )
     result = parser._normalize_markdown(raw)
     assert result.count("## Introduction") == 1
     assert "Actual content." in result
@@ -291,3 +297,36 @@ async def test_parallel_vlm_parser_monotonic_progress_callback(
     assert len(progress_messages) == 2
     assert progress_messages[0] == "Processando OCR: 1/2 páginas concluídas"
     assert progress_messages[1] == "Processando OCR: 2/2 páginas concluídas"
+
+
+@pytest.mark.asyncio
+async def test_transcribe_system_prompt_contains_continuity_rules(
+    sample_pdf_bytes: bytes,
+) -> None:
+    import asyncio
+
+    mock_client = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Page content"
+    mock_client.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+
+    parser = ParallelVlmDocumentParser(openai_client=mock_client)
+    semaphore = asyncio.Semaphore(1)
+
+    await parser._transcribe_single_page(
+        raw_bytes=sample_pdf_bytes,
+        page_num=1,
+        total_pages=2,
+        hierarchy_hint="Section 1",
+        effective_prompt="Default prompt",
+        semaphore=semaphore,
+    )
+
+    mock_client.chat.completions.create.assert_called_once()
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    messages = call_kwargs["messages"]
+    system_message = next(msg["content"] for msg in messages if msg["role"] == "system")
+
+    assert "Continuidade de Hierarquia" in system_message
+    assert "Continuidade de Texto" in system_message
+    assert "Tabelas Inter-Página" in system_message
