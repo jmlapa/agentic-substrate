@@ -18,7 +18,7 @@ class MarkItDownDocumentParser(IDocumentParser):
     def __init__(
         self,
         openrouter_client: Any | None = None,
-        vision_model: str = "qwen/qwen3-vl-8b-instruct",
+        vision_model: str = "qwen/qwen3-vl-32b-instruct",
         default_prompt: str | None = None,
         markitdown_instance: Any | None = None,
         markitdown_factory: Any | None = None,

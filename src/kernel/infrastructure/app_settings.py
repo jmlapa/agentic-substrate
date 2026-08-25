@@ -77,7 +77,7 @@ class AppSettings(BaseSettings):
         default=50, alias="OPENROUTER_GRAPH_MAX_CONCURRENCY"
     )
     ocr_vision_model_name: str = Field(
-        default="qwen/qwen3-vl-8b-instruct",
+        default="qwen/qwen3-vl-32b-instruct",
         alias="OCR_VISION_MODEL_NAME",
     )
     ocr_max_concurrency: int = Field(default=50, alias="OCR_MAX_CONCURRENCY")

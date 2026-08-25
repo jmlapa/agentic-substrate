@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ParallelVlmDocumentParser` & `QwenSyntheticTocExtractor`: Migração das diretivas inline para `OpenRouterProviderDefaults`.
   - `OpenRouterRagSynthesizer` & `VlmImageDocumentParser`: Headers e payload padronizados via `OpenRouterProviderDefaults`.
   - `OpenRouterClientFactory` & `PydanticAiOpenRouterProviderFactory`: Reutilização centralizada dos cabeçalhos canônicos e atalho `get_throughput_extra_body()`.
+- **Modelo Padrão de Visão/OCR (VLM)**:
+  - Definido `qwen/qwen3-vl-32b-instruct` como modelo padrão de OCR em `AppSettings`, adaptadores e templates de ambiente (`.env.example`), oferecendo maior qualidade de extração e menor custo por milhão de tokens na OpenRouter.
 
 ## [0.6.0] - 2026-08-24
 
