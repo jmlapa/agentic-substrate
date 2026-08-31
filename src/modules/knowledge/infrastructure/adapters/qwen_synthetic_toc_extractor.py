@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from collections.abc import Callable, Coroutine
@@ -184,15 +185,33 @@ class QwenSyntheticTocExtractor(ISyntheticTocExtractor):
                 # Estimativa de tokens para a chamada
                 await self._limiter.acquire(estimated_tokens=500 * batch_page_count)
 
-            response = await self._client.chat.completions.create(
-                model=self._vision_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": content_payload},
-                ],
-                temperature=0.0,
-                extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
-            )
+            max_retries = 3
+            base_delay = 1.0
+            response = None
+            last_err: Exception | None = None
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = await self._client.chat.completions.create(
+                        model=self._vision_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": content_payload},
+                        ],
+                        temperature=0.0,
+                        extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
+                    )
+                    break
+                except Exception as e:
+                    last_err = e
+                    if attempt < max_retries:
+                        await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+
+            if response is None:
+                raise RuntimeError(
+                    f"Falha na extração de Sumário Sintético no Lote {batch_count} "
+                    f"após {max_retries} tentativas: {last_err}"
+                )
 
             raw_response = response.choices[0].message.content or ""
             items_raw = self._parse_json_items(raw_response)

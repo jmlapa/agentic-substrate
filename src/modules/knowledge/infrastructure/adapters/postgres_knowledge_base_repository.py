@@ -320,6 +320,7 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
             if err_step and err_msg:
                 doc_dict["error"] = {
                     "step": err_step,
+                    "message": err_msg,
                     "error_message": err_msg,
                 }
 

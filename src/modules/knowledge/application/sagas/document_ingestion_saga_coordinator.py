@@ -496,8 +496,14 @@ class DocumentIngestionSagaCoordinator:
                 )
                 return parent.id, parent_graph
 
+            chunk_semaphore = asyncio.Semaphore(15)
+
+            async def _bounded_extract(parent: ParentChunk, idx: int) -> tuple[str, ExtractedGraph]:
+                async with chunk_semaphore:
+                    return await _extract_single_parent(parent, idx)
+
             extraction_results = await asyncio.gather(
-                *(_extract_single_parent(p, idx) for idx, p in enumerate(valid_parents))
+                *(_bounded_extract(p, idx) for idx, p in enumerate(valid_parents))
             )
 
             all_nodes: dict[str, GraphNode] = {}

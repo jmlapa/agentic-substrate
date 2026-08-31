@@ -217,65 +217,75 @@ class DirectOpenRouterGraphExtractor(IGraphExtractor):
             estimated_tokens = len(system_prompt.split()) + len(user_prompt.split()) + 500
             await self._rate_limiter.acquire(estimated_tokens=estimated_tokens)
 
-            try:
-                response = await self._client.chat.completions.create(
-                    model=self._model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=self._temperature,
-                    response_format={"type": "json_object"},
-                    extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
-                )
+            max_retries = 3
+            base_delay = 1.0
+            last_err: Exception | None = None
 
-                choice = response.choices[0]
-                content = choice.message.content or "{}"
-                data = json.loads(content)
-                parsed = _DirectGraphOutput.model_validate(data)
-
-                # Validação e conversão para entidades de domínio
-                nodes: list[GraphNode] = []
-                valid_node_ids: set[str] = set()
-
-                for ent in parsed.entities:
-                    clean_id = ent.id.strip().lower()
-                    if not clean_id:
-                        continue
-                    valid_node_ids.add(clean_id)
-                    props = dict(ent.properties)
-                    props["name"] = ent.name or clean_id
-                    if ent.aliases:
-                        props["aliases"] = ent.aliases
-
-                    nodes.append(
-                        GraphNode(
-                            id=clean_id,
-                            node_type=ent.entity_type,
-                            properties=props,
-                        )
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = await self._client.chat.completions.create(
+                        model=self._model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=self._temperature,
+                        response_format={"type": "json_object"},
+                        extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
                     )
 
-                edges: list[GraphEdge] = []
-                for rel in parsed.relations:
-                    src_id = rel.source_id.strip().lower()
-                    tgt_id = rel.target_id.strip().lower()
+                    choice = response.choices[0]
+                    content = choice.message.content or "{}"
+                    data = json.loads(content)
+                    parsed = _DirectGraphOutput.model_validate(data)
 
-                    # Integridade referencial básica
-                    if src_id in valid_node_ids and tgt_id in valid_node_ids:
-                        edges.append(
-                            GraphEdge(
-                                source_id=src_id,
-                                target_id=tgt_id,
-                                relationship_type=rel.relationship_type,
-                                properties=rel.properties,
+                    # Validação e conversão para entidades de domínio
+                    nodes: list[GraphNode] = []
+                    valid_node_ids: set[str] = set()
+
+                    for ent in parsed.entities:
+                        clean_id = ent.id.strip().lower()
+                        if not clean_id:
+                            continue
+                        valid_node_ids.add(clean_id)
+                        props = dict(ent.properties)
+                        props["name"] = ent.name or clean_id
+                        if ent.aliases:
+                            props["aliases"] = ent.aliases
+
+                        nodes.append(
+                            GraphNode(
+                                id=clean_id,
+                                node_type=ent.entity_type,
+                                properties=props,
                             )
                         )
 
-                return ExtractedGraph(nodes=nodes, edges=edges)
+                    edges: list[GraphEdge] = []
+                    for rel in parsed.relations:
+                        src_id = rel.source_id.strip().lower()
+                        tgt_id = rel.target_id.strip().lower()
 
-            except Exception as e:
-                logger.warning(
-                    f"Falha na extração direta com {self._model_name}: {e}. Ativando fallback."
-                )
-                return await self._fallback_extractor.extract_graph(markdown_text, ontology, kb_id)
+                        # Integridade referencial básica
+                        if src_id in valid_node_ids and tgt_id in valid_node_ids:
+                            edges.append(
+                                GraphEdge(
+                                    source_id=src_id,
+                                    target_id=tgt_id,
+                                    relationship_type=rel.relationship_type,
+                                    properties=rel.properties,
+                                )
+                            )
+
+                    return ExtractedGraph(nodes=nodes, edges=edges)
+
+                except Exception as e:
+                    last_err = e
+                    if attempt < max_retries:
+                        await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+
+            logger.warning(
+                f"Falha na extração direta com {self._model_name} após "
+                f"{max_retries} tentativas: {last_err}. Ativando fallback."
+            )
+            return await self._fallback_extractor.extract_graph(markdown_text, ontology, kb_id)

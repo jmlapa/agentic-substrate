@@ -263,3 +263,28 @@ async def test_qwen_synthetic_toc_extractor_resumes_partial_batches(
     assert mock_openai_client.chat.completions.create.call_count == 2
     # ToC final consolidado foi salvo em cache
     assert await toc_storage.has_toc(partition, doc_id)
+
+
+@pytest.mark.asyncio
+async def test_qwen_synthetic_toc_extractor_retry_on_error(
+    sample_pdf_bytes: bytes,
+) -> None:
+    client = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "[]"
+    mock_response = MagicMock(choices=[mock_choice])
+
+    client.chat.completions.create = AsyncMock(
+        side_effect=[
+            Exception("Rate limited 429"),
+            mock_response,
+        ]
+    )
+
+    extractor = QwenSyntheticTocExtractor(
+        openai_client=client,
+    )
+
+    toc = await extractor.extract_toc(sample_pdf_bytes, batch_size=5)
+    assert isinstance(toc, SyntheticDocumentToc)
+    assert client.chat.completions.create.call_count == 2

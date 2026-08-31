@@ -76,6 +76,7 @@ export type DocumentProcessingStatus =
 export interface DocumentProcessingError {
   step?: string;
   message?: string;
+  error_message?: string;
 }
 
 export type DocumentSourceType = 'document' | 'image' | 'audio';

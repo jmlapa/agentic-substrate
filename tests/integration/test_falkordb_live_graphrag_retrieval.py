@@ -19,12 +19,14 @@ from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter 
 @pytest.mark.asyncio
 async def test_falkordb_live_graphrag_retrieval_and_expansion() -> None:
     # 1. Connect to live FalkorDB container on port 6380
-    client = FalkorDB(host="localhost", port=6380)
-    adapter = FalkorDbGraphStoreAdapter(client=client)
-
-    kb_id = uuid4()
-    graph_name = f"kb_{kb_id.hex}"
-    graph_handle = client.select_graph(graph_name)
+    try:
+        client = FalkorDB(host="localhost", port=6380)
+        adapter = FalkorDbGraphStoreAdapter(client=client)
+        kb_id = uuid4()
+        graph_name = f"kb_{kb_id.hex}"
+        graph_handle = client.select_graph(graph_name)
+    except Exception:
+        pytest.skip("FalkorDB live container not available on localhost:6380")
 
     try:
         # 2. Ensure vector index in live FalkorDB

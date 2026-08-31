@@ -170,3 +170,45 @@ async def test_direct_extractor_filters_orphan_edges(
 
     assert len(graph.nodes) == 1
     assert len(graph.edges) == 0  # Aresta órfã deve ter sido descartada
+
+
+@pytest.mark.asyncio
+async def test_direct_extractor_retry_on_transient_error(
+    sample_ontology: OntologySchema,
+) -> None:
+    extractor = DirectOpenRouterGraphExtractor(
+        api_key="test-api-key",
+    )
+
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = json.dumps(
+        {
+            "entities": [
+                {
+                    "id": "stf",
+                    "name": "STF",
+                    "entity_type": "SujeitoDireito",
+                    "properties": {},
+                    "aliases": [],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    mock_response.choices = [mock_choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=[
+            Exception("Rate limit 429"),
+            mock_response,
+        ]
+    )
+    extractor._client = mock_client
+
+    graph = await extractor.extract_graph("STF decidiu.", sample_ontology)
+
+    assert len(graph.nodes) == 1
+    assert graph.nodes[0].id == "stf"
+    assert mock_client.chat.completions.create.call_count == 2

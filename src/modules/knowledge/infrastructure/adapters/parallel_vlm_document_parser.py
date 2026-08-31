@@ -236,27 +236,38 @@ class ParallelVlmDocumentParser(IDocumentParser):
             if not self._client:
                 return f"<!-- [Página {page_num} não transcrita: cliente não configurado] -->"
 
-            try:
-                response = await self._client.chat.completions.create(
-                    model=self._vision_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ],
-                    temperature=0.0,
-                    extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
-                )
-                page_md = str(response.choices[0].message.content or "").strip()
+            max_retries = 3
+            base_delay = 1.0
+            last_err: Exception | None = None
 
-                # 2. Salva Checkpoint imediatamente após sucesso
-                if self._checkpoint_storage and kb_partition and doc_id:
-                    await self._checkpoint_storage.save_page(
-                        kb_partition, doc_id, page_num, page_md
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = await self._client.chat.completions.create(
+                        model=self._vision_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        temperature=0.0,
+                        extra_body=OpenRouterProviderDefaults.get_throughput_extra_body(),
                     )
+                    page_md = str(response.choices[0].message.content or "").strip()
 
-                return page_md
-            except Exception as e:
-                return f"<!-- [Erro no OCR da Página {page_num}: {e}] -->"
+                    # 2. Salva Checkpoint imediatamente após sucesso
+                    if self._checkpoint_storage and kb_partition and doc_id:
+                        await self._checkpoint_storage.save_page(
+                            kb_partition, doc_id, page_num, page_md
+                        )
+
+                    return page_md
+                except Exception as e:
+                    last_err = e
+                    if attempt < max_retries:
+                        await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+
+            raise RuntimeError(
+                f"Falha de OCR na página {page_num} após {max_retries} tentativas: {last_err}"
+            )
 
     async def parse_to_markdown(
         self,

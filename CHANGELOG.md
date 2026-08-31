@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-31
+
+### Fixed
+- **Retentativas Automáticas com Backoff Exponencial no Pipeline VLM & LLM**:
+  - `ParallelVlmDocumentParser`: Implementação de retentativas automáticas (3 tentativas com backoff `1s`, `2s`, `4s`) por página de OCR para resiliência a oscilações transitórias de rede, timeouts e HTTP 429 (Rate Limit), eliminando descarte silencioso de páginas e garantindo preservação atômica em `PageCheckpointStorage`.
+  - `QwenSyntheticTocExtractor`: Retentativas automáticas com backoff por lote na geração do Sumário Sintético (ToC).
+  - `DirectOpenRouterGraphExtractor`: Retentativas com backoff exponencial antes de ativação de fallback heurístico.
+- **Normalização e Exposição de Diagnósticos de Erro na Saga e Read Model**:
+  - `PostgresKnowledgeBaseRepository` & `KnowledgeController`: Padronização do payload de erro nos DTOs (`step`, `message` e `error_message`), corrigindo incompatibilidade de chave que ocultava os detalhes de erro no frontend.
+  - `PipelineStatusTracker` & `KnowledgeBaseDetailPage`: Destaque visual imediato da etapa específica em falha (alerta vermelho), preservação do status de etapas precedentes concluídas (verde) e exibição de diagnósticos de erro acionáveis na interface.
+- **Controle de Concorrência na Extração de Grafos de Documentos Extensos**:
+  - `DocumentIngestionSagaCoordinator`: Bounding de concorrência com `asyncio.Semaphore(15)` no processamento concorrente de centenas de `ParentChunks` em documentos longos (ex: PDFs com 400+ páginas), prevenindo saturação de sockets e do event loop.
+
 ## [0.6.1] - 2026-08-24
 
 ### Added

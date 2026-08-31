@@ -363,3 +363,64 @@ async def test_transcribe_system_prompt_enforces_document_language_for_generated
     # Regra obrigatória: descrições geradas devem usar o mesmo idioma do documento original
     assert "Idioma do Documento" in system_message
     assert "mesmo idioma" in system_message
+
+
+@pytest.mark.asyncio
+async def test_transcribe_retries_on_transient_error_and_succeeds(
+    sample_pdf_bytes: bytes,
+) -> None:
+    import asyncio
+
+    mock_client = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Recovered after retry"
+
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=[
+            Exception("Rate limited 429"),
+            Exception("Gateway timeout 504"),
+            MagicMock(choices=[mock_choice]),
+        ]
+    )
+
+    parser = ParallelVlmDocumentParser(openai_client=mock_client)
+    semaphore = asyncio.Semaphore(1)
+
+    result = await parser._transcribe_single_page(
+        raw_bytes=sample_pdf_bytes,
+        page_num=1,
+        total_pages=2,
+        hierarchy_hint="Section 1",
+        effective_prompt="Default prompt",
+        semaphore=semaphore,
+    )
+
+    assert result == "Recovered after retry"
+    assert mock_client.chat.completions.create.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_transcribe_raises_runtime_error_when_retries_exhausted(
+    sample_pdf_bytes: bytes,
+) -> None:
+    import asyncio
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=Exception("Permanent API connection failure")
+    )
+
+    parser = ParallelVlmDocumentParser(openai_client=mock_client)
+    semaphore = asyncio.Semaphore(1)
+
+    with pytest.raises(RuntimeError, match="Falha de OCR na página 1 após 3 tentativas"):
+        await parser._transcribe_single_page(
+            raw_bytes=sample_pdf_bytes,
+            page_num=1,
+            total_pages=2,
+            hierarchy_hint="Section 1",
+            effective_prompt="Default prompt",
+            semaphore=semaphore,
+        )
+
+    assert mock_client.chat.completions.create.call_count == 3

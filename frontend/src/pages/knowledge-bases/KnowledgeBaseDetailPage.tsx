@@ -439,7 +439,7 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
                         progressPercentage={doc.progress_percentage}
                         progressMessage={doc.progress_message}
                         errorStep={doc.error?.step}
-                        errorMessage={doc.error?.message}
+                        errorMessage={doc.error?.message || doc.error?.error_message}
                       />
                     </div>
                   </Card>

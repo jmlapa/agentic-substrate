@@ -269,7 +269,19 @@ async def get_knowledge_base(
                 "progress_total": doc.get("progress_total", 0),
                 "progress_percentage": doc.get("progress_percentage", 0),
                 "progress_message": doc.get("progress_message"),
-                "error": doc.get("error"),
+                "error": (
+                    {
+                        "step": doc["error"].get("step"),
+                        "message": (
+                            doc["error"].get("message") or doc["error"].get("error_message")
+                        ),
+                        "error_message": (
+                            doc["error"].get("message") or doc["error"].get("error_message")
+                        ),
+                    }
+                    if doc.get("error") and isinstance(doc["error"], dict)
+                    else None
+                ),
             }
             for doc in kb.documents.values()
         ],

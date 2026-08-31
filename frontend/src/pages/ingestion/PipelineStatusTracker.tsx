@@ -107,6 +107,19 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
   const isFailed = status === 'FAILED';
   const currentIndex = getStageIndex(status);
 
+  const getFailedStageIndex = (step: string | null | undefined): number => {
+    if (!step) return -1;
+    const s = step.toUpperCase();
+    if (s.includes('UPLOAD') || s.includes('STORE')) return 0;
+    if (s.includes('PARSE') || s.includes('OCR')) return 1;
+    if (s.includes('CHUNK')) return 2;
+    if (s.includes('GRAPH') || s.includes('EXTRACT')) return 3;
+    if (s.includes('INDEX')) return 4;
+    return -1;
+  };
+
+  const failedStageIdx = isFailed ? getFailedStageIndex(errorStep) : -1;
+
   return (
     <div className={`w-full py-2.5 ${className}`}>
       <div className="flex items-center justify-between relative">
@@ -119,14 +132,16 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
           }`}
           style={{
             width: isFailed
-              ? '100%'
+              ? failedStageIdx >= 0
+                ? `${(failedStageIdx / (stages.length - 1)) * 100}%`
+                : '100%'
               : `${Math.min(
                   100,
                   Math.max(
                     0,
                     currentIndex === 5
                       ? 100
-                      : ((currentIndex) / (stages.length - 1)) * 100
+                      : (currentIndex / (stages.length - 1)) * 100
                   )
                 )}%`,
           }}
@@ -134,10 +149,9 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
 
         {stages.map((stage, idx) => {
           const stageStep = idx + 1;
-          // Quando INDEXED (5), todos os 5 passos são 'isDone = true'
-          const isDone = currentIndex >= stageStep;
-          // O passo atual em execução é o próximo a ser completado
-          const isCurrent = !isDone && currentIndex === idx && !isFailed;
+          const isThisStageFailed = isFailed && (failedStageIdx === idx || (failedStageIdx === -1 && currentIndex === idx));
+          const isDone = !isFailed ? currentIndex >= stageStep : (failedStageIdx >= 0 ? idx < failedStageIdx : currentIndex >= stageStep);
+          const isCurrent = !isDone && !isThisStageFailed && currentIndex === idx && !isFailed;
           const Icon = stage.icon;
 
           return (
@@ -147,17 +161,19 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
             >
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
-                  isDone
+                  isThisStageFailed
+                    ? 'border-rose-500 bg-rose-950 text-rose-400 shadow-md shadow-rose-500/20 ring-2 ring-rose-500/30'
+                    : isDone
                     ? 'border-emerald-500/80 bg-emerald-950 text-emerald-400 shadow-sm shadow-emerald-500/10'
                     : isCurrent
                     ? 'border-indigo-500 bg-indigo-950 text-indigo-300 shadow-md shadow-indigo-500/30 ring-2 ring-indigo-500/20'
-                    : isFailed
-                    ? 'border-zinc-800 bg-zinc-900 text-zinc-600'
                     : 'border-zinc-800 bg-zinc-900/90 text-zinc-500'
                 }`}
-                title={stage.label}
+                title={isThisStageFailed ? `Falha em: ${stage.label}` : stage.label}
               >
-                {isDone ? (
+                {isThisStageFailed ? (
+                  <AlertCircle className="w-4 h-4 text-rose-400" />
+                ) : isDone ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 ) : isCurrent ? (
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
@@ -169,19 +185,19 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
               <div className="flex flex-col items-center text-center">
                 <span
                   className={`text-[11px] font-semibold tracking-tight whitespace-nowrap ${
-                    isDone
+                    isThisStageFailed
+                      ? 'text-rose-400 font-bold'
+                      : isDone
                       ? 'text-emerald-400'
                       : isCurrent
                       ? 'text-indigo-300 font-bold'
-                      : isFailed
-                      ? 'text-zinc-600'
                       : 'text-zinc-500'
                   }`}
                 >
                   {stage.label}
                 </span>
                 <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
-                  {stage.sublabel}
+                  {isThisStageFailed ? 'Falhou' : stage.sublabel}
                 </span>
               </div>
             </div>
@@ -219,12 +235,18 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
       {isFailed && (
         <div className="mt-3.5 flex items-start gap-2.5 rounded-lg border border-rose-900/60 bg-rose-950/30 p-2.5 text-xs text-rose-300">
           <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
+          <div className="space-y-1 min-w-0 flex-1">
             <p className="font-semibold text-rose-200">
               Falha no processamento (Etapa: {errorStep || 'Pipeline Ingestion'})
             </p>
-            {errorMessage && (
-              <p className="text-[11px] font-mono text-rose-400/90">{errorMessage}</p>
+            {errorMessage ? (
+              <p className="text-[11px] font-mono text-rose-300/90 break-words whitespace-pre-wrap">
+                {errorMessage}
+              </p>
+            ) : (
+              <p className="text-[11px] font-mono text-rose-300/70">
+                Ocorreu uma interrupção durante a execução. Clique em &quot;Retomar Ingestão&quot; para continuar a partir dos checkpoints existentes sem perda de progresso.
+              </p>
             )}
           </div>
         </div>
