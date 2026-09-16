@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-15
+
+### Added
+- **Módulo de Deploy All-in-One em VM Única (`deploy/vm/` - Marco 1.21)**:
+  - **Orquestração Docker Compose (`deploy/vm/docker-compose.yml`)**:
+    - Coordenação dos 6 serviços fundamentais: Caddy 2, Frontend Console SPA (Nginx), API Gateway (FastAPI), PostgreSQL 16 (+ pgvector), Unified FalkorDB e Redis 7.
+    - Isolamento rigoroso de portas: apenas portas `80` e `443` expostas no host; portas de banco de dados (`5432`, `6379`, `6380`) e API (`8000`) restritas à rede interna `substrate_net`.
+    - Persistência contínua em disco de bloco SSD (`./data/...`) eliminando risco de perda de grafos, vetores e eventos.
+  - **Edge Proxy Caddy 2 (`deploy/vm/Caddyfile`)**:
+    - Emissão e renovação automática de certificados SSL/TLS via Let's Encrypt para domínio ou localhost.
+    - Compressão nativa `zstd` e `gzip` para ativos estáticos.
+    - Roteamento unificado de `/*` para o Frontend e `/api/*` e `/docs*` para a API Gateway com buffers desabilitados (`flush_interval -1`) para streaming SSE em tempo real, eliminando problemas de CORS.
+  - **Script de Automação Idempotente (`deploy/vm/setup.sh`)**:
+    - Script executável para VMs Debian/Ubuntu (AWS EC2, GCP Compute Engine, Hetzner, etc.).
+    - Instalação automática de Docker Engine e Docker Compose v2 caso ausentes.
+    - Suporte a injeção automatizada de `.env` via Terraform/cloud-init ou geração assistida com senha segura randômica para o PostgreSQL.
+    - Execução automática de migrações (`alembic upgrade head`) e healthchecks em cascata.
+  - **Suíte de Testes Automatizados de Configuração (`tests/unit/test_deploy_vm_configuration.py`)**:
+    - Testes unitários com Pytest validando topologia de rede, ausência de portas de banco no host, rotas do Caddyfile, cobertura de variáveis e sintaxe do script de setup.
+  - **Documentação & Especificação Formal**:
+    - Criação de `SPEC-vm-all-in-one-deploy.md`, artefato conceitual em `docs/ideas/staging-cloud-deployment.md` e guia de deploy de 1 comando no `README.md`.
+
 ## [0.6.2] - 2026-08-31
 
 ### Fixed

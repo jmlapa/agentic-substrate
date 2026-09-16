@@ -133,6 +133,55 @@ cd frontend && npm run dev
 
 ---
 
+## ☁️ Single-VM All-in-One Cloud Deployment
+
+You can deploy the entire Agentic Substrate stack (Frontend SPA, FastAPI Backend, PostgreSQL 16 with pgvector, FalkorDB, and Redis) to your own cloud VM (AWS EC2 `t4g.medium`/`t3.medium`, GCP Compute Engine `e2-standard-2`, Hetzner, or DigitalOcean) in **1 command** with automated Let's Encrypt SSL/TLS via Caddy.
+
+### Recommended VM Specifications
+- **OS**: Ubuntu 22.04 LTS or 24.04 LTS (x86_64 or arm64)
+- **Memory**: 8 GB RAM (recommended to support high-concurrency PDF ingestion and HNSW vector indexing without OOM)
+- **Disk**: 50 GB SSD persistent block storage
+- **Firewall / Security Group**: Expose only ports `80` (HTTP) and `443` (HTTPS) to the public internet. Database ports (`5432`, `6379`, `6380`) and API (`8000`) remain strictly internal.
+
+### 1-Command Automated Deploy (SSH)
+```bash
+# 1. Clone the repository on your VM
+git clone https://github.com/insider/agentic-substrate.git /opt/agentic-substrate
+cd /opt/agentic-substrate
+
+# 2. Configure your public domain and secrets
+cp deploy/vm/.env.example deploy/vm/.env
+# Edit deploy/vm/.env: set DOMAIN_NAME (e.g. staging.yourdomain.com), ACME_EMAIL, OPENROUTER_API_KEY / GEMINI_API_KEY
+nano deploy/vm/.env
+
+# 3. Run the automated setup
+bash deploy/vm/setup.sh
+```
+
+The script will automatically install Docker & Compose v2 (if missing), configure data storage with proper permissions, launch all 6 services, and run database migrations.
+
+### Automated Provisioning via Terraform / Cloud-Init
+If you manage your VMs with Terraform, OpenTofu, or cloud-init, pass your `.env` directly via `user_data` and trigger `bash deploy/vm/setup.sh` at the end of the script for fully automated, zero-touch deployment:
+```hcl
+# Example Terraform user_data snippet:
+resource "aws_instance" "substrate_vm" {
+  # ...
+  user_data = <<-EOF
+    #!/bin/bash
+    git clone https://github.com/insider/agentic-substrate.git /opt/agentic-substrate
+    cat <<'ENV' > /opt/agentic-substrate/deploy/vm/.env
+    DOMAIN_NAME="staging.yourdomain.com"
+    ACME_EMAIL="devops@yourdomain.com"
+    OPENROUTER_API_KEY="${var.openrouter_api_key}"
+    GEMINI_API_KEY="${var.gemini_api_key}"
+    ENV
+    cd /opt/agentic-substrate && bash deploy/vm/setup.sh
+  EOF
+}
+```
+
+---
+
 ## 🧪 Ingestion & Query CLI
 
 ### Ingest a Document into GraphRAG
