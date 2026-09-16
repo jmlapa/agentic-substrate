@@ -9,6 +9,7 @@
 | `memory` | Memória de curto/longo prazo para agentes, histórico de diálogos, grafos de memória episódica/semântica. | `kernel` | Backlog (v0.4.0) |
 | `tool-registry` | Registro, validação e governança de tools executáveis por agentes. | `kernel` | Backlog (v0.5.0) |
 | `execution` | Máquina de estados de execução de agentes e orquestração de sessões. | `kernel`, `memory`, `knowledge`, `tool-registry` | Backlog (v0.6.0) |
+| `deploy` | Modos de deploy da plataforma. Inicia suportando o modo All-in-One em VM única (Docker Compose + Caddy com SSL automático, PostgreSQL 16 com pgvector, FalkorDB, Redis, API Gateway e Frontend Console em rede interna isolada e volumes de bloco SSD). | `api-gateway`, `frontend-console` | Completed (v0.7.0) |
 
 ## Especificações Técnicas
 - `SPEC-knowledge-substrate.md` (Marco 1 & 1.5 - Substrato Base de Knowledge) — Concluído
@@ -27,6 +28,7 @@
 - `SPEC-notes-portal-explorer.md` (Marco 1.18 - Smart Notes Portal & Document Explorer) — Especificado (v0.3.7)
 - `SPEC-markdown-continuity-normalizer.md` (Marco 1.19 - Markdown Continuity Normalizer) — Concluído (v0.3.8)
 - `SPEC-lean-7b-direct-openrouter-structured-extractor.md` (Marco 1.20 - Lean 7B/8B Structured Ontology Extractor via OpenRouter & Llama 3.1 8B) — Concluído (v0.6.0)
+- `SPEC-vm-all-in-one-deploy.md` (Marco 1.21 - Modo de Deploy All-in-One em VM Única) — Concluído (v0.7.0)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -52,6 +54,7 @@
 9. **Marco 1.15 (Concluído - v0.3.9):** `knowledge:optimized-graphrag-retrieval-and-budgeting` (FalkorDB Cypher, Deduplicação Natural de Sementes, Bounded Multiplicative Decay, 32k Dynamic Budgeting, XML Context Injection Defense)
 10. **Marco 1.19 (Concluído - v0.3.8):** `knowledge:markdown-continuity-normalizer` (Continuous Markdown Normalizer, Header Deduplication, Inter-Page Continuity Rules)
 11. **Marco 1.20 (Concluído - v0.6.0):** `knowledge:lean-7b-direct-openrouter-structured-extractor` (Direct OpenRouter Extractor, Llama 3.1 8B, Constrained Decoding, Referential Integrity Filter, Multi-Complexity Eval Suite)
-12. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+12. **Marco 1.21 (Concluído - v0.7.0):** `deploy:vm-all-in-one` (Deploy All-in-One em VM Única com Docker Compose + Caddy SSL Automático)
+13. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 
 

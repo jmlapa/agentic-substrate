@@ -1,55 +1,53 @@
-# Implementation Plan: Markdown Continuity Normalizer (Marco 1.19)
+# Implementation Plan: Single-VM All-in-One Deployment (Marco 1.21)
 
 ## 1. Overview
 
-O parser VLM (`ParallelVlmDocumentParser`) possui dois problemas conhecidos na saída do Markdown: (1) o `system_prompt` de produção está mais pobre que o POC — três regras de continuidade nunca migraram; (2) a concatenação injeta marcadores `<!-- PAGE N -->` e pode duplicar headers entre páginas. Este plano entrega o Marco 1.19 em 7 tarefas atômicas XS/S, cada uma com ciclo implement → test → commit antes de avançar. O executor DEVE usar a skill `incremental-implementation` em cada tarefa.
+Disponibilizar o módulo `deploy/vm/` que permite subir o **Agentic Substrate** completo (FastAPI, React Console SPA, PostgreSQL com pgvector, FalkorDB, Redis e Caddy 2 com SSL automático) em uma única máquina virtual (AWS EC2, GCP Compute Engine, etc.) com um único comando. O plano é dividido em 5 tarefas incrementais e verificáveis.
 
 ---
 
 ## 2. Architecture Decisions
 
-- **Sem novos arquivos de adapter ou classes públicas** — toda lógica fica em `ParallelVlmDocumentParser` como métodos privados (`_normalize_markdown`, `_dedup_adjacent_headers`) e constantes de módulo.
-- **Regex compiladas no nível de módulo** (fora da classe) para performance e testabilidade independente.
-- **Deduplicação apenas entre headers adjacentes** — sem parágrafo de conteúdo entre eles (após remoção dos markers). Isso evita falsos positivos em documentos que reutilizam o mesmo título em seções diferentes.
-- **Dois pontos de normalização** — fast-path de cache (L226) e path normal (L296-298) — ambos devem chamar `_normalize_markdown`.
-- **Atualização atômica de assertions** — não é possível mudar apenas o teste sem aplicar o normalizer no mesmo commit (senão o teste falha ao contrário). Tasks 3 e 4 são acopladas nesse sentido.
+- **Modo All-in-One Estrito:** Todos os componentes rodam na mesma VM compartilhando uma rede interna Docker bridge isolada (`substrate_net`).
+- **Segurança por Padrão (Zero DB Port Exposure):** Nenhuma porta de banco de dados (`5432`, `6379`, `6380`) ou backend (`8000`) é exposta ao host (`0.0.0.0`). Apenas `80` e `443` do Caddy são públicas.
+- **Persistência de Bloco no Host:** Volumes mapeados no SSD da máquina (`./data/...`) garantem que o FalkorDB (grafo + vetores HNSW), PostgreSQL (event store + tabelas) e Redis (sagas) nunca percam dados em reinícios de containers.
+- **Caddy como Reverse Proxy & Ingress Único:** Serve o frontend SPA em `/`, roteia `/api/*` e `/docs` para a API Gateway e gera certificados Let's Encrypt automaticamente.
+- **Automação Idempotente (`setup.sh`):** Suporta execução automatizada via Terraform/cloud-init (se o `.env` já estiver presente) ou manual via SSH.
 
 ---
 
 ## 3. Dependency Graph
 
 ```
-[Task 1] Regex constants no módulo
+[Task 1] Templates de Configuração & Proxy (deploy/vm/.env.example, deploy/vm/Caddyfile)
     │
-    ├── [Task 2] _dedup_adjacent_headers() + testes unitários
-    │       │
-    │       └── [Task 3] _normalize_markdown() + 7 testes unitários novos
-    │               │
-    │               └── [Task 4] Aplicar normalizer nos 2 pontos de saída
-    │                       + atualizar assertions existentes (acoplado)
-    │
-    └── [Task 5] Enriquecer system_prompt + teste de presença das 3 regras
+    └── [Task 2] Orquestração Docker Compose All-in-One (deploy/vm/docker-compose.yml)
             │
-            └── [Task 6] Atualizar docs (SPEC + CAPABILITY-MAP)
+            └── [Task 3] Script de Automação e Provisionamento (deploy/vm/setup.sh)
                     │
-                    └── [Task 7] Gate final: make pre-commit
+                    └── [Task 4] Suíte de Testes Automatizados de Configuração (tests/unit/test_deploy_vm_configuration.py)
+                            │
+                            └── [Task 5] Documentação no README.md e Gate Final (make pre-commit)
 ```
 
 ---
 
 ## 4. Phase Breakdown
 
-### Phase 1: Fundação (Tasks 1-3)
-Adiciona as constantes e métodos privados sem ainda mudar o comportamento externo. O sistema permanece funcionando e os testes existentes continuam passando.
+### Phase 1: Configuração e Proxy Core (Task 1)
+Criação do template `.env.example` com presets de infraestrutura interna e do `Caddyfile` com regras de roteamento reverso, compressão e suporte a SSE.
 
-### Phase 2: Integração (Task 4)
-Liga o normalizer nos dois pontos de saída e atualiza as assertions existentes atomicamente. Após esta task, o comportamento externo muda: `parse_to_markdown` nunca mais emite `<!-- PAGE N -->`.
+### Phase 2: Orquestração All-in-One (Task 2)
+Criação do `deploy/vm/docker-compose.yml` coordenando os 6 containers com healthchecks, ordem estrita de inicialização e persistência local.
 
-### Phase 3: Prompt Enrichment (Task 5)
-Enriquece o `system_prompt` com as 3 regras de continuidade e valida via teste de string.
+### Phase 3: Script de Setup Idempotente (Task 3)
+Criação do `deploy/vm/setup.sh` com instalação automática do Docker/Compose, geração de senha segura de banco, verificação de `.env` e subida com migração.
 
-### Phase 4: Docs & Gate (Tasks 6-7)
-Atualiza os docs de spec e executa o gate de qualidade completo.
+### Phase 4: Validação Automatizada (Task 4)
+Implementação de testes unitários que validam sintaxe do YAML, isolamento de portas, consistência de variáveis com `AppSettings` e validade do script bash.
+
+### Phase 5: Documentação e Gate de Qualidade (Task 5)
+Atualização do `README.md` com instruções de deploy em VM e execução do gate completo `make pre-commit`.
 
 ---
 
@@ -57,33 +55,7 @@ Atualiza os docs de spec e executa o gate de qualidade completo.
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Regex de error marker falha em exceções com texto longo | Baixo | Usar `re.DOTALL` + testar com mock de erro real |
-| Deduplicação remove headers legítimos com mesmo texto em seções distintas | Médio | Dedup apenas em headers **adjacentes** (sem conteúdo entre eles) — não global |
-| Testes viciados (mock retornando o resultado esperado sem testar lógica real) | Alto | Testar `_normalize_markdown` diretamente com strings fixas, sem mocks; o método é puro e determinístico |
-| Executor modifica mais arquivos que o escopo da task | Médio | Cada task especifica explicitamente os arquivos; qualquer arquivo fora da lista requer confirmação |
-
----
-
-## 6. Anti-Padrões Proibidos para o Executor
-
-> ⚠️ O executor DEVE seguir a skill `incremental-implementation`. Em particular:
-
-- **NÃO** escrever mais de ~100 linhas sem rodar os testes.
-- **NÃO** criar testes que apenas verificam que a função foi chamada (mocks sem lógica real). Os testes do normalizer usam strings fixas de entrada e assertam strings fixas de saída.
-- **NÃO** mockar `_normalize_markdown` nos testes unitários dela — testar a função diretamente, ela é pura.
-- **NÃO** modificar arquivos fora do escopo listado na task sem confirmação explícita.
-- **NÃO** commitar com testes falhando. Se um teste falhar, corrigir ANTES do commit.
-- **NÃO** remover ou enfraquecer assertions existentes para fazê-las passar — entender por que falharam e corrigir o código.
-
----
-
-## 7. Commit Convention
-
-Todos os commits neste plano usam o formato Conventional Commits:
-```
-feat(knowledge): <descrição no imperativo>
-test(knowledge): <descrição no imperativo>
-docs: <descrição no imperativo>
-```
-
-Cada commit é atômico — representa exatamente uma task completa.
+| Variáveis desincronizadas entre `.env.example` e `AppSettings` | Médio | Teste automatizado validando que toda variável essencial exigida pelo backend está no template. |
+| Portas de banco expostas acidentalmente para a internet pública | Alto | Teste unitário inspecionando o Compose para garantir que apenas Caddy tem bindings de portas no host. |
+| Ingestão massiva causando OOM na VM | Alto | Documentação formal exigindo VM com mínimo de 8GB de RAM (GCP `e2-standard-2` ou AWS `t4g.medium`). |
+| Script `setup.sh` quebrando em ambientes sem `sudo` interativo | Médio | Detecção de privilégios de root / uso não interativo de apt (`DEBIAN_FRONTEND=noninteractive`). |
