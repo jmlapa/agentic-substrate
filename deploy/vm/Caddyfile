@@ -1,0 +1,32 @@
+{
+    # Global options
+    email {$ACME_EMAIL:admin@example.com}
+}
+
+{$DOMAIN_NAME:localhost} {
+    # Encode responses using modern compression algorithms
+    encode zstd gzip
+
+    # API Gateway routes
+    handle /api/* {
+        reverse_proxy api:8000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Real-IP {remote_host}
+            flush_interval -1
+        }
+    }
+
+    # OpenAPI / Swagger documentation
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # Frontend Console SPA routes
+    handle {
+        reverse_proxy frontend:80
+    }
+}
