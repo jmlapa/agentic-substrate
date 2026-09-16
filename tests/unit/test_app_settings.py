@@ -14,15 +14,10 @@ def test_app_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.debug is False
     assert settings.api_title == "Agentic Substrate API"
     assert settings.api_version == "0.1.0"
-    assert settings.gemini_model_name == "gemini-3.5-flash-lite"
-    assert settings.gemini_max_rpm == 300
-    assert settings.gemini_max_tpm == 1_000_000
-    assert settings.gemini_max_concurrency == 15
     assert settings.embedding_service_type == "memory"
     assert settings.embedding_dimension == 768
     assert settings.event_store_type == "memory"
     assert settings.graph_store_type == "memory"
-    assert settings.storage_type == "local"
     assert settings.storage_local_base_dir == "./data/storage"
     assert settings.postgres_host == "localhost"
     assert settings.postgres_port == 5432
@@ -36,7 +31,6 @@ def test_app_settings_secret_masking() -> None:
         GEMINI_API_KEY=SecretStr("super-secret-gemini-key"),
         POSTGRES_PASSWORD=SecretStr("super-secret-pg-pass"),
         FALKORDB_PASSWORD=SecretStr("super-secret-falkor-pass"),
-        S3_SECRET_ACCESS_KEY=SecretStr("super-secret-s3-pass"),
     )
 
     # String and repr representations must mask secrets
@@ -44,7 +38,6 @@ def test_app_settings_secret_masking() -> None:
     assert "super-secret-gemini-key" not in settings_repr
     assert "super-secret-pg-pass" not in settings_repr
     assert "super-secret-falkor-pass" not in settings_repr
-    assert "super-secret-s3-pass" not in settings_repr
     assert "**********" in settings_repr
 
     # Values must be accessible explicitly via get_secret_value()
@@ -53,8 +46,6 @@ def test_app_settings_secret_masking() -> None:
     assert settings.postgres_password.get_secret_value() == "super-secret-pg-pass"
     assert settings.falkordb_password is not None
     assert settings.falkordb_password.get_secret_value() == "super-secret-falkor-pass"
-    assert settings.s3_secret_access_key is not None
-    assert settings.s3_secret_access_key.get_secret_value() == "super-secret-s3-pass"
 
 
 def test_app_settings_environment_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,8 +65,7 @@ def test_app_settings_environment_override(monkeypatch: pytest.MonkeyPatch) -> N
             "POSTGRES_DB": "prod_db",
             "FALKORDB_HOST": "falkordb.internal",
             "FALKORDB_PORT": "6379",
-            "STORAGE_TYPE": "s3",
-            "S3_BUCKET_NAME": "my-prod-bucket",
+            "STORAGE_LOCAL_BASE_DIR": "/custom/data/storage",
         },
     )
 
@@ -93,8 +83,7 @@ def test_app_settings_environment_override(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.postgres_db == "prod_db"
     assert settings.falkordb_host == "falkordb.internal"
     assert settings.falkordb_port == 6379
-    assert settings.storage_type == "s3"
-    assert settings.s3_bucket_name == "my-prod-bucket"
+    assert settings.storage_local_base_dir == "/custom/data/storage"
 
 
 def test_app_settings_dsn_computation_granular() -> None:

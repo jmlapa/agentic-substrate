@@ -26,15 +26,8 @@ class AppSettings(BaseSettings):
     api_title: str = Field(default="Agentic Substrate API", alias="API_TITLE")
     api_version: str = Field(default="0.1.0", alias="API_VERSION")
 
-    # LLM & Embeddings
+    # Embeddings (Gemini 2 via direct HTTP)
     gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
-    gemini_model_name: str = Field(
-        default="gemini-3.5-flash-lite",
-        alias="GEMINI_MODEL_NAME",
-    )
-    gemini_max_rpm: int = Field(default=300, alias="GEMINI_MAX_RPM")
-    gemini_max_tpm: int = Field(default=1_000_000, alias="GEMINI_MAX_TPM")
-    gemini_max_concurrency: int = Field(default=15, alias="GEMINI_MAX_CONCURRENCY")
     embedding_service_type: Literal["memory", "gemini"] = Field(
         default="memory",
         alias="EMBEDDING_SERVICE_TYPE",
@@ -54,10 +47,6 @@ class AppSettings(BaseSettings):
     openrouter_app_referer: str = Field(
         default="https://agentic-substrate.local",
         alias="OPENROUTER_APP_REFERER",
-    )
-    graph_extractor_provider: Literal["gemini", "openrouter"] = Field(
-        default="openrouter",
-        alias="GRAPH_EXTRACTOR_PROVIDER",
     )
     openrouter_graph_model_name: str = Field(
         default="meta-llama/llama-3.1-8b-instruct",
@@ -81,17 +70,8 @@ class AppSettings(BaseSettings):
         alias="OCR_VISION_MODEL_NAME",
     )
     ocr_max_concurrency: int = Field(default=50, alias="OCR_MAX_CONCURRENCY")
-    ocr_toc_batch_size: int = Field(default=25, alias="OCR_TOC_BATCH_SIZE")
     ocr_low_res_scale: float = Field(default=1.0, alias="OCR_LOW_RES_SCALE")
     ocr_high_res_scale: float = Field(default=2.0, alias="OCR_HIGH_RES_SCALE")
-    ocr_default_markdown_prompt: str = Field(
-        default=(
-            "Transcribe document faithfully into GitHub Flavored Markdown. "
-            "Preserve tables, headings and lists, and provide descriptive "
-            "text for figures and diagrams."
-        ),
-        alias="OCR_DEFAULT_MARKDOWN_PROMPT",
-    )
 
     # Database / Event Store
     event_store_type: Literal["memory", "postgres"] = Field(
@@ -124,14 +104,8 @@ class AppSettings(BaseSettings):
     redis_password: SecretStr | None = Field(default=None, alias="REDIS_PASSWORD")
     redis_db: int = Field(default=0, alias="REDIS_DB")
 
-    # Object Storage
-    storage_type: Literal["local", "s3"] = Field(default="local", alias="STORAGE_TYPE")
+    # Object Storage (Local File System)
     storage_local_base_dir: str = Field(default="./data/storage", alias="STORAGE_LOCAL_BASE_DIR")
-    s3_bucket_name: str | None = Field(default=None, alias="S3_BUCKET_NAME")
-    s3_access_key_id: SecretStr | None = Field(default=None, alias="S3_ACCESS_KEY_ID")
-    s3_secret_access_key: SecretStr | None = Field(default=None, alias="S3_SECRET_ACCESS_KEY")
-    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
-    s3_endpoint_url: str | None = Field(default=None, alias="S3_ENDPOINT_URL")
 
     def __init__(
         self,
