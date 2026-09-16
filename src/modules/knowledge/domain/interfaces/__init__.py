@@ -4,9 +4,6 @@ from src.modules.knowledge.domain.interfaces.i_document_parser import (
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
     IEmbeddingService,
 )
-from src.modules.knowledge.domain.interfaces.i_entity_registry import (
-    IEntityRegistry,
-)
 from src.modules.knowledge.domain.interfaces.i_graph_extractor import (
     IGraphExtractor,
 )
@@ -32,7 +29,6 @@ from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
 __all__ = [
     "IDocumentParser",
     "IEmbeddingService",
-    "IEntityRegistry",
     "IGraphExtractor",
     "IGraphStore",
     "IJobQueue",
