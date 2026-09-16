@@ -74,7 +74,7 @@ export const PipelineStatusTracker: React.FC<PipelineStatusTrackerProps> = ({
       sublabel:
         indexedNodesCount !== undefined && indexedNodesCount > 0
           ? `${indexedNodesCount}N / ${indexedEdgesCount || 0}A`
-          : 'PydanticAI',
+          : 'OpenRouter',
     },
     {
       key: 'INDEXED',

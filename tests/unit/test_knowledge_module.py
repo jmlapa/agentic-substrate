@@ -46,8 +46,8 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_ontology_repository
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
 )
-from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
-    MarkItDownDocumentParser,
+from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
+    ParallelVlmDocumentParser,
 )
 from src.modules.knowledge.infrastructure.extractors.dynamic_ontology_model_builder import (
     DynamicOntologyModelBuilder,
@@ -127,7 +127,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         repo = InMemoryKnowledgeBaseRepository()
         ontology_repo = InMemoryOntologyRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
-        parser = MarkItDownDocumentParser()
+        parser = ParallelVlmDocumentParser()
         extractor = StructuredPydanticGraphExtractor()
         graph_store = InMemoryGraphStore()
 
@@ -214,7 +214,7 @@ async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: Ontolo
         repo = InMemoryKnowledgeBaseRepository()
         ontology_repo = InMemoryOntologyRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
-        parser = MarkItDownDocumentParser()
+        parser = ParallelVlmDocumentParser()
         extractor = StructuredPydanticGraphExtractor()
         graph_store = InMemoryGraphStore()
 

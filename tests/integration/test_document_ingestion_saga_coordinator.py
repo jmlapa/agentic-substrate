@@ -30,11 +30,11 @@ from src.modules.knowledge.infrastructure.adapters.in_memory_knowledge_base_repo
 from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_adapter import (
     LocalFileSystemStorageAdapter,
 )
-from src.modules.knowledge.infrastructure.adapters.markitdown_document_parser import (
-    MarkItDownDocumentParser,
+from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
+    ParallelVlmDocumentParser,
 )
-from src.modules.knowledge.infrastructure.chunking.markdown_parent_child_chunker import (
-    MarkdownParentChildChunker,
+from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
+    StructureTolerantMarkdownChunker,
 )
 from src.modules.knowledge.infrastructure.extractors.structured_pydantic_graph_extractor import (
     StructuredPydanticGraphExtractor,
@@ -72,8 +72,12 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
-        parser = MarkItDownDocumentParser()
-        chunker = MarkdownParentChildChunker(max_parent_tokens=100)
+        parser = ParallelVlmDocumentParser()
+        chunker = StructureTolerantMarkdownChunker(
+            max_parent_tokens=15,
+            child_chunk_tokens=10,
+            child_overlap_tokens=2,
+        )
         embedding_service = InMemoryEmbeddingService(dimension=768)
         extractor = StructuredPydanticGraphExtractor()
         graph_store = InMemoryGraphStore()
@@ -154,10 +158,10 @@ async def test_saga_coordinator_handles_chunking_failure(
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
-        parser = MarkItDownDocumentParser()
+        parser = ParallelVlmDocumentParser()
 
         # Chunker that fails
-        failing_chunker = AsyncMock(spec=MarkdownParentChildChunker)
+        failing_chunker = AsyncMock(spec=StructureTolerantMarkdownChunker)
         failing_chunker.chunk.side_effect = RuntimeError("Chunker syntax parsing error")
 
         embedding_service = InMemoryEmbeddingService(dimension=768)

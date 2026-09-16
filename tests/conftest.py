@@ -6,10 +6,8 @@ import pytest
 # Ensure environment variables are configured for test hermeticity before any module imports
 os.environ["ENVIRONMENT"] = "test"
 os.environ["EVENT_STORE_TYPE"] = "memory"
-os.environ["VECTOR_STORE_TYPE"] = "memory"
 os.environ["GRAPH_STORE_TYPE"] = "memory"
 os.environ["EMBEDDING_SERVICE_TYPE"] = "memory"
-os.environ["STORAGE_TYPE"] = "local"
 os.environ["STORAGE_LOCAL_BASE_DIR"] = "/tmp/agentic-test-storage"
 
 

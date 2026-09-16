@@ -85,9 +85,6 @@ from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter 
 from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
     GeminiEmbeddingAdapter,
 )
-from src.modules.knowledge.infrastructure.adapters.gemini_rag_synthesizer import (
-    GeminiRagSynthesizer,
-)
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
@@ -147,12 +144,6 @@ from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_c
 )
 from src.modules.knowledge.infrastructure.extractors.direct_openrouter_graph_extractor import (
     DirectOpenRouterGraphExtractor,
-)
-from src.modules.knowledge.infrastructure.extractors.existing_entity_registry import (
-    ExistingEntityRegistry,
-)
-from src.modules.knowledge.infrastructure.extractors.pydantic_ai_graph_extractor import (
-    PydanticAiGraphExtractor,
 )
 from src.modules.knowledge.infrastructure.projections.knowledge_base_projector import (
     KnowledgeBaseProjector,
@@ -231,13 +222,11 @@ def create_app_container(
     toc_checkpoint = TocCheckpointStorage(storage=storage)
     parent_graph_checkpoint = ParentGraphCheckpointStorage(storage=storage)
 
-    # Rate Limiter & Entity Registry (Global per process)
-    is_openrouter = bool(cfg.openrouter_api_key)
+    # Rate Limiter (Global per process)
     limiter = AsyncTokenBucketLimiter(
-        max_rpm=cfg.openrouter_max_rpm if is_openrouter else cfg.gemini_max_rpm,
-        max_tpm=cfg.openrouter_max_tpm if is_openrouter else cfg.gemini_max_tpm,
+        max_rpm=cfg.openrouter_max_rpm,
+        max_tpm=cfg.openrouter_max_tpm,
     )
-    entity_registry = ExistingEntityRegistry()
 
     # Document Parser (Two-Pass Stateful ToC + Parallel VLM OCR & Fast-Path)
     openrouter_key = cfg.openrouter_api_key.get_secret_value() if cfg.openrouter_api_key else None
@@ -267,7 +256,6 @@ def create_app_container(
         toc_extractor=toc_extractor,
         page_renderer=renderer,
         vision_model=cfg.ocr_vision_model_name,
-        default_prompt=cfg.ocr_default_markdown_prompt,
         max_concurrency=cfg.ocr_max_concurrency,
         rate_limiter=limiter,
         checkpoint_storage=page_checkpoint,
@@ -300,28 +288,16 @@ def create_app_container(
     else:
         embedding_service = InMemoryEmbeddingService()
 
-    # Graph Extractor (Direct OpenRouter or PydanticAI with Gemini)
-    extractor_provider = cfg.graph_extractor_provider
-    extractor: IGraphExtractor
-    if extractor_provider == "openrouter" and openrouter_key:
-        extractor = DirectOpenRouterGraphExtractor(
-            rate_limiter=limiter,
-            model_name=cfg.openrouter_graph_model_name,
-            api_key=openrouter_key,
-            base_url=cfg.openrouter_base_url,
-            app_title=cfg.openrouter_app_title,
-            app_referer=cfg.openrouter_app_referer,
-            max_concurrency=cfg.openrouter_graph_max_concurrency,
-        )
-    else:
-        extractor = PydanticAiGraphExtractor(
-            rate_limiter=limiter,
-            entity_registry=entity_registry,
-            provider_type="gemini",
-            model_name=cfg.gemini_model_name,
-            api_key=gemini_key,
-            max_concurrency=cfg.gemini_max_concurrency,
-        )
+    # Graph Extractor (Direct OpenRouter with deterministic fallback)
+    extractor: IGraphExtractor = DirectOpenRouterGraphExtractor(
+        rate_limiter=limiter,
+        model_name=cfg.openrouter_graph_model_name,
+        api_key=openrouter_key,
+        base_url=cfg.openrouter_base_url,
+        app_title=cfg.openrouter_app_title,
+        app_referer=cfg.openrouter_app_referer,
+        max_concurrency=cfg.openrouter_graph_max_concurrency,
+    )
 
     # Graph Store (FalkorDB or InMemory)
     grp_type = graph_store_type or cfg.graph_store_type
@@ -345,11 +321,6 @@ def create_app_container(
             max_tokens=cfg.openrouter_synthesis_max_tokens,
             app_title=cfg.openrouter_app_title,
             app_referer=cfg.openrouter_app_referer,
-        )
-    elif gemini_key:
-        synthesis_service = GeminiRagSynthesizer(
-            api_key=gemini_key,
-            model_name=cfg.gemini_model_name,
         )
     else:
         synthesis_service = InMemoryRagSynthesizer()
