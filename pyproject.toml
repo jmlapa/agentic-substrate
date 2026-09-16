@@ -19,7 +19,7 @@ dependencies = [
     "markitdown[all]>=0.0.1a4",
     "falkordb>=1.0.0",
     "redis>=5.0.0",
-    "pydantic-ai>=2.31.0",
+    "openai>=1.40.0",
 ]
 
 [project.optional-dependencies]
