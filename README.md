@@ -24,10 +24,10 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
                       │            Knowledge Module            │
                       │  ┌──────────────────────────────────┐  │
                       │  │ Ingestion Saga (Event-Driven)    │  │
-                      │  │ ├─ MarkItDown Parser (PDF/DOCX)  │  │
+                      │  │ ├─ Parallel VLM & Multi. Parser  │  │
                       │  │ ├─ Structure-Tolerant Chunker    │  │
                       │  │ ├─ Gemini Embedding 2 (768d MRL) │  │
-                      │  │ └─ PydanticAI v2 Graph Extractor │  │
+                      │  │ └─ Direct OpenRouter Extractor   │  │
                       │  └──────────────────────────────────┘  │
                       └───────────────────┬────────────────────┘
                                           │
@@ -57,23 +57,28 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
 - **Conceptual Mentions**: Links Parent Chunks to ontological entities: `(:ParentChunk)-[:MENTIONS]->(:Entity)`.
 - **Single-Hop OpenCypher Retrieval**: Queries vector similarities with `db.idx.vector.queryNodes` and ascends to Parent context and entity subgraphs in sub-10ms queries.
 
-### 2. PydanticAI v2 Dynamic Graph Extraction & Rate Limiting
-- **Zero-Hallucination Extraction**: Compiles dynamic Pydantic models in runtime from user-defined ontologies.
-- **Transport-Level Rate Limiter (`RateLimitedAsyncTransport`)**: Intercepts HTTP calls with a sliding window token-bucket limiter (300 RPM / 1.000.000 TPM for `gemini-3.5-flash-lite`).
-- **Cumulative Entity Canonization (`ExistingEntityRegistry`)**: Injects existing extracted entities into extraction prompts per Knowledge Base to avoid duplicate graph nodes.
-- **Concurrent Batching**: Parallelizes Parent Chunk extraction via `asyncio.gather` with concurrency semaphores (`max_concurrency=15`).
+### 2. Direct OpenRouter Graph Extraction & Rate Limiting (Llama 3.1 8B)
+- **Zero-Hallucination JSON Completion**: Extracts ontological entities and relationships using `meta-llama/llama-3.1-8b-instruct` directly through OpenRouter's structured output API.
+- **Referential Integrity Filtering**: Enforces strict ontological domain matching and self-referential cycle elimination in memory before graph persistence.
+- **High-Throughput Token Bucket Limiter**: Transport-level token bucket rate limiter sustaining 1.500 RPM / 10.000.000 TPM with sliding window tracking.
+- **Deterministic Fallback Engine**: Built-in local fallback extractor ensuring 100% ingestion resilience even in disconnected or zero-token environments.
 
 ### 3. Universal Structure-Tolerant Markdown Chunker
 - **`AtomicBlockLexer`**: Classifies Markdown into atomic units (`CODE_BLOCK`, `TABLE`, `LIST_ITEM`, `HEADING`, `PARAGRAPH`).
 - **Zero-Damage Chunking**: Never splits tables or code blocks across chunk boundaries.
 - **Hierarchical Breadcrumbs**: Preserves complete section hierarchy in Parent Chunks (~1.200 tokens) and Child Chunks (~200 tokens + 30 overlap).
 
-### 4. Configurable Multimodal OCR & OpenRouter Vision (`MarkItDown`)
-- **Fast-Path Zero-Cost Default**: Plaintext and text-layer documents execute natively on CPU with zero LLM API calls and sub-second parsing speed.
-- **Multimodal Visual Analysis**: Optional toggle routing image-heavy, diagrammatic, and scanned documents to `qwen/qwen3-vl-30b-a3b-instruct` via OpenRouter.
-- **Custom Markdown Structure Injection**: Dynamic instruction prompt customizing Markdown formatting (strict tables, mathematical preservation, diagram annotations).
+### 4. Parallel VLM & Multimodal Document Parser
+- **Fast-Path Zero-Cost Default**: Plaintext and digital PDFs execute natively on CPU with zero LLM API calls and sub-second parsing speed.
+- **Resilient Parallel Two-Pass OCR**: Scanned documents, complex diagrams, and tables leverage `qwen/qwen3-vl-32b-instruct` with stateful rolling-window Two-Pass Synthetic ToC extraction.
+- **Inter-Page Continuity & Normalization**: Automatically stitches broken tables, headers, and code blocks across page boundaries.
 
-### 5. Frontend Console SPA (`/frontend`)
+### 5. Fact-Dense RAG Synthesis with Google Gemma 4
+- **Dual-Mode Architecture**: Supports both full RAG synthesis with evidence citations and raw candidate retrieval modes.
+- **Fact-Dense Synthesis**: Powered by `google/gemma-4-26b-a4b-it` via OpenRouter, delivering high-density synthesis while defending against prompt injection via XML boundary isolation.
+- **Dynamic Token Budgeting**: Enforces a strict 32k context token budget with bounded multiplicative graph decay and natural seed deduplication.
+
+### 6. Frontend Console SPA (`/frontend`)
 - Modern, responsive SPA built with **React 18.3 + Vite 5.4 + TypeScript 5.5 + Tailwind CSS 3.4** and TanStack React Query v5.
 - Visual management of Ontologies, Knowledge Bases, live ingestion pipeline progress tracker, and interactive RAG Playground with synthesized LLM responses and evidence inspection.
 
@@ -216,7 +221,10 @@ agentic-substrate/
 │   │   ├── 0002-unified-falkordb-hybrid-graphrag.md
 │   │   ├── 0003-pydantic-ai-graph-extractor-and-rate-limiter.md
 │   │   ├── 0004-universal-structure-tolerant-chunker.md
-│   │   └── 0005-configurable-ocr-and-openrouter-vlm.md
+│   │   ├── 0005-configurable-ocr-and-openrouter-vlm.md
+│   │   ├── ...
+│   │   ├── 0010-lean-7b-direct-openrouter-structured-extractor.md
+│   │   └── 0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md
 │   └── ideas/                  # Concept exploration documents
 ├── frontend/                   # React 18 + Vite SPA Console Hub & Playground
 ├── migrations/                 # Alembic async database migrations
@@ -252,13 +260,15 @@ agentic-substrate/
 ## 📜 Architectural Decisions (ADRs)
 - [ADR-0001: Hexagonal Event-Sourced Architecture with Single Class Per File](docs/decisions/0001-hexagonal-event-sourced-architecture.md)
 - [ADR-0002: Unified FalkorDB Hybrid GraphRAG Engine](docs/decisions/0002-unified-falkordb-hybrid-graphrag.md)
-- [ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization](docs/decisions/0003-pydantic-ai-graph-extractor-and-rate-limiter.md)
+- [ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization](docs/decisions/0003-pydantic-ai-graph-extractor-and-rate-limiter.md) *(Superseded by ADR-0010 & ADR-0011)*
 - [ADR-0004: Universal Structure-Tolerant Markdown Chunker](docs/decisions/0004-universal-structure-tolerant-chunker.md)
 - [ADR-0005: Configurable Multimodal OCR, OpenRouter VLM and PydanticAI OpenAI Provider](docs/decisions/0005-configurable-ocr-and-openrouter-vlm.md)
 - [ADR-0006: CQRS Consolidated Read Model Projections and O(1) Relational Query Engine](docs/decisions/0006-cqrs-read-model-projections.md)
 - [ADR-0007: OpenRouter Gemma 4 Fact-Dense RAG Synthesis & Dual-Mode Query Architecture](docs/decisions/0007-openrouter-gemma-4-fact-dense-rag-synthesis.md)
 - [ADR-0008: Optimized GraphRAG Retrieval, Candidate Fusion & Dynamic Token Budgeting](docs/decisions/0008-optimized-graphrag-retrieval-and-budgeting.md)
 - [ADR-0009: Bounded Multiplicative Graph Decay, Natural Candidate Deduplication & Asymmetric Retrieval](docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md)
+- [ADR-0010: Lean 7B/8B Structured Ontology Extractor via Direct OpenRouter JSON Completion](docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md)
+- [ADR-0011: Deprecation of PydanticAI, Legacy Parsers/Chunkers, and Environment Hardening](docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md)
 
 ---
 

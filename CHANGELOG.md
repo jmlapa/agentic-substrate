@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-09-16
+
+### Removed
+- **Descontinuação de `pydantic-ai` e Purga de Dependências**:
+  - Remoção de `pydantic-ai>=2.31.0` do `pyproject.toml` e exclusão de 67 pacotes transitivos pesados não utilizados (`google-genai`, `opentelemetry-*`, `logfire`, etc.).
+  - Remoção dos adaptadores legados de extração: `PydanticAiGraphExtractor`, `PydanticAiOpenRouterProviderFactory`, `ExistingEntityRegistry` e `IEntityRegistry`.
+  - Remoção de parsers e chunkers obsoletos: `MarkItDownDocumentParser` (substituído por `ParallelVlmDocumentParser`), `MarkdownParentChildChunker` (substituído por `StructureTolerantMarkdownChunker`), `DeepSeekRagSynthesizer` e `GeminiRagSynthesizer` (substituídos por `OpenRouterRagSynthesizer`).
+  - Remoção de scripts PoC descartáveis da pasta `scripts/` (`poc_hierarchical_json_toc.py`, `poc_sliding_window_ocr.py`, `poc_synthetic_toc_qwen.py`).
+  - Limpeza de variáveis de ambiente fantasmas em `AppSettings`, `.env.example`, `deploy/vm/.env.example` e `docker/docker-compose.yml` (`GEMINI_MODEL_NAME`, `GEMINI_MAX_RPM`, `GEMINI_MAX_TPM`, `GEMINI_MAX_CONCURRENCY`, `GRAPH_EXTRACTOR_PROVIDER`, `OCR_TOC_BATCH_SIZE`, `OCR_DEFAULT_MARKDOWN_PROMPT`, `S3_*`, `STORAGE_TYPE`).
+
+### Changed
+- **Dependência Explícita do SDK OpenAI para OpenRouter**:
+  - Adição direta de `openai>=1.40.0` no `pyproject.toml` para comunicação com a API OpenRouter via `DirectOpenRouterGraphExtractor` e `OpenRouterRagSynthesizer`.
+- **Fiação do IoC Container (`Container`)**:
+  - Configuração exclusiva do `DirectOpenRouterGraphExtractor` (com fallback determinístico local) e `OpenRouterRagSynthesizer`.
+- **Frontend Pipeline Tracker**:
+  - Atualização do indicador de status da etapa de extração de ontologia de `PydanticAI` para `OpenRouter`.
+
+### Documentation
+- **ADRs e Especificações Técnicas**:
+  - Criação do `ADR-0011: Deprecation of PydanticAI, Legacy Parsers/Chunkers, and Environment Hardening`.
+  - Atualização do `ADR-0003` (marcado como superado por ADR-0010 e ADR-0011).
+  - Sincronização do `CAPABILITY-MAP.md`, `README.md`, `SPEC-pydantic-ai-graph-extractor-and-rate-limiter.md` e `SPEC-knowledge-chunking-and-embeddings.md`.
+
 ## [0.7.0] - 2026-09-15
 
 ### Added

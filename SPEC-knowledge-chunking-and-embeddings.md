@@ -1,5 +1,8 @@
 # Spec: Markdown Parent-Child Chunking & Gemini Embedding 2 Substrate
 
+> [!NOTE]
+> **EVOLUÇÃO DO CHUNKER:** O particionador inicial `MarkdownParentChildChunker` foi aprimorado e substituído pelo `StructureTolerantMarkdownChunker` com `AtomicBlockLexer` (ver [`SPEC-markdown-structure-tolerant-chunker.md`](file:///Users/insider/personal/agentic-substrate/SPEC-markdown-structure-tolerant-chunker.md), [ADR-0004](file:///Users/insider/personal/agentic-substrate/docs/decisions/0004-universal-structure-tolerant-chunker.md) e [ADR-0011](file:///Users/insider/personal/agentic-substrate/docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md)).
+
 ## Objective
 Implementar um pipeline robusto de particionamento hierárquico de Markdown (`MarkdownParentChildChunker`) e geração assíncrona de embeddings via Google Gemini (`gemini-embedding-2`), integrando os vetores de texto e entidades ontológicas no PostgreSQL com `pgvector` e amarrando a proveniência dos chunks na Saga Coreografada de ingestão do Knowledge Substrate.
 

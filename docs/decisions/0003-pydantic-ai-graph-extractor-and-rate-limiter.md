@@ -1,7 +1,7 @@
 # ADR-0003: PydanticAI v2 Graph Extraction, Rate Limiting and Cumulative Canonization
 
 ## Status
-Accepted (Refined and superseded in part by ADR-0010 for OpenRouter direct extraction)
+Superseded by ADR-0010 and ADR-0011
 
 ## Date
 2026-08-17

@@ -1,5 +1,8 @@
 # Spec: PydanticAI Graph Extractor, Rate Limiter (RPM/TPM) & Entity Canonicalization
 
+> [!WARNING]
+> **DEPRECATED / SUPERSEDED:** A extração via `PydanticAI` e o modelo Gemini Flash-Lite foram descontinuados e substituídos formalmente pela especificação [`SPEC-lean-7b-direct-openrouter-structured-extractor.md`](file:///Users/insider/personal/agentic-substrate/SPEC-lean-7b-direct-openrouter-structured-extractor.md) e pelos registros [ADR-0010](file:///Users/insider/personal/agentic-substrate/docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md) e [ADR-0011](file:///Users/insider/personal/agentic-substrate/docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md). O extrator padrão em produção é o `DirectOpenRouterGraphExtractor` (`meta-llama/llama-3.1-8b-instruct`).
+
 ## Objective
 Implementar um extrator ontológico de grafos de alta performance e baixo custo (`PydanticAiGraphExtractor`) baseado em `pydantic-ai` v2 e no modelo **Gemini Flash-Lite**, acoplado a um **Rate Limiter Assíncrono com Sliding Window** (`AsyncTokenBucketLimiter`) para controle estrito de cotas (RPM e TPM) e a um mecanismo de **Resolução Cumulativa de Entidades** (`ExistingEntityRegistry`) para evitar nós duplicados no FalkorDB.
 

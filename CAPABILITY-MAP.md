@@ -3,7 +3,7 @@
 | Module id | Responsibility | Depends on | Status |
 |---|---|---|---|
 | `kernel` | Primitivas compartilhadas puras (Entity, ValueObject, AggregateRoot, DomainEvent, Result/Either), contratos de Event Sourcing, interfaces de EventBus, PostgresEventStore com concorrência otimista, controle de vazão (AsyncTokenBucketLimiter) e abstrações base. | — | Completed (v0.2.0) |
-| `knowledge` | Pipeline assíncrono GraphRAG: ingestão particionada por KB em Local FileSystem Storage, Saga coreografada com Event Sourcing, parser MarkItDown (com fast-path nativo zero-cost e OCR multimodal via OpenRouter/Qwen3-VL), chunking hierárquico tolerante à estrutura (StructureTolerantMarkdownChunker), embeddings Gemini 2 com MRL (768d), extração ontológica com PydanticAI v2 (OpenRouter/Google Gemma 4 e Gemini), rate limiting (300 RPM / 1M TPM), canonização cumulativa de entidades e indexação híbrida no FalkorDB. | `kernel` | Completed (v0.3.0) |
+| `knowledge` | Pipeline assíncrono GraphRAG: ingestão particionada por KB em Local FileSystem Storage, Saga coreografada com Event Sourcing, parser multimodal e VLM paralelo (ParallelVlmDocumentParser / Qwen3-VL com Two-Pass Synthetic ToC e fast-path CPU), chunking hierárquico tolerante à estrutura (StructureTolerantMarkdownChunker), embeddings Gemini 2 com MRL (768d), extração ontológica direta via OpenRouter (Llama 3.1 8B) com fallback determinístico local, síntese RAG com Google Gemma 4 via OpenRouter, rate limiting assíncrono (1.500 RPM / 10M TPM) e indexação híbrida no FalkorDB. | `kernel` | Completed (v0.3.0) |
 | `api-gateway` | Exposição HTTP/REST assíncrona (FastAPI), container de injeção de dependências (IoC), orquestração de endpoints para gerenciamento de KBs, templates de ontologia, upload particionado com opções de OCR e consultas híbridas GraphRAG com subgrafos e nós ontológicos. | `kernel`, `knowledge` | Completed (v0.3.0) |
 | `frontend-console` | Console SPA leve (Vite, React, TypeScript, Tailwind CSS) para gestão de ontologias, criação e listagem de KBs, upload de documentos com toggle de OCR e instruções customizadas de Markdown, monitoramento visual em tempo real por etapas de pipeline e playground de consulta RAG com LLM. | `api-gateway` | Completed (v0.3.0) |
 | `memory` | Memória de curto/longo prazo para agentes, histórico de diálogos, grafos de memória episódica/semântica. | `kernel` | Backlog (v0.4.0) |
@@ -41,6 +41,7 @@
 - `docs/decisions/0008-optimized-graphrag-retrieval-and-budgeting.md`
 - `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`
 - `docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md`
+- `docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
