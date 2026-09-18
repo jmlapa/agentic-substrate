@@ -16,7 +16,7 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
 ```
                       ┌────────────────────────────────────────┐
                       │              API Gateway               │
-                      │     (FastAPI REST / OpenAPI DTOs)      │
+                      │  (FastAPI REST + Streamable SSE MCP)   │
                       └───────────────────┬────────────────────┘
                                           │
                                           ▼
@@ -81,6 +81,15 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
 ### 6. Frontend Console SPA (`/frontend`)
 - Modern, responsive SPA built with **React 18.3 + Vite 5.4 + TypeScript 5.5 + Tailwind CSS 3.4** and TanStack React Query v5.
 - Visual management of Ontologies, Knowledge Bases, live ingestion pipeline progress tracker, and interactive RAG Playground with synthesized LLM responses and evidence inspection.
+
+### 7. Streamable HTTP/SSE Model Context Protocol (MCP) Server
+- **Unified Edge Protocol**: Standardized Anthropic MCP interface hosted over HTTP/SSE at `/mcp/sse` and `/mcp/messages`.
+- **In-Process High Performance**: Direct in-memory invocation of use cases via `AppContainer` with 0ms extra IPC latency.
+- **Autonomous Agent Interoperability**: Seamlessly connect Cursor, Claude Desktop, LangGraph, CrewAI, AutoGen, or custom agents.
+- **Cognitive Tools**:
+  - `knowledge_query`: Hybrid GraphRAG query with fact-dense synthesis and optional graph triples evidence.
+  - `knowledge_list_kbs`: Lists all available Knowledge Bases with status and document counts.
+  - `knowledge_search_notes`: Fast-path instant lexical and structural header search without LLM token cost.
 
 ---
 
@@ -205,6 +214,47 @@ curl -X POST http://localhost:8000/api/v1/knowledge/bases/{kb_id}/query \
   }'
 ```
 
+### Connect Autonomous Agents via Model Context Protocol (MCP)
+External agents can connect directly to the Streamable HTTP/SSE MCP endpoint (`http://localhost:8000/mcp/sse` or `https://<your-domain>/mcp/sse`).
+
+**Claude Desktop / Cursor Configuration (`mcpServers`):**
+```json
+{
+  "mcpServers": {
+    "agentic-substrate": {
+      "url": "http://localhost:8000/mcp/sse"
+    }
+  }
+}
+```
+
+**Python Client Example (`mcp` SDK):**
+```python
+import asyncio
+from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
+
+
+async def main():
+    async with sse_client("http://localhost:8000/mcp/sse") as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # List available tools
+            tools = await session.list_tools()
+            print([t.name for t in tools.tools])
+
+            # Query Knowledge Graph
+            result = await session.call_tool(
+                "knowledge_query",
+                arguments={"kb_id": "<kb-uuid>", "query": "Quais são as regras de tributação?"},
+            )
+            print(result.content[0].text)
+
+
+asyncio.run(main())
+```
+
 ---
 
 ## 📁 Repository Structure
@@ -269,6 +319,7 @@ agentic-substrate/
 - [ADR-0009: Bounded Multiplicative Graph Decay, Natural Candidate Deduplication & Asymmetric Retrieval](docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md)
 - [ADR-0010: Lean 7B/8B Structured Ontology Extractor via Direct OpenRouter JSON Completion](docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md)
 - [ADR-0011: Deprecation of PydanticAI, Legacy Parsers/Chunkers, and Environment Hardening](docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md)
+- [ADR-0012: Streamable HTTP/SSE Model Context Protocol (MCP) Server and Modular Tool Providers](docs/decisions/0012-streamable-http-sse-mcp-server.md)
 
 ---
 

@@ -1,53 +1,58 @@
-# Implementation Plan: Single-VM All-in-One Deployment (Marco 1.21)
+# Implementation Plan: Streamable HTTP/SSE MCP Server (Marco 1.22)
 
 ## 1. Overview
 
-Disponibilizar o módulo `deploy/vm/` que permite subir o **Agentic Substrate** completo (FastAPI, React Console SPA, PostgreSQL com pgvector, FalkorDB, Redis e Caddy 2 com SSL automático) em uma única máquina virtual (AWS EC2, GCP Compute Engine, etc.) com um único comando. O plano é dividido em 5 tarefas incrementais e verificáveis.
+Implementar a interface de **Model Context Protocol (MCP)** sobre **HTTP/SSE (Server-Sent Events)** no `api-gateway` do Agentic Substrate. A interface permitirá que agentes autônomos externos (Claude, Cursor, LangGraph, CrewAI, AutoGen) descubram e consumam as ferramentas cognitivas de recuperação do Substrate (`knowledge_query`, `knowledge_list_kbs`, `knowledge_search_notes`) de forma in-process, modular e com tipagem estrita.
 
 ---
 
 ## 2. Architecture Decisions
 
-- **Modo All-in-One Estrito:** Todos os componentes rodam na mesma VM compartilhando uma rede interna Docker bridge isolada (`substrate_net`).
-- **Segurança por Padrão (Zero DB Port Exposure):** Nenhuma porta de banco de dados (`5432`, `6379`, `6380`) ou backend (`8000`) é exposta ao host (`0.0.0.0`). Apenas `80` e `443` do Caddy são públicas.
-- **Persistência de Bloco no Host:** Volumes mapeados no SSD da máquina (`./data/...`) garantem que o FalkorDB (grafo + vetores HNSW), PostgreSQL (event store + tabelas) e Redis (sagas) nunca percam dados em reinícios de containers.
-- **Caddy como Reverse Proxy & Ingress Único:** Serve o frontend SPA em `/`, roteia `/api/*` e `/docs` para a API Gateway e gera certificados Let's Encrypt automaticamente.
-- **Automação Idempotente (`setup.sh`):** Suporta execução automatizada via Terraform/cloud-init (se o `.env` já estiver presente) ou manual via SSH.
+- **Servidor MCP Unificado na Borda:** Um único ponto de entrada SSE (`/mcp/sse` e `/mcp/messages`), eliminando a necessidade de múltiplos servidores e conexões paralelas no cliente MCP.
+- **In-Process Invocation:** O servidor MCP chama diretamente os Use Cases em memória através do `AppContainer`, com 0ms de latência de rede adicional e sem necessidade de proxy HTTP intermediário.
+- **Single Class per File & Modular Providers:** Cada ferramenta (`KnowledgeQueryTool`, etc.) e o provedor de ferramentas (`KnowledgeMcpToolProvider`) residem em seus próprios arquivos, seguindo rigorosamente o `AGENTS.md`.
+- **Foco em Retrieval no MVP:** Operações de ingestão e mutação pesadas continuam na API REST (`multipart/form-data`), mantendo o MCP rápido, focado e imune a gargalos de payload binário sobre JSON-RPC.
 
 ---
 
 ## 3. Dependency Graph
 
 ```
-[Task 1] Templates de Configuração & Proxy (deploy/vm/.env.example, deploy/vm/Caddyfile)
+[Task 1] Adicionar dependência 'mcp' no pyproject.toml
     │
-    └── [Task 2] Orquestração Docker Compose All-in-One (deploy/vm/docker-compose.yml)
+    └── [Task 2] Protocolo IMcpToolProvider e Handlers das Tools (tools/ e protocols/)
             │
-            └── [Task 3] Script de Automação e Provisionamento (deploy/vm/setup.sh)
+            └── [Task 3] Provedor Modular KnowledgeMcpToolProvider (providers/)
                     │
-                    └── [Task 4] Suíte de Testes Automatizados de Configuração (tests/unit/test_deploy_vm_configuration.py)
+                    └── [Task 4] Servidor MCP e Gerenciador de Sessões SSE (mcp_server_app.py)
                             │
-                            └── [Task 5] Documentação no README.md e Gate Final (make pre-commit)
+                            └── [Task 5] Integração no FastAPI (main.py) e Roteamento Proxy
+                                    │
+                                    └── [Task 6] Testes de Integração End-to-End MCP (SSE + JSON-RPC)
+                                            │
+                                            └── [Task 7] Gate Final de Qualidade (make pre-commit)
 ```
 
 ---
 
 ## 4. Phase Breakdown
 
-### Phase 1: Configuração e Proxy Core (Task 1)
-Criação do template `.env.example` com presets de infraestrutura interna e do `Caddyfile` com regras de roteamento reverso, compressão e suporte a SSE.
+### Phase 1: Dependências e Contratos das Ferramentas (Tasks 1, 2, 3)
+- Adição da dependência `mcp>=1.3.0` ao `pyproject.toml`.
+- Definição do protocolo `IMcpToolProvider`.
+- Criação das 3 tools individuais com tipagem estrita: `KnowledgeQueryTool`, `KnowledgeListKbsTool`, `KnowledgeSearchNotesTool`.
+- Criação do `KnowledgeMcpToolProvider` agregando as ferramentas do domínio `knowledge`.
+- Testes unitários com mocks do `AppContainer`.
 
-### Phase 2: Orquestração All-in-One (Task 2)
-Criação do `deploy/vm/docker-compose.yml` coordenando os 6 containers com healthchecks, ordem estrita de inicialização e persistência local.
+### Phase 2: Servidor SSE e Integração ao Gateway (Tasks 4, 5)
+- Criação da aplicação MCP utilizando `SseServerTransport` do SDK oficial `mcp`.
+- Gerenciamento de sessões para comunicação bidirecional (`GET /mcp/sse` e `POST /mcp/messages`).
+- Montagem da sub-aplicação no FastAPI principal (`src/api_gateway/main.py`).
+- Ajuste no `deploy/vm/Caddyfile` para permitir `/mcp/*` com buffering desativado (streaming SSE nativo).
 
-### Phase 3: Script de Setup Idempotente (Task 3)
-Criação do `deploy/vm/setup.sh` com instalação automática do Docker/Compose, geração de senha segura de banco, verificação de `.env` e subida com migração.
-
-### Phase 4: Validação Automatizada (Task 4)
-Implementação de testes unitários que validam sintaxe do YAML, isolamento de portas, consistência de variáveis com `AppSettings` e validade do script bash.
-
-### Phase 5: Documentação e Gate de Qualidade (Task 5)
-Atualização do `README.md` com instruções de deploy em VM e execução do gate completo `make pre-commit`.
+### Phase 3: Verificação Ponta a Ponta e Gate (Tasks 6, 7)
+- Suíte de testes de integração simulando o cliente MCP (handshake SSE, `initialize`, `tools/list`, `tools/call`).
+- Execução do gate oficial `make pre-commit` (Ruff lint, Ruff format, Mypy strict, Pytest coverage).
 
 ---
 
@@ -55,7 +60,7 @@ Atualização do `README.md` com instruções de deploy em VM e execução do ga
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Variáveis desincronizadas entre `.env.example` e `AppSettings` | Médio | Teste automatizado validando que toda variável essencial exigida pelo backend está no template. |
-| Portas de banco expostas acidentalmente para a internet pública | Alto | Teste unitário inspecionando o Compose para garantir que apenas Caddy tem bindings de portas no host. |
-| Ingestão massiva causando OOM na VM | Alto | Documentação formal exigindo VM com mínimo de 8GB de RAM (GCP `e2-standard-2` ou AWS `t4g.medium`). |
-| Script `setup.sh` quebrando em ambientes sem `sudo` interativo | Médio | Detecção de privilégios de root / uso não interativo de apt (`DEBIAN_FRONTEND=noninteractive`). |
+| Incompatibilidade de tipos Pydantic v2 no SDK MCP | Médio | Uso do SDK oficial `mcp>=1.3.0` que já é construído nativamente sobre Pydantic v2. |
+| Buffering de SSE pelo proxy reverso (Caddy / Nginx) | Alto | Configuração explícita de desativação de buffer no Caddyfile (`flush_interval -1`) para rotas SSE. |
+| Violação da regra Single Class per File | Alto | Cada tool, provider e transport wrapper criado em seu próprio arquivo dedicado. |
+| Overhead de tokens com retornos longos do GraphRAG | Médio | Formatação concisa em Markdown na ferramenta `knowledge_query`, com opção de evidências de grafo apenas sob demanda (`include_graph_evidence=False` por padrão). |

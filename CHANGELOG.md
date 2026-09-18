@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-18
+
+### Added
+- **Servidor Streamable HTTP/SSE Model Context Protocol (MCP - Marco 1.22)**:
+  - **Servidor MCP Unificado na Borda (`src/api_gateway/mcp/`)**:
+    - Servidor montado em `/mcp` no FastAPI (`/mcp/sse` para handshake SSE e `/mcp/messages` para mensagens JSON-RPC 2.0).
+    - Integração nativa in-process com o `AppContainer` com resolução dinâmica de container ativo durante o lifespan da aplicação.
+  - **Ferramentas Cognitivas e de Descoberta (`src/api_gateway/mcp/tools/`)**:
+    - `KnowledgeQueryTool` (`knowledge_query`): Execução assíncrona de GraphRAG com síntese factual e evidências de grafo opcionais.
+    - `KnowledgeListKbsTool` (`knowledge_list_kbs`): Listagem de bases de conhecimento cadastradas com métricas de documentos e status.
+    - `KnowledgeSearchNotesTool` (`knowledge_search_notes`): Busca rápida por cabeçalhos e trechos sem custo de tokens LLM.
+  - **Provedor Modular de Ferramentas (`src/api_gateway/mcp/providers/`)**:
+    - Protocolo `IMcpToolProvider` e implementação `KnowledgeMcpToolProvider` seguindo estritamente a disciplina Single Class per File.
+  - **Suporte a Streaming em Proxy Reverso (`deploy/vm/Caddyfile`)**:
+    - Configuração de rota `/mcp/*` com desativação explícita de buffer (`flush_interval -1`) para entrega imediata de eventos SSE.
+  - **Suíte de Testes Automatizados**:
+    - Testes unitários com mocks em `tests/unit/api_gateway/mcp/`.
+    - Teste de integração end-to-end com o cliente MCP oficial (`mcp.client.sse`) em `tests/integration/test_mcp_sse_server.py`.
+  - **Documentação Arquitetural**:
+    - Criação de `docs/decisions/0012-streamable-http-sse-mcp-server.md` e atualização da especificação técnica `SPEC-streamable-mcp-server.md`.
+
 ## [0.7.1] - 2026-09-16
 
 ### Removed

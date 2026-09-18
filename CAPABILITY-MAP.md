@@ -4,7 +4,7 @@
 |---|---|---|---|
 | `kernel` | Primitivas compartilhadas puras (Entity, ValueObject, AggregateRoot, DomainEvent, Result/Either), contratos de Event Sourcing, interfaces de EventBus, PostgresEventStore com concorrência otimista, controle de vazão (AsyncTokenBucketLimiter) e abstrações base. | — | Completed (v0.2.0) |
 | `knowledge` | Pipeline assíncrono GraphRAG: ingestão particionada por KB em Local FileSystem Storage, Saga coreografada com Event Sourcing, parser multimodal e VLM paralelo (ParallelVlmDocumentParser / Qwen3-VL com Two-Pass Synthetic ToC e fast-path CPU), chunking hierárquico tolerante à estrutura (StructureTolerantMarkdownChunker), embeddings Gemini 2 com MRL (768d), extração ontológica direta via OpenRouter (Llama 3.1 8B) com fallback determinístico local, síntese RAG com Google Gemma 4 via OpenRouter, rate limiting assíncrono (1.500 RPM / 10M TPM) e indexação híbrida no FalkorDB. | `kernel` | Completed (v0.3.0) |
-| `api-gateway` | Exposição HTTP/REST assíncrona (FastAPI), container de injeção de dependências (IoC), orquestração de endpoints para gerenciamento de KBs, templates de ontologia, upload particionado com opções de OCR e consultas híbridas GraphRAG com subgrafos e nós ontológicos. | `kernel`, `knowledge` | Completed (v0.3.0) |
+| `api-gateway` | Exposição HTTP/REST assíncrona (FastAPI), servidor unificado Streamable HTTP/SSE Model Context Protocol (MCP em `/mcp`), container de injeção de dependências (IoC), orquestração de endpoints para gerenciamento de KBs, templates de ontologia, upload particionado com opções de OCR e consultas híbridas GraphRAG com subgrafos e nós ontológicos. | `kernel`, `knowledge` | Completed (v0.8.0) |
 | `frontend-console` | Console SPA leve (Vite, React, TypeScript, Tailwind CSS) para gestão de ontologias, criação e listagem de KBs, upload de documentos com toggle de OCR e instruções customizadas de Markdown, monitoramento visual em tempo real por etapas de pipeline e playground de consulta RAG com LLM. | `api-gateway` | Completed (v0.3.0) |
 | `memory` | Memória de curto/longo prazo para agentes, histórico de diálogos, grafos de memória episódica/semântica. | `kernel` | Backlog (v0.4.0) |
 | `tool-registry` | Registro, validação e governança de tools executáveis por agentes. | `kernel` | Backlog (v0.5.0) |
@@ -29,6 +29,7 @@
 - `SPEC-markdown-continuity-normalizer.md` (Marco 1.19 - Markdown Continuity Normalizer) — Concluído (v0.3.8)
 - `SPEC-lean-7b-direct-openrouter-structured-extractor.md` (Marco 1.20 - Lean 7B/8B Structured Ontology Extractor via OpenRouter & Llama 3.1 8B) — Concluído (v0.6.0)
 - `SPEC-vm-all-in-one-deploy.md` (Marco 1.21 - Modo de Deploy All-in-One em VM Única) — Concluído (v0.7.0)
+- `SPEC-streamable-mcp-server.md` (Marco 1.22 - Streamable HTTP/SSE MCP Server & Modular Tool Providers) — Concluído (v0.8.0)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -42,6 +43,7 @@
 - `docs/decisions/0009-bounded-multiplicative-graph-decay-and-natural-deduplication.md`
 - `docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md`
 - `docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md`
+- `docs/decisions/0012-streamable-http-sse-mcp-server.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
@@ -56,6 +58,7 @@
 10. **Marco 1.19 (Concluído - v0.3.8):** `knowledge:markdown-continuity-normalizer` (Continuous Markdown Normalizer, Header Deduplication, Inter-Page Continuity Rules)
 11. **Marco 1.20 (Concluído - v0.6.0):** `knowledge:lean-7b-direct-openrouter-structured-extractor` (Direct OpenRouter Extractor, Llama 3.1 8B, Constrained Decoding, Referential Integrity Filter, Multi-Complexity Eval Suite)
 12. **Marco 1.21 (Concluído - v0.7.0):** `deploy:vm-all-in-one` (Deploy All-in-One em VM Única com Docker Compose + Caddy SSL Automático)
-13. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+13. **Marco 1.22 (Concluído - v0.8.0):** `api-gateway:streamable-mcp-server` (Streamable HTTP/SSE Model Context Protocol Server & Modular Knowledge Tool Providers)
+14. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 
 

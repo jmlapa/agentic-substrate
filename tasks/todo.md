@@ -1,4 +1,4 @@
-# Task List: Single-VM All-in-One Deployment (Marco 1.21)
+# Task List: Streamable HTTP/SSE MCP Server (Marco 1.22)
 
 > **Regra de ouro:** Implement → Test → Verify (passing) → Commit.
 > Cada tarefa deve ter escopo atômico, critérios de aceitação testáveis e verificação explícita.
@@ -7,114 +7,157 @@
 
 ## Tasks
 
-### Task 1: Criar templates de configuração e proxy (`deploy/vm/.env.example` e `deploy/vm/Caddyfile`)
+### Task 1: Adicionar dependência oficial `mcp` ao `pyproject.toml`
 
-**Description:** Cria o diretório `deploy/vm/` contendo o template de variáveis de ambiente com presets seguros para a VM e o `Caddyfile` configurado para roteamento unificado, SSL automático Let's Encrypt, compressão gzip/zstd e suporte a streaming de tokens.
+**Description:** Adiciona `mcp>=1.3.0` como dependência principal do projeto no `pyproject.toml` e sincroniza o ambiente de desenvolvimento.
 
 **Acceptance criteria:**
-- [x] `deploy/vm/.env.example` criado com presets para `POSTGRES_HOST=postgres`, `FALKORDB_HOST=falkordb`, `REDIS_HOST=redis`, `STORAGE_TYPE=local` e placeholders para `DOMAIN_NAME`, `ACME_EMAIL`, `POSTGRES_PASSWORD`, `OPENROUTER_API_KEY` e `GEMINI_API_KEY`.
-- [x] `deploy/vm/Caddyfile` criado com suporte a variável `{$DOMAIN_NAME:localhost}`, roteamento de `/api/*` e `/docs*` para `api:8000`, e `/*` para `frontend:80`.
-- [x] Headers `X-Forwarded-Proto` e `X-Real-IP` configurados no Caddy.
+- [x] `pyproject.toml` contém `"mcp>=1.3.0"` em `dependencies`.
+- [x] O pacote é importável em Python (`python -c "import mcp"` executa com sucesso).
 
 **Verification:**
 ```bash
-test -f deploy/vm/.env.example && test -f deploy/vm/Caddyfile
-grep "DOMAIN_NAME" deploy/vm/.env.example
-grep "reverse_proxy api:8000" deploy/vm/Caddyfile
+python -c "import mcp; print(mcp.__file__)"
 ```
 
 **Files touched:**
-- `deploy/vm/.env.example`
+- `pyproject.toml`
+
+**Commit:** `chore(deps): add official mcp sdk dependency`
+
+---
+
+### Task 2: Implementar o protocolo `IMcpToolProvider` e as classes isoladas das Tools
+
+**Description:** Cria o protocolo `IMcpToolProvider` e implementa as 3 classes isoladas de ferramentas no padrão Single Class per File em `src/api_gateway/mcp/tools/` e `src/api_gateway/mcp/protocols/`, além de testes unitários para cada tool.
+
+**Acceptance criteria:**
+- [x] `src/api_gateway/mcp/protocols/i_mcp_tool_provider.py` criado definindo o contrato de provedor de tools.
+- [x] `src/api_gateway/mcp/tools/knowledge_query_tool.py` criado implementando `knowledge_query`.
+- [x] `src/api_gateway/mcp/tools/knowledge_list_kbs_tool.py` criado implementando `knowledge_list_kbs`.
+- [x] `src/api_gateway/mcp/tools/knowledge_search_notes_tool.py` criado implementando `knowledge_search_notes`.
+- [x] Arquivos `__init__.py` correspondentes exportam publicamente as classes.
+- [x] Testes unitários em `tests/unit/api_gateway/mcp/test_knowledge_tools.py` passando com 100% de sucesso.
+
+**Verification:**
+```bash
+pytest tests/unit/api_gateway/mcp/test_knowledge_tools.py -v
+mypy --strict src/api_gateway/mcp/
+```
+
+**Files touched:**
+- `src/api_gateway/mcp/protocols/i_mcp_tool_provider.py`
+- `src/api_gateway/mcp/protocols/__init__.py`
+- `src/api_gateway/mcp/tools/knowledge_query_tool.py`
+- `src/api_gateway/mcp/tools/knowledge_list_kbs_tool.py`
+- `src/api_gateway/mcp/tools/knowledge_search_notes_tool.py`
+- `src/api_gateway/mcp/tools/__init__.py`
+- `tests/unit/api_gateway/mcp/test_knowledge_tools.py`
+
+**Commit:** `feat(mcp): implement modular tool handlers for knowledge retrieval`
+
+---
+
+### Task 3: Implementar o provedor de ferramentas `KnowledgeMcpToolProvider`
+
+**Description:** Cria o `KnowledgeMcpToolProvider` em `src/api_gateway/mcp/providers/` implementando `IMcpToolProvider`, responsável por registrar e expor as definições e schemas das ferramentas do módulo Knowledge para o servidor MCP.
+
+**Acceptance criteria:**
+- [x] `KnowledgeMcpToolProvider` herda de `IMcpToolProvider`.
+- [x] Método `get_tools()` ou delegação registra as ferramentas na instância do servidor MCP.
+- [x] Suporte a registro das ferramentas `knowledge_query`, `knowledge_list_kbs` e `knowledge_search_notes`.
+- [x] Testes unitários em `tests/unit/api_gateway/mcp/test_knowledge_provider.py` passando.
+
+**Verification:**
+```bash
+pytest tests/unit/api_gateway/mcp/test_knowledge_provider.py -v
+mypy --strict src/api_gateway/mcp/providers/
+```
+
+**Files touched:**
+- `src/api_gateway/mcp/providers/knowledge_mcp_tool_provider.py`
+- `src/api_gateway/mcp/providers/__init__.py`
+- `tests/unit/api_gateway/mcp/test_knowledge_provider.py`
+
+**Commit:** `feat(mcp): implement knowledge mcp tool provider`
+
+---
+
+### Task 4: Implementar o servidor MCP com transporte SSE e gerenciamento de sessões
+
+**Description:** Implementa a sub-aplicação Starlette/FastAPI com transporte SSE (`SseServerTransport`) do SDK `mcp`, permitindo conexões de clientes em `/sse` e troca de mensagens JSON-RPC em `/messages`.
+
+**Acceptance criteria:**
+- [x] `src/api_gateway/mcp/mcp_server_app.py` cria a aplicação com endpoints SSE e mensagens.
+- [x] Handshake do MCP (`initialize`, `notifications/initialized`, `tools/list`, `tools/call`) suportado com sucesso.
+- [x] Tratamento adequado de fechamento e timeout de sessões.
+
+**Verification:**
+```bash
+mypy --strict src/api_gateway/mcp/
+```
+
+**Files touched:**
+- `src/api_gateway/mcp/mcp_server_app.py`
+- `src/api_gateway/mcp/__init__.py`
+
+**Commit:** `feat(mcp): create streamable sse mcp server application`
+
+---
+
+### Task 5: Integrar a sub-aplicação MCP no FastAPI (`main.py`) e Caddyfile
+
+**Description:** Monta a aplicação MCP no `main.py` em `/mcp` e atualiza a configuração de proxy reverso no `deploy/vm/Caddyfile` para assegurar suporte a streaming SSE (`flush_interval -1`).
+
+**Acceptance criteria:**
+- [x] Rota `/mcp` montada no FastAPI em `src/api_gateway/main.py`.
+- [x] `deploy/vm/Caddyfile` configurado para rotear `/mcp/*` para o backend com buffering de resposta desativado.
+
+**Verification:**
+```bash
+grep "/mcp" src/api_gateway/main.py
+grep "mcp" deploy/vm/Caddyfile
+```
+
+**Files touched:**
+- `src/api_gateway/main.py`
 - `deploy/vm/Caddyfile`
 
-**Commit:** `feat(deploy): add env template and caddyfile for single-vm deployment`
+**Commit:** `feat(mcp): mount mcp server in api gateway and configure caddy proxy`
 
 ---
 
-### Task 2: Implementar a orquestração Docker Compose All-in-One (`deploy/vm/docker-compose.yml`)
+### Task 6: Implementar suíte de testes de integração ponta a ponta para o MCP
 
-**Description:** Cria o `deploy/vm/docker-compose.yml` que orquestra os 6 serviços: `caddy`, `api`, `frontend`, `postgres`, `falkordb` e `redis`. Todos em rede interna isolada `substrate_net`. Apenas as portas 80 e 443 do Caddy são mapeadas no host. Todos os bancos e backend possuem healthchecks e dependências estritas.
+**Description:** Implementa testes de integração com `httpx.AsyncClient` testando o ciclo de vida completo via transporte SSE e mensagens JSON-RPC: `initialize`, listagem de ferramentas e execução de `knowledge_list_kbs` e `knowledge_query`.
 
 **Acceptance criteria:**
-- [x] 6 serviços declarados: `caddy`, `frontend`, `api`, `postgres`, `falkordb`, `redis`.
-- [x] Apenas o serviço `caddy` possui mapeamento de portas públicas (`80:80`, `443:443`).
-- [x] `postgres`, `falkordb`, `redis`, `api` expõem portas apenas dentro da rede interna `substrate_net`.
-- [x] Volumes de dados locais mapeados em `./data/postgres`, `./data/falkordb`, `./data/redis`, `./data/storage`, `./data/caddy_data`.
-- [x] Healthchecks configurados para postgres, falkordb, redis e api com `depends_on: condition: service_healthy`.
-- [x] `docker compose -f deploy/vm/docker-compose.yml config` valida com sucesso (com `.env` temporário).
+- [x] Teste de conexão SSE (`GET /mcp/sse`) recebendo evento com sessionId e URL de messages.
+- [x] Teste de chamada JSON-RPC `initialize` e `tools/list`.
+- [x] Teste de execução `tools/call` validando retorno formatado em Markdown.
+- [x] 100% dos testes de integração passando.
 
 **Verification:**
 ```bash
-cp deploy/vm/.env.example deploy/vm/.env
-docker compose -f deploy/vm/docker-compose.yml config > /dev/null
-rm deploy/vm/.env
+pytest tests/integration/test_mcp_sse_server.py -v
 ```
 
 **Files touched:**
-- `deploy/vm/docker-compose.yml`
+- `tests/integration/test_mcp_sse_server.py`
 
-**Commit:** `feat(deploy): add all-in-one docker compose orchestration for vm`
-
----
-
-### Task 3: Implementar o script de setup e provisionamento (`deploy/vm/setup.sh`)
-
-**Description:** Cria o script executável `deploy/vm/setup.sh` responsável por automatizar a inicialização do ambiente em uma VM Ubuntu/Debian recém-criada de forma totalmente idempotente.
-
-**Acceptance criteria:**
-- [x] Script verifica se Docker e Docker Compose v2 estão instalados (instala automaticamente se ausentes em distribuições Debian/Ubuntu).
-- [x] Preserva `.env` existente (injetado via Terraform ou CI) ou gera a partir de `.env.example` com senha segura para PostgreSQL.
-- [x] Cria os diretórios locais de persistência (`data/postgres`, `data/falkordb`, etc.) com permissões seguras.
-- [x] Executa `docker compose pull` e `up -d --build`.
-- [x] Executa migrações do Alembic (`exec api alembic upgrade head`).
-- [x] Exibe status dos containers e URL de acesso.
-- [x] Permissão de execução (`chmod +x`).
-
-**Verification:**
-```bash
-bash -n deploy/vm/setup.sh
-test -x deploy/vm/setup.sh
-```
-
-**Files touched:**
-- `deploy/vm/setup.sh`
-
-**Commit:** `feat(deploy): add automated idempotent setup script for vm appliance`
+**Commit:** `test(mcp): add end-to-end integration tests for streamable sse mcp`
 
 ---
 
-### Task 4: Implementar testes automatizados de configuração (`tests/unit/test_deploy_vm_configuration.py`)
+### Task 7: Executar validação final e gate de qualidade (`make pre-commit`)
 
-**Description:** Adiciona testes unitários com pytest para validar a integridade estática de todos os arquivos de configuração do módulo de deploy, garantindo que portas sensíveis não sejam expostas, que variáveis essenciais estejam presentes e que o script de setup seja sintaticamente válido.
-
-**Acceptance criteria:**
-- [x] Teste valida que `deploy/vm/docker-compose.yml` não faz binding de portas para o host nos serviços `postgres`, `falkordb`, `redis` e `api`.
-- [x] Teste valida que todos os 6 serviços possuem healthchecks ou dependências saudáveis.
-- [x] Teste valida que `deploy/vm/Caddyfile` contém blocos de proxy para `/api/*` e `/*`.
-- [x] Teste valida que as variáveis do `.env.example` cobrem as configurações do `AppSettings`.
-- [x] Teste valida a sintaxe bash do `setup.sh` usando `bash -n`.
-- [x] 100% dos testes passam com `pytest`.
-
-**Verification:**
-```bash
-uv run pytest tests/unit/test_deploy_vm_configuration.py -v
-```
-
-**Files touched:**
-- `tests/unit/test_deploy_vm_configuration.py`
-
-**Commit:** `test(deploy): add automated configuration and security validation suite for vm deploy`
-
----
-
-### Task 5: Documentar deploy em VM no README.md e executar gate de qualidade
-
-**Description:** Atualiza a documentação principal no `README.md` incluindo a seção "Deploy em Cloud Própria (VM Única)" com passos rápidos e claros, e executa a verificação completa de qualidade pré-commit.
+**Description:** Executa todos os linters, formatadores, checagem estrita de tipos e suíte completa de testes para garantir conformidade com o `AGENTS.md`.
 
 **Acceptance criteria:**
-- [x] `README.md` atualizado com seção dedicada ao deploy em VM única (AWS EC2, GCP Compute Engine).
-- [x] Instruções cobrem tanto o provisionamento automatizado quanto manual.
-- [x] `make pre-commit` executado e passando com 100% de sucesso (Ruff, Mypy strict, Pytest com cobertura).
+- [x] `ruff check .` com zero erros e warnings.
+- [x] `ruff format --check .` 100% formatado.
+- [x] `mypy --strict src/ tests/` com `No issues found`.
+- [x] `make pre-commit` aprovado com sucesso.
 
 **Verification:**
 ```bash
@@ -122,7 +165,6 @@ make pre-commit
 ```
 
 **Files touched:**
-- `README.md`
-- `CAPABILITY-MAP.md` (se necessário ajuste final de status)
+- Todos os arquivos modificados/criados
 
-**Commit:** `docs(deploy): document single-vm deployment in readme and pass quality gates`
+**Commit:** `chore(mcp): complete quality gates and pre-commit checks`

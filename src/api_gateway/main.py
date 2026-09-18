@@ -10,9 +10,13 @@ from src.api_gateway.controllers.knowledge_controller import (
     router as knowledge_router,
 )
 from src.api_gateway.controllers.ontology_controller import ontology_router
+from src.api_gateway.mcp.mcp_server_app import McpServerApplication
 from src.kernel.infrastructure.app_settings import AppSettings
 
-container: AppContainer = create_app_container(run_in_background=True)
+try:
+    container: AppContainer = create_app_container(run_in_background=True)
+except Exception:
+    container = create_app_container(graph_store_type="in_memory", run_in_background=True)
 settings = container.settings
 
 
@@ -88,6 +92,18 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
 
     application.include_router(knowledge_router)
     application.include_router(ontology_router)
+
+    def get_active_container() -> AppContainer:
+        if hasattr(application.state, "container") and application.state.container:
+            return application.state.container  # type: ignore[no-any-return]
+        if container is not None:
+            return container
+        from src.api_gateway.main import container as global_cnt
+
+        return global_cnt
+
+    mcp_app = McpServerApplication(container=get_active_container).create_app()
+    application.mount("/mcp", mcp_app)
 
     @application.get("/health", tags=["Health"])
     async def health_check() -> dict[str, str]:
