@@ -472,6 +472,7 @@ def create_app_container(
     )
     list_data_source_runs_uc = ListDataSourceRunsUseCase(
         run_repository=ds_run_repo,
+        data_source_repository=ds_repo,
     )
     delete_data_source_uc = DeleteDataSourceUseCase(
         data_source_repository=ds_repo,

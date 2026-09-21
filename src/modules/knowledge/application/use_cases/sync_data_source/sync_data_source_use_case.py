@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -60,6 +61,7 @@ class SyncDataSourceUseCase:
         event_bus: EventBus | None = None,
         logger: Logger | None = None,
         max_concurrency: int = 2,
+        max_file_size_bytes: int = 50 * 1024 * 1024,
     ) -> None:
         self._ds_repo = data_source_repository
         self._run_repo = data_source_run_repository
@@ -69,6 +71,7 @@ class SyncDataSourceUseCase:
         self._event_bus = event_bus
         self._logger = logger
         self._max_concurrency = max(1, max_concurrency)
+        self._max_file_size_bytes = max_file_size_bytes
 
     def _log_info(self, message: str) -> None:
         if self._logger:
@@ -90,7 +93,9 @@ class SyncDataSourceUseCase:
         )
 
         data_source = await self._ds_repo.get_by_id(request.data_source_id)
-        if data_source is None:
+        if data_source is None or (
+            request.kb_id is not None and data_source.kb_id != request.kb_id
+        ):
             msg = f"DataSource '{request.data_source_id}' não encontrado."
             self._log_error(f"[SyncDataSourceUseCase] {msg}")
             return Err(DomainError(msg, "DATA_SOURCE_NOT_FOUND"))
@@ -156,17 +161,27 @@ class SyncDataSourceUseCase:
 
             async def _process_item(item: DiscoveredDocumentItem) -> None:
                 async with semaphore:
+                    safe_name = Path(item.name).name or item.name
+                    if item.size_bytes > self._max_file_size_bytes:
+                        err_msg = (
+                            f"File '{item.name}' exceeds maximum allowed size "
+                            f"({item.size_bytes} > {self._max_file_size_bytes} bytes)"
+                        )
+                        self._log_error(f"[SyncDataSourceUseCase] {err_msg}")
+                        run.record_document_failed(doc_id=None, file_name=safe_name, error=err_msg)
+                        return
+
                     content: bytes | None = None
                     try:
                         self._log_info(
-                            f"[SyncDataSourceUseCase] Baixando item '{item.name}' "
+                            f"[SyncDataSourceUseCase] Baixando item '{safe_name}' "
                             f"(id={item.external_id})..."
                         )
                         content, resolved_mime, version_hash = await connector.download_document(
                             item.external_id, item.mime_type
                         )
 
-                        replaces_doc_id = existing_docs_by_name.get(item.name)
+                        replaces_doc_id = existing_docs_by_name.get(safe_name)
                         source_metadata: dict[str, Any] = {
                             "data_source_id": str(data_source.id),
                             "sync_run_id": str(run.id),
@@ -176,13 +191,13 @@ class SyncDataSourceUseCase:
                         }
 
                         self._log_info(
-                            f"[SyncDataSourceUseCase] Enviando '{item.name}' para attach "
+                            f"[SyncDataSourceUseCase] Enviando '{safe_name}' para attach "
                             f"(replaces_doc_id={replaces_doc_id}, run_id={run.id})..."
                         )
 
                         attach_req = AttachAndStoreDocumentRequest(
                             kb_id=data_source.kb_id,
-                            file_name=item.name,
+                            file_name=safe_name,
                             content_type=resolved_mime,
                             file_content=content,
                             source_metadata=source_metadata,
@@ -191,23 +206,23 @@ class SyncDataSourceUseCase:
                         if isinstance(attach_res, Err):
                             err_msg = f"Falha no attach_document: {attach_res.error.message}"
                             self._log_error(
-                                f"[SyncDataSourceUseCase] Erro no item '{item.name}': {err_msg}"
+                                f"[SyncDataSourceUseCase] Erro no item '{safe_name}': {err_msg}"
                             )
                             run.record_document_failed(
-                                doc_id=None, file_name=item.name, error=err_msg
+                                doc_id=None, file_name=safe_name, error=err_msg
                             )
                         else:
                             self._log_info(
-                                f"[SyncDataSourceUseCase] Item '{item.name}' anexado: "
+                                f"[SyncDataSourceUseCase] Item '{safe_name}' anexado: "
                                 f"doc_id='{attach_res.value.document_id}'"
                             )
                     except Exception as item_err:
                         err_msg = str(item_err)
                         self._log_error(
-                            f"[SyncDataSourceUseCase] Falha ao processar item '{item.name}': "
+                            f"[SyncDataSourceUseCase] Falha ao processar item '{safe_name}': "
                             f"{err_msg}"
                         )
-                        run.record_document_failed(doc_id=None, file_name=item.name, error=err_msg)
+                        run.record_document_failed(doc_id=None, file_name=safe_name, error=err_msg)
                     finally:
                         content = None
 

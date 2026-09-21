@@ -42,7 +42,7 @@ class DeleteDataSourceUseCase:
         )
 
         existing = await self._ds_repo.get_by_id(request.data_source_id)
-        if existing is None:
+        if existing is None or (request.kb_id is not None and existing.kb_id != request.kb_id):
             msg = f"DataSource com ID '{request.data_source_id}' não foi encontrado."
             self._log_error(f"[DeleteDataSourceUseCase] {msg}")
             return Err(DomainError(msg, "DATA_SOURCE_NOT_FOUND"))

@@ -158,7 +158,7 @@ async def delete_data_source(
         )
 
     res = await container.delete_data_source_use_case.execute(
-        DeleteDataSourceRequest(data_source_id=data_source_id)
+        DeleteDataSourceRequest(data_source_id=data_source_id, kb_id=kb_id)
     )
     if isinstance(res, Err):
         _logger.warning(
@@ -199,7 +199,7 @@ async def sync_data_source(
         )
 
     res = await container.sync_data_source_use_case.execute(
-        SyncDataSourceRequest(data_source_id=data_source_id)
+        SyncDataSourceRequest(data_source_id=data_source_id, kb_id=kb_id)
     )
     if isinstance(res, Err):
         _logger.warning(
@@ -257,7 +257,7 @@ async def list_data_source_runs(
         )
 
     res = await container.list_data_source_runs_use_case.execute(
-        ListDataSourceRunsRequest(data_source_id=data_source_id, limit=limit)
+        ListDataSourceRunsRequest(data_source_id=data_source_id, limit=limit, kb_id=kb_id)
     )
     if isinstance(res, Err):
         _logger.warning(
