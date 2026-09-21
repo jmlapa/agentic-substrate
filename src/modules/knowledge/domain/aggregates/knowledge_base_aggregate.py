@@ -159,8 +159,17 @@ class KnowledgeBaseAggregate(AggregateRoot):
         )
 
     def mark_knowledge_indexed(
-        self, document_id: UUID, indexed_nodes: int, indexed_edges: int
+        self,
+        document_id: UUID,
+        indexed_nodes: int,
+        indexed_edges: int,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
+        doc_meta = (
+            metadata
+            if metadata is not None
+            else self.documents.get(document_id, {}).get("metadata", {})
+        )
         self.record_event(
             DocumentKnowledgeIndexedEvent(
                 aggregate_id=self.id,
@@ -168,10 +177,22 @@ class KnowledgeBaseAggregate(AggregateRoot):
                 document_id=document_id,
                 indexed_nodes_count=indexed_nodes,
                 indexed_edges_count=indexed_edges,
+                metadata=dict(doc_meta),
             )
         )
 
-    def mark_processing_failed(self, document_id: UUID, step: str, error_message: str) -> None:
+    def mark_processing_failed(
+        self,
+        document_id: UUID,
+        step: str,
+        error_message: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        doc_meta = (
+            metadata
+            if metadata is not None
+            else self.documents.get(document_id, {}).get("metadata", {})
+        )
         self.record_event(
             DocumentProcessingFailedEvent(
                 aggregate_id=self.id,
@@ -179,6 +200,7 @@ class KnowledgeBaseAggregate(AggregateRoot):
                 document_id=document_id,
                 step=step,
                 error_message=error_message,
+                metadata=dict(doc_meta),
             )
         )
 

@@ -251,16 +251,16 @@
 **Description:** Cria os listeners de eventos desacoplados: `BlueGreenDocumentSwapHandler` para expurgar versões anteriores após indexação da nova, e `DataSourceRunProjector` para atualizar o progresso e finalizar as runs conforme os documentos são processados pelas Sagas.
 
 **Acceptance criteria:**
-- [ ] `BlueGreenDocumentSwapHandler` escuta `DocumentIndexedEvent`: se `replaces_doc_id` estiver presente, invoca `DeleteDocumentUseCase(kb_id, replaces_doc_id)`.
-- [ ] Se `replaces_doc_id` for `None`, o handler é No-Op.
-- [ ] `DataSourceRunProjector` escuta `DocumentIndexedEvent` e incrementa `indexed_files_count` na run correspondente via `sync_run_id`.
-- [ ] `DataSourceRunProjector` escuta `DocumentIngestionFailedEvent` e incrementa `failed_files_count`, anexando o erro no `failure_summary`.
-- [ ] Ao atingir `total_files`, a run é finalizada com o status correto (`COMPLETED`, `PARTIALLY_FAILED` ou `FAILED`).
-- [ ] Testes unitários em `tests/unit/test_data_source_handlers.py`.
+- [x] `BlueGreenDocumentSwapHandler` escuta `DocumentIndexedEvent`: se `replaces_doc_id` estiver presente, invoca `DeleteDocumentUseCase(kb_id, replaces_doc_id)`.
+- [x] Se `replaces_doc_id` for `None`, o handler é No-Op.
+- [x] `DataSourceRunProjector` escuta `DocumentIndexedEvent` e incrementa `indexed_files_count` na run correspondente via `sync_run_id`.
+- [x] `DataSourceRunProjector` escuta `DocumentIngestionFailedEvent` e incrementa `failed_files_count`, anexando o erro no `failure_summary`.
+- [x] Ao atingir `total_files`, a run é finalizada com o status correto (`COMPLETED`, `PARTIALLY_FAILED` ou `FAILED`).
+- [x] Testes unitários em `tests/unit/test_data_source_handlers.py`.
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/test_data_source_handlers.py -v`
-- [ ] `uv run mypy --strict src/modules/knowledge/application/handlers/`
+- [x] `uv run pytest tests/unit/test_data_source_handlers.py -v`
+- [x] `uv run mypy --strict src/modules/knowledge/application/handlers/`
 
 **Dependencies:** Task 8
 
@@ -275,9 +275,9 @@
 ---
 
 ### Checkpoint 4: Core Application Logic & Reactivity
-- [ ] Sync worker executando streaming $O(1)$ sem bloquear a API.
-- [ ] Blue/Green swap atômico funcionando via eventos sem downtime.
-- [ ] DataSourceRun rastreando métricas com fidelidade de ponta a ponta.
+- [x] Sync worker executando streaming $O(1)$ sem bloquear a API.
+- [x] Blue/Green swap atômico funcionando via eventos sem downtime.
+- [x] DataSourceRun rastreando métricas com fidelidade de ponta a ponta.
 
 ---
 
