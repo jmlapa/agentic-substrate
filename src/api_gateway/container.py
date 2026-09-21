@@ -18,11 +18,17 @@ from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator
 from src.modules.knowledge.application.use_cases.attach_and_store_document import (
     AttachAndStoreDocumentUseCase,
 )
+from src.modules.knowledge.application.use_cases.create_data_source import (
+    CreateDataSourceUseCase,
+)
 from src.modules.knowledge.application.use_cases.create_knowledge_base import (
     CreateKnowledgeBaseUseCase,
 )
 from src.modules.knowledge.application.use_cases.create_ontology_template import (
     CreateOntologyTemplateUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_data_source import (
+    DeleteDataSourceUseCase,
 )
 from src.modules.knowledge.application.use_cases.delete_document import (
     DeleteDocumentUseCase,
@@ -39,6 +45,12 @@ from src.modules.knowledge.application.use_cases.get_document_content import (
 from src.modules.knowledge.application.use_cases.get_ontology_template import (
     GetOntologyTemplateUseCase,
 )
+from src.modules.knowledge.application.use_cases.list_data_source_runs import (
+    ListDataSourceRunsUseCase,
+)
+from src.modules.knowledge.application.use_cases.list_data_sources import (
+    ListDataSourcesUseCase,
+)
 from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
     ListKnowledgeBasesUseCase,
 )
@@ -53,6 +65,18 @@ from src.modules.knowledge.application.use_cases.quick_search_notes import (
 )
 from src.modules.knowledge.application.use_cases.reprocess_document import (
     ReprocessDocumentUseCase,
+)
+from src.modules.knowledge.application.use_cases.sync_data_source import (
+    SyncDataSourceUseCase,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_connector_registry import (
+    IDataSourceConnectorRegistry,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_repository import (
+    IDataSourceRepository,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_run_repository import (
+    IDataSourceRunRepository,
 )
 from src.modules.knowledge.domain.interfaces.i_document_parser import IDocumentParser
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
@@ -180,6 +204,15 @@ class AppContainer:
     job_queue: IJobQueue | None = None
     projector: KnowledgeBaseProjector | None = None
     settings: AppSettings | None = None
+    # Data Sources (Marco 1.25)
+    data_source_repository: IDataSourceRepository | None = None
+    data_source_run_repository: IDataSourceRunRepository | None = None
+    data_source_connector_registry: IDataSourceConnectorRegistry | None = None
+    create_data_source_use_case: CreateDataSourceUseCase | None = None
+    list_data_sources_use_case: ListDataSourcesUseCase | None = None
+    list_data_source_runs_use_case: ListDataSourceRunsUseCase | None = None
+    delete_data_source_use_case: DeleteDataSourceUseCase | None = None
+    sync_data_source_use_case: SyncDataSourceUseCase | None = None
 
 
 def create_app_container(

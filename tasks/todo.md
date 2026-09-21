@@ -286,18 +286,18 @@
 **Description:** Cria os DTOs isolados de request/response e o `DataSourceController` na camada `api_gateway`, expondo endpoints REST para CRUD e disparo de sincronização assíncrona com resposta imediata `202 Accepted`.
 
 **Acceptance criteria:**
-- [ ] DTOs Pydantic v2 criados: `CreateDataSourceDTO`, `DataSourceResponseDTO`, `DataSourceRunResponseDTO`, `SyncDataSourceResponseDTO`.
-- [ ] Controller expõe rotas:
+- [x] DTOs Pydantic v2 criados: `CreateDataSourceDTO`, `DataSourceResponseDTO`, `DataSourceRunResponseDTO`, `SyncDataSourceResponseDTO`.
+- [x] Controller expõe rotas:
   - `POST /api/v1/knowledge-bases/{kb_id}/data-sources` (Criação)
   - `GET /api/v1/knowledge-bases/{kb_id}/data-sources` (Listagem)
   - `DELETE /api/v1/knowledge-bases/{kb_id}/data-sources/{id}` (Exclusão)
   - `POST /api/v1/knowledge-bases/{kb_id}/data-sources/{id}/sync` (Disparo do Sync com resposta `202 Accepted`)
   - `GET /api/v1/knowledge-bases/{kb_id}/data-sources/{id}/runs` (Histórico de Execuções)
-- [ ] Testes unitários do controller com FastAPI `TestClient` em `tests/unit/api_gateway/test_data_source_controller.py`.
+- [x] Testes unitários do controller com FastAPI `TestClient` em `tests/unit/api_gateway/test_data_source_controller.py`.
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/api_gateway/test_data_source_controller.py -v`
-- [ ] `uv run mypy --strict src/api_gateway/`
+- [x] `uv run pytest tests/unit/api_gateway/test_data_source_controller.py -v`
+- [x] `uv run mypy --strict src/api_gateway/`
 
 **Dependencies:** Tasks 7, 8 e 9
 
