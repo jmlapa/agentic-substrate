@@ -6,6 +6,21 @@ from src.modules.knowledge.domain.value_objects.canonical_entity import (
     CanonicalEntity,
 )
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
+from src.modules.knowledge.domain.value_objects.data_source_changes_batch import (
+    DataSourceChangesBatch,
+)
+from src.modules.knowledge.domain.value_objects.data_source_run_status import (
+    DataSourceRunStatus,
+)
+from src.modules.knowledge.domain.value_objects.data_source_status import (
+    DataSourceStatus,
+)
+from src.modules.knowledge.domain.value_objects.data_source_type import (
+    DataSourceType,
+)
+from src.modules.knowledge.domain.value_objects.discovered_document_item import (
+    DiscoveredDocumentItem,
+)
 from src.modules.knowledge.domain.value_objects.document_chunk_collection import (
     DocumentChunkCollection,
 )
@@ -14,6 +29,9 @@ from src.modules.knowledge.domain.value_objects.document_source_type import (
 )
 from src.modules.knowledge.domain.value_objects.document_status import DocumentStatus
 from src.modules.knowledge.domain.value_objects.extracted_graph import ExtractedGraph
+from src.modules.knowledge.domain.value_objects.google_drive_folder_config import (
+    GoogleDriveFolderConfig,
+)
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
 from src.modules.knowledge.domain.value_objects.hierarchical_toc_item import (
@@ -43,10 +61,16 @@ __all__ = [
     "AtomicBlockType",
     "CanonicalEntity",
     "ChildChunk",
+    "DataSourceChangesBatch",
+    "DataSourceRunStatus",
+    "DataSourceStatus",
+    "DataSourceType",
+    "DiscoveredDocumentItem",
     "DocumentChunkCollection",
     "DocumentSourceType",
     "DocumentStatus",
     "ExtractedGraph",
+    "GoogleDriveFolderConfig",
     "GraphEdge",
     "GraphNode",
     "HierarchicalTocItem",
