@@ -13,17 +13,11 @@ class DataSourceConnectorRegistry(IDataSourceConnectorRegistry):
     def __init__(self) -> None:
         self._connectors: dict[DataSourceType, IDataSourceConnector] = {}
 
-    def register(
-        self, connector_type: DataSourceType, connector: IDataSourceConnector
-    ) -> None:
+    def register(self, connector_type: DataSourceType, connector: IDataSourceConnector) -> None:
         self._connectors[connector_type] = connector
 
-    def get_connector(
-        self, connector_type: DataSourceType
-    ) -> IDataSourceConnector:
+    def get_connector(self, connector_type: DataSourceType) -> IDataSourceConnector:
         connector = self._connectors.get(connector_type)
         if connector is None:
-            raise KeyError(
-                f"No connector registered for DataSourceType '{connector_type}'"
-            )
+            raise KeyError(f"No connector registered for DataSourceType '{connector_type}'")
         return connector

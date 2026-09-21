@@ -86,9 +86,7 @@ class DataSourceRun(Entity[UUID]):
         self._indexed_files_count += 1
         self._check_completion()
 
-    def record_document_failed(
-        self, doc_id: UUID | None, file_name: str, error: str
-    ) -> None:
+    def record_document_failed(self, doc_id: UUID | None, file_name: str, error: str) -> None:
         self._failed_files_count += 1
         self._failure_summary.append(
             {

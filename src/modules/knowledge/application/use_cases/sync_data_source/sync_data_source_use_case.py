@@ -141,6 +141,9 @@ class SyncDataSourceUseCase:
                 f"Próximo cursor='{changes.next_cursor}'"
             )
 
+            run.mark_ingesting(len(changes.items))
+            await self._run_repo.save(run)
+
             kb = await self._kb_repo.get_by_id(data_source.kb_id)
             existing_docs_by_name: dict[str, UUID] = {}
             if kb:
@@ -211,8 +214,9 @@ class SyncDataSourceUseCase:
             if changes.items:
                 await asyncio.gather(*[_process_item(item) for item in changes.items])
 
-            run.mark_ingesting(len(changes.items))
-            await self._run_repo.save(run)
+            latest_run = await self._run_repo.get_by_id(run.id)
+            if latest_run is not None:
+                run = latest_run
 
             data_source.complete_sync(new_cursor=changes.next_cursor)
             await self._ds_repo.save(data_source)

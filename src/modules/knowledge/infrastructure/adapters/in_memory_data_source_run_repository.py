@@ -19,8 +19,6 @@ class InMemoryDataSourceRunRepository(IDataSourceRunRepository):
     async def list_by_data_source_id(
         self, data_source_id: UUID, limit: int = 50
     ) -> list[DataSourceRun]:
-        matching = [
-            r for r in self._runs.values() if r.data_source_id == data_source_id
-        ]
+        matching = [r for r in self._runs.values() if r.data_source_id == data_source_id]
         matching.sort(key=lambda r: r.started_at, reverse=True)
         return matching[:limit]
