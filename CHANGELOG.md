@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       8. ChatGPT / OpenAI Codex
       9. Python MCP SDK
       10. Node.js / TypeScript MCP SDK
+    - `McpBasicAuthPanel`: Suporte nativo à proteção por Caddy Basic Auth (`deploy/vm/rules/auth.caddy`), com cálculo reativo de credenciais Base64 (RFC 7617) e injeção automática de headers `Authorization` em todas as configurações dos agentes.
   - **Navegação & Roteamento (`frontend/src/App.tsx`, `frontend/src/components/layout/Sidebar.tsx`)**:
     - Nova rota `/mcp` mapeada para a página `McpConnectHubPage`.
     - Link de navegação no menu lateral com ícone de rede e badge indicativo.

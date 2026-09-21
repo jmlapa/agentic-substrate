@@ -97,6 +97,8 @@ frontend/
 └── src/
     ├── api/
     │   └── mcp-api.ts             # Cliente Axios e tipagens da API MCP Info
+    ├── utils/
+    │   └── mcpAuth.ts             # Utilitários de encoding e headers Basic Auth (RFC 7617)
     ├── hooks/
     │   └── useMcpInfo.ts          # TanStack Query hook com polling de saúde
     ├── components/
@@ -107,10 +109,12 @@ frontend/
     │       ├── McpConnectHubPage.tsx        # View principal do Hub
     │       ├── components/
     │       │   ├── McpHealthBanner.tsx      # Card de status online/latência/URL
-    │       │   ├── McpClientSelectorTabs.tsx# Abas por agente com copy-paste
+    │       │   ├── McpBasicAuthPanel.tsx    # Card interativo de credenciais Caddy Basic Auth
+    │       │   ├── McpClientSelectorTabs.tsx# Abas por agente com injeção dinâmica de headers
     │       │   ├── McpToolsCatalog.tsx      # Accordion/grid das tools ativas
     │       │   └── McpCodeSnippet.tsx       # Bloco de código com highlight e copy
     └── App.tsx                    # Rota /mcp -> McpConnectHubPage
+
 ```
 
 ---
@@ -247,3 +251,7 @@ export const McpCodeSnippet: React.FC<{ code: string; language?: string; title?:
   - **Resolução:** Utilizará o endpoint REST `GET /api/v1/mcp/info`. Isso evita conexões SSE infinitas no navegador que consumiriam conexões do pool HTTP, garantindo latência imediata e compatibilidade total.
 - **Q: Como o usuário diferencia ambiente local (localhost:8000) de produção (meudominio.com)?**
   - **Resolução:** O frontend detecta se `window.location.hostname` é `localhost` ou `127.0.0.1`. Se for, monta `http://localhost:8000/mcp/sse` (porta padrão da API). Se estiver em produção, monta `${window.location.origin}/mcp/sse`. Além disso, um campo editável ou seletor rápido permite ao usuário customizar a URL base se estiver usando túnel ngrok ou portas alternativas.
+- **Q: Como tratar a autenticação quando o Caddy está com a regra `rules/auth.caddy` (Basic Auth) ativa na VM?**
+  - **Resolução:** O hub disponibiliza o componente `McpBasicAuthPanel` com toggle reativo. Ao informar usuário e senha, o cabeçalho HTTP padrão `Authorization: Basic <base64>` (RFC 7617) é gerado e injetado automaticamente na chave `"headers"` de todos os 10 clientes MCP.
+  - **Decisão de Segurança:** Credenciais embutidas na URL (`https://user:pass@host/mcp/sse`) foram expressamente descartadas por serem depreciadas pela RFC 3986 (seção 3.2.1) e causarem vazamento de senhas em logs de acesso, histórico e cabeçalhos Referer, além de serem descartadas por clientes SSE modernos. O Caddy valida o cabeçalho `Authorization`, tornando a abordagem baseada em headers 100% interoperável e segura.
+
