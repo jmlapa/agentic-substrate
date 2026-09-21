@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-21
+
+### Added
+- **MCP Agent Connect Hub & Catálogo Dinâmico de Ferramentas (Marco 1.24)**:
+  - **Introspecção O(1) de Ferramentas no Backend (`src/api_gateway/controllers/mcp_controller.py`)**:
+    - Endpoint `GET /api/v1/mcp/info` inspeciona dinamicamente os provedores de ferramentas MCP (`IMcpToolProvider`) do servidor FastMCP sem exigir conexões SSE persistentes do navegador.
+    - DTOs dedicados com Pydantic v2 seguindo estritamente a disciplina Single Class per File: `McpToolParameterDto`, `McpToolInfoDto` e `McpInfoResponseDto`.
+    - Suíte de testes unitários em `tests/unit/api_gateway/test_mcp_controller.py`.
+  - **Camada de Integração Frontend (`frontend/src/api/mcp-api.ts`, `frontend/src/hooks/useMcpInfo.ts`)**:
+    - Cliente tipado e proxy `/mcp` configurado no `frontend/vite.config.ts`.
+    - Hook TanStack React Query com polling inteligente a cada 10s e monitoramento de conectividade em tempo real.
+  - **Componentes Modulares de Conexão MCP (`frontend/src/pages/mcp/components/`)**:
+    - `McpHealthBanner`: Status visual de conectividade (Online/Offline), contagem em tempo real de ferramentas ativas e campo editável de Base URL com resolução dinâmica de portas (localhost:8000 vs origin de produção).
+    - `McpCodeSnippet`: Bloco de código com destaque e cópia rápida em 1 clique com confirmação visual.
+    - `McpToolsCatalog`: Catálogo interativo com visualização detalhada de parâmetros tipados, obrigatoriedade e categorização de ferramentas.
+    - `McpClientSelectorTabs`: Suporte com sintaxes e comandos oficiais para 10 clientes e SDKs:
+      1. Claude Code (CLI)
+      2. Claude Desktop
+      3. GitHub Copilot (VS Code Agent Mode)
+      4. Antigravity CLI (DeepMind AGY)
+      5. Cursor
+      6. Gemini CLI
+      7. OpenCode
+      8. ChatGPT / OpenAI Codex
+      9. Python MCP SDK
+      10. Node.js / TypeScript MCP SDK
+  - **Navegação & Roteamento (`frontend/src/App.tsx`, `frontend/src/components/layout/Sidebar.tsx`)**:
+    - Nova rota `/mcp` mapeada para a página `McpConnectHubPage`.
+    - Link de navegação no menu lateral com ícone de rede e badge indicativo.
+  - **Documentação e Planejamento**:
+    - Especificação técnica `SPEC-mcp-agent-connect-hub.md` e documento de pesquisa `docs/ideas/mcp-agent-connect-hub.md`.
+
 ## [0.8.1] - 2026-09-21
 
 ### Added

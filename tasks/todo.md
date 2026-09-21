@@ -1,106 +1,177 @@
-# Tasks: Modular Caddy Environment Rules & Zero-Conflict VM Deployment (Marco 1.23)
+# Task List: MCP Agent Connect Hub (Marco 1.23)
 
-## Task List
-
-- [x] `task-1`: Atualizar `Caddyfile` e `docker-compose.yml` para suporte a regras modulares
-- [x] `task-2`: Criar estrutura `deploy/vm/rules/` com `.gitkeep`, `README.md` e `auth.caddy.example`
-- [x] `task-3`: Atualizar `.gitignore`, `setup.sh` e `.env.example` com isolamento de ambiente
-- [x] **Checkpoint 1 (Foundation & Isolation):** Validar integridade dos arquivos e isolamento git
-- [x] `task-4`: Validar sintaxe do Caddyfile e testar backward compatibility
-- [x] `task-5`: Registrar v0.8.1 no `CHANGELOG.md` e preparar fluxo de subtree push
-- [x] **Checkpoint 2 (Final Verification):** Árvore limpa e pronto para subtree push upstream
+> **Regra de ouro:** Implement → Test → Verify (passing) → Commit.
+> Cada tarefa deve ter escopo atômico, critérios de aceitação testáveis e verificação explícita.
 
 ---
 
-### Task Details
+## Tasks
 
-#### Task 1: Atualizar `Caddyfile` e `docker-compose.yml`
-**Description:** Adiciona `import /etc/caddy/rules/*.caddy` no bloco de site do `Caddyfile` e adiciona o volume `./rules:/etc/caddy/rules:ro` no serviço `caddy` em `docker-compose.yml`.
-**Dependencies:** None
-**Estimated scope:** S (2 files)
-**Acceptance Criteria:**
-- `deploy/vm/Caddyfile` contém `import /etc/caddy/rules/*.caddy` no início do site block.
-- `deploy/vm/docker-compose.yml` monta `./rules:/etc/caddy/rules:ro` no serviço `caddy`.
+### Task 1: Implementar DTOs e Endpoint de Introspecção `GET /api/v1/mcp/info` no Backend
+
+**Description:** Cria os DTOs isolados no padrão Single Class per File em `src/api_gateway/dtos/` (`McpToolParameterDTO`, `McpToolInfoDTO`, `McpInfoResponseDTO`) e o controller `mcp_controller.py` em `src/api_gateway/controllers/`, registrando a rota `/api/v1/mcp/info` no FastAPI.
+
+**Acceptance criteria:**
+- [x] `src/api_gateway/dtos/mcp_tool_parameter_dto.py` criado com schema Pydantic v2.
+- [x] `src/api_gateway/dtos/mcp_tool_info_dto.py` criado com schema Pydantic v2.
+- [x] `src/api_gateway/dtos/mcp_info_response_dto.py` criado com schema Pydantic v2.
+- [x] `src/api_gateway/dtos/__init__.py` exporta os novos DTOs.
+- [x] `src/api_gateway/controllers/mcp_controller.py` implementa `GET /api/v1/mcp/info` introspectando as ferramentas ativas (`knowledge_query`, `knowledge_list_kbs`, `knowledge_search_notes`).
+- [x] `src/api_gateway/controllers/__init__.py` exporta o router.
+- [x] `src/api_gateway/main.py` registra o router no app FastAPI.
+
 **Verification:**
-- [ ] `grep "import /etc/caddy/rules/\*.caddy" substrate/deploy/vm/Caddyfile`
-- [ ] `grep "./rules:/etc/caddy/rules:ro" substrate/deploy/vm/docker-compose.yml`
-**Files:**
-- `substrate/deploy/vm/Caddyfile`
-- `substrate/deploy/vm/docker-compose.yml`
+```bash
+uv run mypy --strict src/api_gateway/
+uv run ruff check src/api_gateway/
+```
+
+**Files touched:**
+- `src/api_gateway/dtos/mcp_tool_parameter_dto.py`
+- `src/api_gateway/dtos/mcp_tool_info_dto.py`
+- `src/api_gateway/dtos/mcp_info_response_dto.py`
+- `src/api_gateway/dtos/__init__.py`
+- `src/api_gateway/controllers/mcp_controller.py`
+- `src/api_gateway/controllers/__init__.py`
+- `src/api_gateway/main.py`
+
+**Commit:** `feat(api_gateway): add mcp introspection endpoint and dtos`
 
 ---
 
-#### Task 2: Criar estrutura `deploy/vm/rules/`
-**Description:** Cria o diretório `deploy/vm/rules/` com `.gitkeep`, `README.md` explicativo e template `auth.caddy.example`.
-**Dependencies:** `task-1`
-**Estimated scope:** S (3 files)
-**Acceptance Criteria:**
-- `deploy/vm/rules/.gitkeep` garante persistência do diretório no Git.
-- `deploy/vm/rules/auth.caddy.example` documenta configuração de basic_auth e comando `caddy hash-password`.
-- `deploy/vm/rules/README.md` explica como estender o Caddyfile de forma desacoplada.
+### Task 2: Implementar Testes Unitários para o Endpoint `GET /api/v1/mcp/info`
+
+**Description:** Cria testes unitários e de integração leve em `tests/unit/api_gateway/test_mcp_controller.py` validando o retorno do endpoint, presença de todas as tools registradas, schemas de parâmetros e status `online`.
+
+**Acceptance criteria:**
+- [x] Teste validando status HTTP 200 e schema de resposta `McpInfoResponseDTO`.
+- [x] Teste verificando que `tools` contém `knowledge_query`, `knowledge_list_kbs` e `knowledge_search_notes`.
+- [x] Teste verificando presença e tipos dos parâmetros de cada ferramenta.
+- [x] 100% de aprovação nos testes unitários.
+
 **Verification:**
-- [ ] `ls -la substrate/deploy/vm/rules/`
-**Files:**
-- `substrate/deploy/vm/rules/.gitkeep`
-- `substrate/deploy/vm/rules/README.md`
-- `substrate/deploy/vm/rules/auth.caddy.example`
+```bash
+uv run pytest tests/unit/api_gateway/test_mcp_controller.py -v
+```
+
+**Files touched:**
+- `tests/unit/api_gateway/test_mcp_controller.py`
+
+**Commit:** `test(api_gateway): add unit tests for mcp info endpoint`
 
 ---
 
-#### Task 3: Atualizar `.gitignore`, `setup.sh` e `.env.example`
-**Description:** Ignora `rules/*.caddy` no `.gitignore`, adiciona criação de `rules/` no `setup.sh` e documenta `DOMAIN_NAME=:80` no `.env.example`.
-**Dependencies:** `task-2`
-**Estimated scope:** M (4 files)
-**Acceptance Criteria:**
-- `.gitignore` (do substrate e da raiz) ignora `deploy/vm/rules/*.caddy` preservando `.example`.
-- `setup.sh` executa `mkdir -p "${SCRIPT_DIR}/rules"`.
-- `.env.example` documenta `DOMAIN_NAME=:80` para acessos diretos via IP em staging.
+### Task 3: Configurar Proxy Vite, Cliente de API e Hook TanStack Query no Frontend
+
+**Description:** Adiciona `/mcp` ao proxy do Vite em `frontend/vite.config.ts`, cria as interfaces TypeScript e funções de API em `frontend/src/api/mcp-api.ts`, e cria o hook `useMcpInfo` com refetching intervalado em `frontend/src/hooks/useMcpInfo.ts`.
+
+**Acceptance criteria:**
+- [x] `frontend/vite.config.ts` possui proxy configurado para `/mcp`.
+- [x] `frontend/src/api/mcp-api.ts` criado com tipos `McpToolParameter`, `McpToolInfo`, `McpInfoResponse` e função `getMcpInfo()`.
+- [x] `frontend/src/hooks/useMcpInfo.ts` implementa hook com TanStack React Query (`queryKey: ['mcp-info']`, `refetchInterval: 10000`).
+
 **Verification:**
-- [ ] `grep "rules/\*.caddy" substrate/.gitignore`
-- [ ] `grep 'mkdir -p "${SCRIPT_DIR}/rules"' substrate/deploy/vm/setup.sh`
-- [ ] `grep -A 2 "DOMAIN_NAME" substrate/deploy/vm/.env.example`
-**Files:**
-- `substrate/.gitignore`
-- `.gitignore`
-- `substrate/deploy/vm/setup.sh`
-- `substrate/deploy/vm/.env.example`
+```bash
+cd frontend && npm run build
+```
+
+**Files touched:**
+- `frontend/vite.config.ts`
+- `frontend/src/api/mcp-api.ts`
+- `frontend/src/hooks/useMcpInfo.ts`
+
+**Commit:** `feat(frontend): setup mcp api client, vite proxy and react query hook`
 
 ---
 
-### Checkpoint 1 (Foundation & Isolation)
-- [ ] Todas as regras de infraestrutura base e diretórios criados
-- [ ] Teste de isolamento Git: criar arquivo `.caddy` temporário e validar `git status --porcelain` vazio
-- [ ] Revisão dos arquivos antes de avançar
+### Task 4: Criar Componentes de UI Básicos: Snippet de Código, Banner de Saúde e Catálogo de Tools
 
----
+**Description:** Implementa os componentes modulares: `McpCodeSnippet.tsx` (bloco de código com botão de cópia), `McpHealthBanner.tsx` (indicador de status online, contagem de tools e resolução de URL editável), e `McpToolsCatalog.tsx` (listagem dinâmica das ferramentas ativas com parâmetros e badges).
 
-#### Task 4: Validar sintaxe e testar backward compatibility
-**Description:** Testa se o `Caddyfile` continua válido com e sem regras em `rules/`, preservando todas as rotas existentes (`/api/*`, `/mcp/*`, `/docs*`, `/openapi.json`, frontend fallback).
-**Dependencies:** Checkpoint 1
-**Estimated scope:** XS (0-1 file)
-**Acceptance Criteria:**
-- Arquivos `.caddy` em `rules/` não aparecem em `git status`.
-- O Caddyfile mantém 100% de compatibilidade e todas as rotas originais.
+**Acceptance criteria:**
+- [x] `frontend/src/pages/mcp/components/McpCodeSnippet.tsx` criado com feedback de cópia em 2s.
+- [x] `frontend/src/pages/mcp/components/McpHealthBanner.tsx` criado com detecção inteligente de URL (`localhost:8000` vs produção) e indicador visual verde/vermelho.
+- [x] `frontend/src/pages/mcp/components/McpToolsCatalog.tsx` criado renderizando cards para `knowledge_query`, `knowledge_list_kbs` e `knowledge_search_notes` com parâmetros detalhados.
+
 **Verification:**
-- [ ] `touch substrate/deploy/vm/rules/test.caddy`
-- [ ] `git status --porcelain substrate/deploy/vm/rules/` (retorna vazio)
-- [ ] `rm substrate/deploy/vm/rules/test.caddy`
+```bash
+cd frontend && npm run build
+```
+
+**Files touched:**
+- `frontend/src/pages/mcp/components/McpCodeSnippet.tsx`
+- `frontend/src/pages/mcp/components/McpHealthBanner.tsx`
+- `frontend/src/pages/mcp/components/McpToolsCatalog.tsx`
+
+**Commit:** `feat(frontend): create mcp health banner, code snippet and tools catalog components`
 
 ---
 
-#### Task 5: Registrar no CHANGELOG e preparar branch upstream
-**Description:** Registra a versão v0.8.1 no `CHANGELOG.md` do substrate detalhando a melhoria de deploy modular e instruções para o PR upstream.
-**Dependencies:** `task-4`
-**Estimated scope:** S (1 file)
-**Acceptance Criteria:**
-- `substrate/CHANGELOG.md` atualizado com a seção `[0.8.1]`.
+### Task 5: Implementar Seletor de Agentes com as 10 Variantes Homologadas
+
+**Description:** Implementa `McpClientSelectorTabs.tsx` com as abas e formatos oficiais estritamente pesquisados: Cursor, Claude Desktop, Claude Code, GitHub Copilot, Antigravity CLI, Gemini CLI, OpenCode, ChatGPT, Python SDK e Node.js SDK.
+
+**Acceptance criteria:**
+- [x] Abas para todos os 10 clientes com ícones/badges apropriados.
+- [x] Cada aba exibe: Caminho de arquivo recomendado no SO, comando CLI (se aplicável), e snippet JSON/código válido com a URL dinâmica.
+- [x] Aba GitHub Copilot utiliza especificamente a chave `"servers"`.
+- [x] Aba Antigravity CLI utiliza especificamente `"serverUrl"`.
+- [x] Aba OpenCode utiliza `"mcp": { "servers": { ... "type": "remote" } }`.
+
 **Verification:**
-- [ ] `git diff substrate/CHANGELOG.md`
-**Files:**
-- `substrate/CHANGELOG.md`
+```bash
+cd frontend && npm run build
+```
+
+**Files touched:**
+- `frontend/src/pages/mcp/components/McpClientSelectorTabs.tsx`
+
+**Commit:** `feat(frontend): implement mcp client selector tabs for top 10 agents`
 
 ---
 
-### Checkpoint 2 (Final Verification)
-- [ ] Subrepo `substrate/` 100% consistente e testado
-- [ ] Pronto para comando `git subtree push` e PR no upstream `jmlapa/agentic-substrate`
+### Task 6: Montar a Página Principal do Hub e Integrar Roteamento e Sidebar
+
+**Description:** Cria `McpConnectHubPage.tsx` orquestrando os componentes, adiciona a rota `/mcp` em `frontend/src/App.tsx`, e adiciona o item de navegação "Substrate MCP" com badge na `frontend/src/components/layout/Sidebar.tsx`.
+
+**Acceptance criteria:**
+- [x] `frontend/src/pages/mcp/McpConnectHubPage.tsx` renderiza layout completo e fluido.
+- [x] `frontend/src/App.tsx` possui rota `/mcp` apontando para `McpConnectHubPage`.
+- [x] `frontend/src/components/layout/Sidebar.tsx` exibe "Substrate MCP" com badge "v0.8.0" / "SSE" e ícone condizente.
+- [x] Navegação funcional e sem quebras de layout no tema Dark.
+
+**Verification:**
+```bash
+cd frontend && npm run build
+```
+
+**Files touched:**
+- `frontend/src/pages/mcp/McpConnectHubPage.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`
+
+**Commit:** `feat(frontend): assemble mcp connect hub page and update sidebar navigation`
+
+---
+
+### Task 7: Validação Completa de Qualidade (`make pre-commit`) e Sincronização
+
+**Description:** Executa todos os linters, formatadores, Mypy estrito, suíte de testes completa do backend e build do frontend.
+
+**Acceptance criteria:**
+- [x] `ruff check .` com zero erros.
+- [x] `ruff format --check .` 100% formatado.
+- [x] `mypy --strict src/ tests/` com `No issues found`.
+- [x] `pytest` passando com mais de 244 testes.
+- [x] `cd frontend && npm run build` gerando bundle de produção sem avisos ou erros.
+- [x] `make pre-commit` aprovado com sucesso.
+
+**Verification:**
+```bash
+make pre-commit
+```
+
+**Files touched:**
+- Todos os arquivos modificados/criados
+
+**Commit:** `chore(mcp): complete quality gates for mcp connect hub`

@@ -1,53 +1,63 @@
-# Implementation Plan: Modular Caddy Environment Rules & Zero-Conflict VM Deployment (Marco 1.23)
+# Implementation Plan: MCP Agent Connect Hub (Marco 1.23)
 
 ## 1. Overview
 
-Implementar o desacoplamento de regras de ambiente no Caddy 2 para o modo de deploy em VM única (`deploy/vm/`), permitindo que configurações específicas (como Basic Auth em staging, whitelists de IP e cabeçalhos customizados) sejam injetadas como arquivos isolados na pasta `rules/` sem modificar o `Caddyfile` versionado pelo Git. Isso elimina árvores de trabalho sujas (`dirty working tree`) na VM e garante que operações de atualização (`git pull origin main`) sejam 100% limpas e idempotentes, prevenindo sobrescritas acidentais de rotas (como ocorrido com `/mcp/*`).
+Disponibilizar no console web (`/frontend`) a central de integração **MCP Agent Connect Hub** (`/mcp`), permitindo a qualquer desenvolvedor ou construtor de agentes autônomos descobrir, configurar e validar o servidor MCP do Agentic Substrate para os 9 principais coding agents do mercado (Cursor, Claude Desktop, Claude Code, GitHub Copilot, Antigravity, Gemini CLI, OpenCode, ChatGPT, além de Python/Node SDKs), com verificador de saúde em tempo real e catálogo dinâmico de ferramentas cognitivas.
 
 ---
 
 ## 2. Architecture Decisions
 
-- **Wildcard Import Idempotente:** O `Caddyfile` base utiliza `import /etc/caddy/rules/*.caddy`. Por usar wildcard, o Caddy ignora silenciosamente se o diretório estiver vazio, preservando backward compatibility total.
-- **Read-Only Container Mount:** O diretório `./rules` é montado como `:ro` no container Caddy, garantindo imutabilidade em runtime a partir do container.
-- **Git Tracking Isolation:** Arquivos `.caddy` em `rules/` são ignorados no `.gitignore`, garantindo que regras locais nunca constem no `git status` da VM.
-- **Template Declarativo Documentado:** Um arquivo `auth.caddy.example` fornece aos operadores um modelo pronto para cópia rápida com documentação do utilitário `caddy hash-password`.
-- **Parametrização via `.env`:** O `DOMAIN_NAME` suporta `:80` nativamente para VMs sem apontamento DNS/TLS.
+- **Endpoint REST Introspectivo O(1):** Criar `GET /api/v1/mcp/info` no backend que inspeciona diretamente o `MCPServer` e retorna metadados estruturados das ferramentas registradas sem exigir conexões SSE persistentes do navegador.
+- **Single Class per File & Strict Typing no Backend:** Todos os DTOs (`McpInfoResponseDTO`, `McpToolInfoDTO`, `McpToolParameterDTO`) e o controller (`mcp_controller.py`) em arquivos isolados, com validação Pydantic v2 e Mypy em modo estrito.
+- **Detecção Inteligente de URL no Frontend:** Resolver automaticamente a URL do SSE (`http://localhost:8000/mcp/sse` quando rodando no Vite porta 3000 em dev, ou `window.location.origin + '/mcp/sse'` em produção com Caddy), permitindo edição rápida caso o usuário use túneis (ngrok).
+- **Abas Fiéis à Documentação Oficial dos Agentes:** Cada cliente recebe sua aba formatada exatamente como sua documentação oficial exige (ex: `"servers"` no Copilot, `"serverUrl"` no Antigravity, `"type": "sse"` no Claude, `"type": "remote"` no OpenCode).
+- **Vite Proxy Local para `/mcp`:** Adicionar `/mcp` ao `proxy` do `frontend/vite.config.ts` para paridade de desenvolvimento local.
 
 ---
 
 ## 3. Dependency Graph
 
 ```
-[Task 1] Atualizar Caddyfile e docker-compose.yml no deploy/vm
+[Task 1] Backend DTOs e Endpoint de Introspecção (GET /api/v1/mcp/info)
     │
-    └── [Task 2] Criar estrutura de rules/ (.gitkeep, README.md, auth.caddy.example)
+    └── [Task 2] Testes Unitários e Integração do Backend (Mypy + Pytest)
             │
-            └── [Task 3] Atualizar .gitignore, setup.sh e .env.example
+            └── [Task 3] Cliente de API e Hook TanStack Query no Frontend (useMcpInfo)
                     │
-                    └── [Task 4] Validação de sintaxe Caddyfile e testes de isolamento
+                    └── [Task 4] Componentes de UI (CodeSnippet, HealthBanner, ToolsCatalog)
                             │
-                            └── [Task 5] Atualizar CHANGELOG.md e preparar branch upstream
+                            └── [Task 5] Seletor de Agentes (McpClientSelectorTabs com 10 clientes)
+                                    │
+                                    └── [Task 6] Página Principal e Integração de Rotas/Sidebar
+                                            │
+                                            └── [Task 7] Validação dos Gates e Build Final (make pre-commit)
 ```
 
 ---
 
 ## 4. Phase Breakdown
 
-### Phase 1: Core Configuration (Tasks 1 e 2)
-- Adicionar `import /etc/caddy/rules/*.caddy` no `deploy/vm/Caddyfile`.
-- Montar `./rules:/etc/caddy/rules:ro` no `deploy/vm/docker-compose.yml`.
-- Criar a pasta `deploy/vm/rules/` com `.gitkeep`, `README.md` e `auth.caddy.example`.
+### Phase 1: Backend Introspection API & Single Class per File (Tasks 1 & 2)
+- Criação dos DTOs: `McpToolParameterDTO`, `McpToolInfoDTO`, `McpInfoResponseDTO` em `src/api_gateway/dtos/`.
+- Criação do controller `mcp_controller.py` em `src/api_gateway/controllers/`.
+- Registro da rota no `main.py`.
+- Testes unitários com Pytest em `tests/unit/api_gateway/test_mcp_controller.py`.
 
-### Phase 2: Environment & Git Isolation (Task 3)
-- Adicionar exclusões de `rules/*.caddy` no `.gitignore` (do substrate e da raiz).
-- Atualizar `deploy/vm/setup.sh` para garantir `mkdir -p ${SCRIPT_DIR}/rules`.
-- Atualizar `deploy/vm/.env.example` documentando `DOMAIN_NAME=:80` para staging.
+### Phase 2: Frontend Data Layer & Core Components (Tasks 3 & 4)
+- Configuração do proxy `/mcp` em `frontend/vite.config.ts`.
+- Tipagens TypeScript e cliente Axios em `frontend/src/api/mcp-api.ts`.
+- Hook TanStack React Query `useMcpInfo` com polling em `frontend/src/hooks/useMcpInfo.ts`.
+- Componentes modulares `McpCodeSnippet.tsx`, `McpHealthBanner.tsx` e `McpToolsCatalog.tsx`.
 
-### Phase 3: Validação e Documentação (Tasks 4 e 5)
-- Testar e validar a sintaxe do Caddyfile.
-- Validar `git status` com arquivos `.caddy` simulados.
-- Atualizar `CHANGELOG.md` e registrar o commit para subtree push upstream.
+### Phase 3: Agent Selector, Page Assembly & Navigation (Tasks 5 & 6)
+- Componente `McpClientSelectorTabs.tsx` com as 10 variantes homologadas e 1-click copy.
+- Montagem da página principal `McpConnectHubPage.tsx` em `frontend/src/pages/mcp/`.
+- Adição da rota `/mcp` em `frontend/src/App.tsx` e link na `frontend/src/components/layout/Sidebar.tsx`.
+
+### Phase 4: Verification & Quality Gates (Task 7)
+- Verificação de compilação frontend (`npm run build`).
+- Execução do gate oficial `make pre-commit` (Ruff, Mypy strict, Pytest com cobertura).
 
 ---
 
@@ -55,6 +65,7 @@ Implementar o desacoplamento de regras de ambiente no Caddy 2 para o modo de dep
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Caddy falhar ao inicializar sem arquivos em `rules/` | Alto | Uso estrito de wildcard (`*.caddy`), que o Caddy v2 trata como glob opcional sem disparar erro. |
-| Operador comitar arquivo de senha na VM | Alto | Adição explícita no `.gitignore` e verificação nos gates locais. |
-| Conflitos em futuros merges do subtree | Médio | Commits estritamente focados na pasta `deploy/vm/` e documentação aderente ao ADR-009. |
+| Diferença de portas entre Vite (3000) e FastAPI (8000) quebrar o snippet copiado | Alto | Lógica no `McpHealthBanner` que detecta hostname `localhost` e substitui a porta da UI (3000) pela da API (8000), permitindo também edição livre pelo usuário. |
+| Inconsistência de schemas entre agentes (ex: Copilot usa `"servers"` em vez de `"mcpServers"`) | Alto | Cada aba tem gerador de JSON isolado, estritamente baseado nas documentações oficiais pesquisadas. |
+| Violação da regra Single Class per File nos novos DTOs | Alto | Cada DTO em seu próprio arquivo dentro de `src/api_gateway/dtos/`. |
+| Falha de Mypy strict no controller | Médio | Tipagem 100% explícita em todos os retornos e parâmetros de rotas. |

@@ -10,6 +10,7 @@ import { CreateOntologyPage } from './pages/ontologies/CreateOntologyPage';
 import { OntologyDetailPage } from './pages/ontologies/OntologyDetailPage';
 import { QueryPlaygroundView } from './pages/playground/QueryPlaygroundView';
 import { NotesPortalPage } from './pages/notes/NotesPortalPage';
+import { McpConnectHubPage } from './pages/mcp/McpConnectHubPage';
 
 export const App: React.FC = () => {
   return (
@@ -39,6 +40,9 @@ export const App: React.FC = () => {
 
           {/* RAG Playground Route */}
           <Route path="/playground" element={<QueryPlaygroundView />} />
+
+          {/* Substrate MCP Hub Route */}
+          <Route path="/mcp" element={<McpConnectHubPage />} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/notes" replace />} />

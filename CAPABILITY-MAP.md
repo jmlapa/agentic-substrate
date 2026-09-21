@@ -31,6 +31,7 @@
 - `SPEC-vm-all-in-one-deploy.md` (Marco 1.21 - Modo de Deploy All-in-One em VM Única) — Concluído (v0.7.0)
 - `SPEC-streamable-mcp-server.md` (Marco 1.22 - Streamable HTTP/SSE MCP Server & Modular Tool Providers) — Concluído (v0.8.0)
 - `SPEC-modular-caddy-rules-and-vm-deployment.md` (Marco 1.23 - Regras Modulares no Caddy & Deploy Zero-Conflito em VM) — Concluído (v0.8.1)
+- `SPEC-mcp-agent-connect-hub.md` (Marco 1.24 - MCP Agent Connect Hub & Dynamic Tool Catalog) — Concluído (v0.9.0)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -61,6 +62,8 @@
 11. **Marco 1.20 (Concluído - v0.6.0):** `knowledge:lean-7b-direct-openrouter-structured-extractor` (Direct OpenRouter Extractor, Llama 3.1 8B, Constrained Decoding, Referential Integrity Filter, Multi-Complexity Eval Suite)
 12. **Marco 1.21 (Concluído - v0.7.0):** `deploy:vm-all-in-one` (Deploy All-in-One em VM Única com Docker Compose + Caddy SSL Automático)
 13. **Marco 1.22 (Concluído - v0.8.0):** `api-gateway:streamable-mcp-server` (Streamable HTTP/SSE Model Context Protocol Server & Modular Knowledge Tool Providers)
-14. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+14. **Marco 1.23 (Concluído - v0.8.1):** `deploy:modular-caddy-rules` (Regras Modulares no Caddy & Deploy Zero-Conflito em VM)
+15. **Marco 1.24 (Concluído - v0.9.0):** `frontend-console:mcp-agent-connect-hub` (MCP Agent Connect Hub, Quickstart por Agente e Catálogo Dinâmico de Ferramentas)
+16. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 
 

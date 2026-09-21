@@ -9,6 +9,7 @@ from src.api_gateway.container import AppContainer, create_app_container
 from src.api_gateway.controllers.knowledge_controller import (
     router as knowledge_router,
 )
+from src.api_gateway.controllers.mcp_controller import router as mcp_router
 from src.api_gateway.controllers.ontology_controller import ontology_router
 from src.api_gateway.mcp.mcp_server_app import McpServerApplication
 from src.kernel.infrastructure.app_settings import AppSettings
@@ -92,6 +93,7 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
 
     application.include_router(knowledge_router)
     application.include_router(ontology_router)
+    application.include_router(mcp_router)
 
     def get_active_container() -> AppContainer:
         if hasattr(application.state, "container") and application.state.container:

@@ -7,6 +7,7 @@ import {
   GitFork,
   Cpu,
   BookOpen,
+  Network,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -33,6 +34,12 @@ export const Sidebar: React.FC = () => {
       label: 'RAG Playground',
       icon: Sparkles,
       badge: 'GraphRAG',
+    },
+    {
+      to: '/mcp',
+      label: 'Substrate MCP',
+      icon: Network,
+      badge: 'v0.8.0',
     },
   ];
 
