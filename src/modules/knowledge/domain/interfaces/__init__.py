@@ -1,3 +1,15 @@
+from src.modules.knowledge.domain.interfaces.i_data_source_connector import (
+    IDataSourceConnector,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_connector_registry import (
+    IDataSourceConnectorRegistry,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_repository import (
+    IDataSourceRepository,
+)
+from src.modules.knowledge.domain.interfaces.i_data_source_run_repository import (
+    IDataSourceRunRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
@@ -27,6 +39,10 @@ from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
 )
 
 __all__ = [
+    "IDataSourceConnector",
+    "IDataSourceConnectorRegistry",
+    "IDataSourceRepository",
+    "IDataSourceRunRepository",
     "IDocumentParser",
     "IEmbeddingService",
     "IGraphExtractor",
