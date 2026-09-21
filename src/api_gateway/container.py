@@ -12,6 +12,12 @@ from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.kernel.infrastructure.in_memory_job_queue import InMemoryJobQueue
 from src.kernel.infrastructure.postgres_event_store import PostgresEventStore
 from src.kernel.infrastructure.redis_job_queue import RedisJobQueue
+from src.modules.knowledge.application.handlers.blue_green_document_swap_handler import (
+    BlueGreenDocumentSwapHandler,
+)
+from src.modules.knowledge.application.handlers.data_source_run_projector import (
+    DataSourceRunProjector,
+)
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
     DocumentIngestionSagaCoordinator,
 )
@@ -69,6 +75,12 @@ from src.modules.knowledge.application.use_cases.reprocess_document import (
 from src.modules.knowledge.application.use_cases.sync_data_source import (
     SyncDataSourceUseCase,
 )
+from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
+    DocumentKnowledgeIndexedEvent,
+)
+from src.modules.knowledge.domain.events.document_processing_failed_event import (
+    DocumentProcessingFailedEvent,
+)
 from src.modules.knowledge.domain.interfaces.i_data_source_connector_registry import (
     IDataSourceConnectorRegistry,
 )
@@ -100,14 +112,29 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
+from src.modules.knowledge.domain.value_objects.data_source_type import (
+    DataSourceType,
+)
 from src.modules.knowledge.infrastructure.adapters.composite_document_parser import (
     CompositeDocumentParser,
+)
+from src.modules.knowledge.infrastructure.adapters.data_source_connector_registry import (
+    DataSourceConnectorRegistry,
 )
 from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter import (
     FalkorDbGraphStoreAdapter,
 )
 from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
     GeminiEmbeddingAdapter,
+)
+from src.modules.knowledge.infrastructure.adapters.google_drive import (
+    GoogleDriveFolderConnector,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_data_source_repository import (
+    InMemoryDataSourceRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.in_memory_data_source_run_repository import (
+    InMemoryDataSourceRunRepository,
 )
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
@@ -147,6 +174,12 @@ from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_stora
 )
 from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
     PdfPageRenderer,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_data_source_repository import (
+    PostgresDataSourceRepository,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_data_source_run_repository import (
+    PostgresDataSourceRunRepository,
 )
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
@@ -213,6 +246,8 @@ class AppContainer:
     list_data_source_runs_use_case: ListDataSourceRunsUseCase | None = None
     delete_data_source_use_case: DeleteDataSourceUseCase | None = None
     sync_data_source_use_case: SyncDataSourceUseCase | None = None
+    blue_green_swap_handler: BlueGreenDocumentSwapHandler | None = None
+    data_source_run_projector: DataSourceRunProjector | None = None
 
 
 def create_app_container(
@@ -239,12 +274,18 @@ def create_app_container(
 
     repo: IKnowledgeBaseRepository
     ontology_repo: IOntologyRepository
+    ds_repo: IDataSourceRepository
+    ds_run_repo: IDataSourceRunRepository
     if postgres_pool:
         repo = PostgresKnowledgeBaseRepository(pool=postgres_pool)
         ontology_repo = PostgresOntologyRepository(pool=postgres_pool)
+        ds_repo = PostgresDataSourceRepository(pool=postgres_pool)
+        ds_run_repo = PostgresDataSourceRunRepository(pool=postgres_pool)
     else:
         repo = InMemoryKnowledgeBaseRepository()
         ontology_repo = InMemoryOntologyRepository()
+        ds_repo = InMemoryDataSourceRepository()
+        ds_run_repo = InMemoryDataSourceRunRepository()
 
     # Object Storage (Local File System)
     base_dir = storage_base_dir or cfg.storage_local_base_dir
@@ -415,6 +456,47 @@ def create_app_container(
     )
     delete_ont = DeleteOntologyTemplateUseCase(repository=ontology_repo)
 
+    # Data Sources Connector Registry & Google Drive Connector
+    connector_registry = DataSourceConnectorRegistry()
+    gdrive_connector = GoogleDriveFolderConnector()
+    connector_registry.register(DataSourceType.GOOGLE_DRIVE_FOLDER, gdrive_connector)
+
+    # Data Sources Use Cases
+    create_data_source_uc = CreateDataSourceUseCase(
+        data_source_repository=ds_repo,
+        kb_repository=repo,
+        event_bus=bus,
+    )
+    list_data_sources_uc = ListDataSourcesUseCase(
+        data_source_repository=ds_repo,
+    )
+    list_data_source_runs_uc = ListDataSourceRunsUseCase(
+        run_repository=ds_run_repo,
+    )
+    delete_data_source_uc = DeleteDataSourceUseCase(
+        data_source_repository=ds_repo,
+    )
+    sync_data_source_uc = SyncDataSourceUseCase(
+        data_source_repository=ds_repo,
+        data_source_run_repository=ds_run_repo,
+        connector_registry=connector_registry,
+        kb_repository=repo,
+        attach_use_case=attach_doc,
+        event_bus=bus,
+        max_concurrency=2,
+    )
+
+    # Reactive Handlers (Blue/Green Document Swap & DataSourceRun Progress Projector)
+    swap_handler = BlueGreenDocumentSwapHandler(delete_use_case=delete_doc)
+    bus.subscribe(DocumentKnowledgeIndexedEvent, swap_handler.handle)
+
+    run_projector = DataSourceRunProjector(
+        data_source_run_repository=ds_run_repo,
+        event_bus=bus,
+    )
+    bus.subscribe(DocumentKnowledgeIndexedEvent, run_projector.handle)
+    bus.subscribe(DocumentProcessingFailedEvent, run_projector.handle)
+
     projector: KnowledgeBaseProjector | None = None
     if postgres_pool is not None:
         projector = KnowledgeBaseProjector(pool=postgres_pool, event_bus=bus)
@@ -455,4 +537,14 @@ def create_app_container(
         job_queue=job_queue,
         projector=projector,
         settings=cfg,
+        data_source_repository=ds_repo,
+        data_source_run_repository=ds_run_repo,
+        data_source_connector_registry=connector_registry,
+        create_data_source_use_case=create_data_source_uc,
+        list_data_sources_use_case=list_data_sources_uc,
+        list_data_source_runs_use_case=list_data_source_runs_uc,
+        delete_data_source_use_case=delete_data_source_uc,
+        sync_data_source_use_case=sync_data_source_uc,
+        blue_green_swap_handler=swap_handler,
+        data_source_run_projector=run_projector,
     )

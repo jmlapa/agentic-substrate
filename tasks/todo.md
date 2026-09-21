@@ -318,13 +318,13 @@
 **Description:** Registra as novas instâncias de repositórios, conectores, use cases e event handlers no container de injeção de dependências (`container.py`) e inclui o novo controller no roteamento da aplicação em `main.py`.
 
 **Acceptance criteria:**
-- [ ] `src/api_gateway/container.py` instancia `PostgresDataSourceRepository`, `PostgresDataSourceRunRepository`, `DataSourceConnectorRegistry` e os novos Use Cases.
-- [ ] `BlueGreenDocumentSwapHandler` e `DataSourceRunProjector` registrados no `EventBus` durante o startup.
-- [ ] Router de data sources incluído no FastAPI em `src/api_gateway/main.py`.
+- [x] `src/api_gateway/container.py` instancia `PostgresDataSourceRepository`, `PostgresDataSourceRunRepository`, `DataSourceConnectorRegistry` e os novos Use Cases.
+- [x] `BlueGreenDocumentSwapHandler` e `DataSourceRunProjector` registrados no `EventBus` durante o startup.
+- [x] Router de data sources incluído no FastAPI em `src/api_gateway/main.py`.
 
 **Verification:**
-- [ ] `uv run mypy --strict src/api_gateway/container.py src/api_gateway/main.py`
-- [ ] `uv run ruff check src/api_gateway/`
+- [x] `uv run mypy --strict src/api_gateway/container.py src/api_gateway/main.py`
+- [x] `uv run ruff check src/api_gateway/`
 
 **Dependencies:** Task 10
 

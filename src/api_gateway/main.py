@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api_gateway.container import AppContainer, create_app_container
+from src.api_gateway.controllers.data_source_controller import (
+    router as data_source_router,
+)
 from src.api_gateway.controllers.knowledge_controller import (
     router as knowledge_router,
 )
@@ -92,6 +95,7 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
     )
 
     application.include_router(knowledge_router)
+    application.include_router(data_source_router)
     application.include_router(ontology_router)
     application.include_router(mcp_router)
 
