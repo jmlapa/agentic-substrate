@@ -85,6 +85,7 @@ mkdir -p "${SCRIPT_DIR}/data/redis"
 mkdir -p "${SCRIPT_DIR}/data/storage"
 mkdir -p "${SCRIPT_DIR}/data/caddy_data"
 mkdir -p "${SCRIPT_DIR}/data/caddy_config"
+mkdir -p "${SCRIPT_DIR}/rules"
 
 # Configurar permissões nos diretórios de banco
 chmod 700 "${SCRIPT_DIR}/data/postgres" || true

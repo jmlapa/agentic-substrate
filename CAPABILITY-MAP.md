@@ -30,6 +30,7 @@
 - `SPEC-lean-7b-direct-openrouter-structured-extractor.md` (Marco 1.20 - Lean 7B/8B Structured Ontology Extractor via OpenRouter & Llama 3.1 8B) — Concluído (v0.6.0)
 - `SPEC-vm-all-in-one-deploy.md` (Marco 1.21 - Modo de Deploy All-in-One em VM Única) — Concluído (v0.7.0)
 - `SPEC-streamable-mcp-server.md` (Marco 1.22 - Streamable HTTP/SSE MCP Server & Modular Tool Providers) — Concluído (v0.8.0)
+- `SPEC-modular-caddy-rules-and-vm-deployment.md` (Marco 1.23 - Regras Modulares no Caddy & Deploy Zero-Conflito em VM) — Concluído (v0.8.1)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -44,6 +45,7 @@
 - `docs/decisions/0010-lean-7b-direct-openrouter-structured-extractor.md`
 - `docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md`
 - `docs/decisions/0012-streamable-http-sse-mcp-server.md`
+- `docs/decisions/0013-modular-caddy-rules-and-zero-conflict-deployment.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)

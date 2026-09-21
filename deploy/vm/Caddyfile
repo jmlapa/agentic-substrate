@@ -7,6 +7,10 @@
     # Encode responses using modern compression algorithms
     encode zstd gzip
 
+    # Environment-specific rules (e.g. basic_auth, ip filters, custom headers)
+    # Dynamically imported if present in ./rules/ without modifying this file.
+    import /etc/caddy/rules/*.caddy
+
     # API Gateway routes
     handle /api/* {
         reverse_proxy api:8000 {

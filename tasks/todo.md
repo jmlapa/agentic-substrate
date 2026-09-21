@@ -1,170 +1,106 @@
-# Task List: Streamable HTTP/SSE MCP Server (Marco 1.22)
+# Tasks: Modular Caddy Environment Rules & Zero-Conflict VM Deployment (Marco 1.23)
 
-> **Regra de ouro:** Implement → Test → Verify (passing) → Commit.
-> Cada tarefa deve ter escopo atômico, critérios de aceitação testáveis e verificação explícita.
+## Task List
 
----
-
-## Tasks
-
-### Task 1: Adicionar dependência oficial `mcp` ao `pyproject.toml`
-
-**Description:** Adiciona `mcp>=1.3.0` como dependência principal do projeto no `pyproject.toml` e sincroniza o ambiente de desenvolvimento.
-
-**Acceptance criteria:**
-- [x] `pyproject.toml` contém `"mcp>=1.3.0"` em `dependencies`.
-- [x] O pacote é importável em Python (`python -c "import mcp"` executa com sucesso).
-
-**Verification:**
-```bash
-python -c "import mcp; print(mcp.__file__)"
-```
-
-**Files touched:**
-- `pyproject.toml`
-
-**Commit:** `chore(deps): add official mcp sdk dependency`
+- [x] `task-1`: Atualizar `Caddyfile` e `docker-compose.yml` para suporte a regras modulares
+- [x] `task-2`: Criar estrutura `deploy/vm/rules/` com `.gitkeep`, `README.md` e `auth.caddy.example`
+- [x] `task-3`: Atualizar `.gitignore`, `setup.sh` e `.env.example` com isolamento de ambiente
+- [x] **Checkpoint 1 (Foundation & Isolation):** Validar integridade dos arquivos e isolamento git
+- [x] `task-4`: Validar sintaxe do Caddyfile e testar backward compatibility
+- [x] `task-5`: Registrar v0.8.1 no `CHANGELOG.md` e preparar fluxo de subtree push
+- [x] **Checkpoint 2 (Final Verification):** Árvore limpa e pronto para subtree push upstream
 
 ---
 
-### Task 2: Implementar o protocolo `IMcpToolProvider` e as classes isoladas das Tools
+### Task Details
 
-**Description:** Cria o protocolo `IMcpToolProvider` e implementa as 3 classes isoladas de ferramentas no padrão Single Class per File em `src/api_gateway/mcp/tools/` e `src/api_gateway/mcp/protocols/`, além de testes unitários para cada tool.
-
-**Acceptance criteria:**
-- [x] `src/api_gateway/mcp/protocols/i_mcp_tool_provider.py` criado definindo o contrato de provedor de tools.
-- [x] `src/api_gateway/mcp/tools/knowledge_query_tool.py` criado implementando `knowledge_query`.
-- [x] `src/api_gateway/mcp/tools/knowledge_list_kbs_tool.py` criado implementando `knowledge_list_kbs`.
-- [x] `src/api_gateway/mcp/tools/knowledge_search_notes_tool.py` criado implementando `knowledge_search_notes`.
-- [x] Arquivos `__init__.py` correspondentes exportam publicamente as classes.
-- [x] Testes unitários em `tests/unit/api_gateway/mcp/test_knowledge_tools.py` passando com 100% de sucesso.
-
+#### Task 1: Atualizar `Caddyfile` e `docker-compose.yml`
+**Description:** Adiciona `import /etc/caddy/rules/*.caddy` no bloco de site do `Caddyfile` e adiciona o volume `./rules:/etc/caddy/rules:ro` no serviço `caddy` em `docker-compose.yml`.
+**Dependencies:** None
+**Estimated scope:** S (2 files)
+**Acceptance Criteria:**
+- `deploy/vm/Caddyfile` contém `import /etc/caddy/rules/*.caddy` no início do site block.
+- `deploy/vm/docker-compose.yml` monta `./rules:/etc/caddy/rules:ro` no serviço `caddy`.
 **Verification:**
-```bash
-pytest tests/unit/api_gateway/mcp/test_knowledge_tools.py -v
-mypy --strict src/api_gateway/mcp/
-```
-
-**Files touched:**
-- `src/api_gateway/mcp/protocols/i_mcp_tool_provider.py`
-- `src/api_gateway/mcp/protocols/__init__.py`
-- `src/api_gateway/mcp/tools/knowledge_query_tool.py`
-- `src/api_gateway/mcp/tools/knowledge_list_kbs_tool.py`
-- `src/api_gateway/mcp/tools/knowledge_search_notes_tool.py`
-- `src/api_gateway/mcp/tools/__init__.py`
-- `tests/unit/api_gateway/mcp/test_knowledge_tools.py`
-
-**Commit:** `feat(mcp): implement modular tool handlers for knowledge retrieval`
+- [ ] `grep "import /etc/caddy/rules/\*.caddy" substrate/deploy/vm/Caddyfile`
+- [ ] `grep "./rules:/etc/caddy/rules:ro" substrate/deploy/vm/docker-compose.yml`
+**Files:**
+- `substrate/deploy/vm/Caddyfile`
+- `substrate/deploy/vm/docker-compose.yml`
 
 ---
 
-### Task 3: Implementar o provedor de ferramentas `KnowledgeMcpToolProvider`
-
-**Description:** Cria o `KnowledgeMcpToolProvider` em `src/api_gateway/mcp/providers/` implementando `IMcpToolProvider`, responsável por registrar e expor as definições e schemas das ferramentas do módulo Knowledge para o servidor MCP.
-
-**Acceptance criteria:**
-- [x] `KnowledgeMcpToolProvider` herda de `IMcpToolProvider`.
-- [x] Método `get_tools()` ou delegação registra as ferramentas na instância do servidor MCP.
-- [x] Suporte a registro das ferramentas `knowledge_query`, `knowledge_list_kbs` e `knowledge_search_notes`.
-- [x] Testes unitários em `tests/unit/api_gateway/mcp/test_knowledge_provider.py` passando.
-
+#### Task 2: Criar estrutura `deploy/vm/rules/`
+**Description:** Cria o diretório `deploy/vm/rules/` com `.gitkeep`, `README.md` explicativo e template `auth.caddy.example`.
+**Dependencies:** `task-1`
+**Estimated scope:** S (3 files)
+**Acceptance Criteria:**
+- `deploy/vm/rules/.gitkeep` garante persistência do diretório no Git.
+- `deploy/vm/rules/auth.caddy.example` documenta configuração de basic_auth e comando `caddy hash-password`.
+- `deploy/vm/rules/README.md` explica como estender o Caddyfile de forma desacoplada.
 **Verification:**
-```bash
-pytest tests/unit/api_gateway/mcp/test_knowledge_provider.py -v
-mypy --strict src/api_gateway/mcp/providers/
-```
-
-**Files touched:**
-- `src/api_gateway/mcp/providers/knowledge_mcp_tool_provider.py`
-- `src/api_gateway/mcp/providers/__init__.py`
-- `tests/unit/api_gateway/mcp/test_knowledge_provider.py`
-
-**Commit:** `feat(mcp): implement knowledge mcp tool provider`
+- [ ] `ls -la substrate/deploy/vm/rules/`
+**Files:**
+- `substrate/deploy/vm/rules/.gitkeep`
+- `substrate/deploy/vm/rules/README.md`
+- `substrate/deploy/vm/rules/auth.caddy.example`
 
 ---
 
-### Task 4: Implementar o servidor MCP com transporte SSE e gerenciamento de sessões
-
-**Description:** Implementa a sub-aplicação Starlette/FastAPI com transporte SSE (`SseServerTransport`) do SDK `mcp`, permitindo conexões de clientes em `/sse` e troca de mensagens JSON-RPC em `/messages`.
-
-**Acceptance criteria:**
-- [x] `src/api_gateway/mcp/mcp_server_app.py` cria a aplicação com endpoints SSE e mensagens.
-- [x] Handshake do MCP (`initialize`, `notifications/initialized`, `tools/list`, `tools/call`) suportado com sucesso.
-- [x] Tratamento adequado de fechamento e timeout de sessões.
-
+#### Task 3: Atualizar `.gitignore`, `setup.sh` e `.env.example`
+**Description:** Ignora `rules/*.caddy` no `.gitignore`, adiciona criação de `rules/` no `setup.sh` e documenta `DOMAIN_NAME=:80` no `.env.example`.
+**Dependencies:** `task-2`
+**Estimated scope:** M (4 files)
+**Acceptance Criteria:**
+- `.gitignore` (do substrate e da raiz) ignora `deploy/vm/rules/*.caddy` preservando `.example`.
+- `setup.sh` executa `mkdir -p "${SCRIPT_DIR}/rules"`.
+- `.env.example` documenta `DOMAIN_NAME=:80` para acessos diretos via IP em staging.
 **Verification:**
-```bash
-mypy --strict src/api_gateway/mcp/
-```
-
-**Files touched:**
-- `src/api_gateway/mcp/mcp_server_app.py`
-- `src/api_gateway/mcp/__init__.py`
-
-**Commit:** `feat(mcp): create streamable sse mcp server application`
+- [ ] `grep "rules/\*.caddy" substrate/.gitignore`
+- [ ] `grep 'mkdir -p "${SCRIPT_DIR}/rules"' substrate/deploy/vm/setup.sh`
+- [ ] `grep -A 2 "DOMAIN_NAME" substrate/deploy/vm/.env.example`
+**Files:**
+- `substrate/.gitignore`
+- `.gitignore`
+- `substrate/deploy/vm/setup.sh`
+- `substrate/deploy/vm/.env.example`
 
 ---
 
-### Task 5: Integrar a sub-aplicação MCP no FastAPI (`main.py`) e Caddyfile
-
-**Description:** Monta a aplicação MCP no `main.py` em `/mcp` e atualiza a configuração de proxy reverso no `deploy/vm/Caddyfile` para assegurar suporte a streaming SSE (`flush_interval -1`).
-
-**Acceptance criteria:**
-- [x] Rota `/mcp` montada no FastAPI em `src/api_gateway/main.py`.
-- [x] `deploy/vm/Caddyfile` configurado para rotear `/mcp/*` para o backend com buffering de resposta desativado.
-
-**Verification:**
-```bash
-grep "/mcp" src/api_gateway/main.py
-grep "mcp" deploy/vm/Caddyfile
-```
-
-**Files touched:**
-- `src/api_gateway/main.py`
-- `deploy/vm/Caddyfile`
-
-**Commit:** `feat(mcp): mount mcp server in api gateway and configure caddy proxy`
+### Checkpoint 1 (Foundation & Isolation)
+- [ ] Todas as regras de infraestrutura base e diretórios criados
+- [ ] Teste de isolamento Git: criar arquivo `.caddy` temporário e validar `git status --porcelain` vazio
+- [ ] Revisão dos arquivos antes de avançar
 
 ---
 
-### Task 6: Implementar suíte de testes de integração ponta a ponta para o MCP
-
-**Description:** Implementa testes de integração com `httpx.AsyncClient` testando o ciclo de vida completo via transporte SSE e mensagens JSON-RPC: `initialize`, listagem de ferramentas e execução de `knowledge_list_kbs` e `knowledge_query`.
-
-**Acceptance criteria:**
-- [x] Teste de conexão SSE (`GET /mcp/sse`) recebendo evento com sessionId e URL de messages.
-- [x] Teste de chamada JSON-RPC `initialize` e `tools/list`.
-- [x] Teste de execução `tools/call` validando retorno formatado em Markdown.
-- [x] 100% dos testes de integração passando.
-
+#### Task 4: Validar sintaxe e testar backward compatibility
+**Description:** Testa se o `Caddyfile` continua válido com e sem regras em `rules/`, preservando todas as rotas existentes (`/api/*`, `/mcp/*`, `/docs*`, `/openapi.json`, frontend fallback).
+**Dependencies:** Checkpoint 1
+**Estimated scope:** XS (0-1 file)
+**Acceptance Criteria:**
+- Arquivos `.caddy` em `rules/` não aparecem em `git status`.
+- O Caddyfile mantém 100% de compatibilidade e todas as rotas originais.
 **Verification:**
-```bash
-pytest tests/integration/test_mcp_sse_server.py -v
-```
-
-**Files touched:**
-- `tests/integration/test_mcp_sse_server.py`
-
-**Commit:** `test(mcp): add end-to-end integration tests for streamable sse mcp`
+- [ ] `touch substrate/deploy/vm/rules/test.caddy`
+- [ ] `git status --porcelain substrate/deploy/vm/rules/` (retorna vazio)
+- [ ] `rm substrate/deploy/vm/rules/test.caddy`
 
 ---
 
-### Task 7: Executar validação final e gate de qualidade (`make pre-commit`)
-
-**Description:** Executa todos os linters, formatadores, checagem estrita de tipos e suíte completa de testes para garantir conformidade com o `AGENTS.md`.
-
-**Acceptance criteria:**
-- [x] `ruff check .` com zero erros e warnings.
-- [x] `ruff format --check .` 100% formatado.
-- [x] `mypy --strict src/ tests/` com `No issues found`.
-- [x] `make pre-commit` aprovado com sucesso.
-
+#### Task 5: Registrar no CHANGELOG e preparar branch upstream
+**Description:** Registra a versão v0.8.1 no `CHANGELOG.md` do substrate detalhando a melhoria de deploy modular e instruções para o PR upstream.
+**Dependencies:** `task-4`
+**Estimated scope:** S (1 file)
+**Acceptance Criteria:**
+- `substrate/CHANGELOG.md` atualizado com a seção `[0.8.1]`.
 **Verification:**
-```bash
-make pre-commit
-```
+- [ ] `git diff substrate/CHANGELOG.md`
+**Files:**
+- `substrate/CHANGELOG.md`
 
-**Files touched:**
-- Todos os arquivos modificados/criados
+---
 
-**Commit:** `chore(mcp): complete quality gates and pre-commit checks`
+### Checkpoint 2 (Final Verification)
+- [ ] Subrepo `substrate/` 100% consistente e testado
+- [ ] Pronto para comando `git subtree push` e PR no upstream `jmlapa/agentic-substrate`
