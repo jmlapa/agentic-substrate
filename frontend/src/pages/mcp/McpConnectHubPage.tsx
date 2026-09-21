@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { useMcpInfo } from '../../hooks/useMcpInfo';
 import { McpHealthBanner } from './components/McpHealthBanner';
+import { McpBasicAuthPanel } from './components/McpBasicAuthPanel';
 import { McpClientSelectorTabs } from './components/McpClientSelectorTabs';
 import { McpToolsCatalog } from './components/McpToolsCatalog';
 import { Network, Zap, ShieldCheck } from 'lucide-react';
 import { McpToolInfo } from '../../api/mcp-api';
+import { buildBasicAuthHeader } from '../../utils/mcpAuth';
 
 const DEFAULT_DEV_API_URL = 'http://localhost:8000';
 
@@ -83,6 +85,9 @@ export const McpConnectHubPage: React.FC = () => {
   };
 
   const [baseUrl, setBaseUrl] = useState<string>(computeDefaultBaseUrl);
+  const [authEnabled, setAuthEnabled] = useState<boolean>(false);
+  const [authUsername, setAuthUsername] = useState<string>('');
+  const [authPassword, setAuthPassword] = useState<string>('');
 
   useEffect(() => {
     setBaseUrl(computeDefaultBaseUrl());
@@ -99,6 +104,10 @@ export const McpConnectHubPage: React.FC = () => {
     : 'online';
 
   const toolsList = mcpInfo?.tools || FALLBACK_TOOLS;
+
+  const authHeader = authEnabled
+    ? buildBasicAuthHeader(authUsername, authPassword)
+    : null;
 
   return (
     <PageContainer
@@ -117,7 +126,17 @@ export const McpConnectHubPage: React.FC = () => {
           version={mcpInfo?.version ? `v${mcpInfo.version}` : 'v0.8.0'}
         />
 
-        {/* 2. Client Quickstart Tabs */}
+        {/* 2. Caddy Basic Auth Configuration */}
+        <McpBasicAuthPanel
+          enabled={authEnabled}
+          onToggle={setAuthEnabled}
+          username={authUsername}
+          onUsernameChange={setAuthUsername}
+          password={authPassword}
+          onPasswordChange={setAuthPassword}
+        />
+
+        {/* 3. Client Quickstart Tabs */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Zap className="h-5 w-5 text-indigo-400" />
@@ -125,13 +144,13 @@ export const McpConnectHubPage: React.FC = () => {
               Configuração Rápida por Agente
             </h3>
           </div>
-          <McpClientSelectorTabs baseUrl={baseUrl} />
+          <McpClientSelectorTabs baseUrl={baseUrl} authHeader={authHeader} />
         </div>
 
-        {/* 3. Dynamic Tools Catalog */}
+        {/* 4. Dynamic Tools Catalog */}
         <McpToolsCatalog tools={toolsList} />
 
-        {/* 4. Architecture & Security Notice */}
+        {/* 5. Architecture & Security Notice */}
         <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 p-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-zinc-400">
           <div className="flex items-start gap-3">
             <Network className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />

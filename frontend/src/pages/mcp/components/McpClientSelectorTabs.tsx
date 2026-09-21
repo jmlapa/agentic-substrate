@@ -10,11 +10,13 @@ import {
   Boxes,
   Info,
   ExternalLink,
+  Lock,
 } from 'lucide-react';
 import { McpCodeSnippet } from './McpCodeSnippet';
 
 export interface McpClientSelectorTabsProps {
   baseUrl: string;
+  authHeader?: string | null;
 }
 
 interface ClientTab {
@@ -27,6 +29,7 @@ interface ClientTab {
 
 export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
   baseUrl,
+  authHeader,
 }) => {
   const [activeTab, setActiveTab] = useState<string>('cursor');
 
@@ -45,11 +48,14 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
     { id: 'node-sdk', name: 'Node.js SDK', icon: Code2, badge: 'TypeScript' },
   ];
 
+  const headersObj = authHeader ? { Authorization: authHeader } : undefined;
+
   const cursorJson = JSON.stringify(
     {
       mcpServers: {
         'agentic-substrate': {
           url: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -63,6 +69,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
         'agentic-substrate': {
           type: 'sse',
           url: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -76,6 +83,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
         'agentic-substrate': {
           type: 'sse',
           url: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -89,6 +97,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
         'agentic-substrate': {
           type: 'sse',
           url: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -101,6 +110,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
       mcpServers: {
         'agentic-substrate': {
           serverUrl: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -113,6 +123,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
       mcpServers: {
         'agentic-substrate': {
           url: sseUrl,
+          ...(headersObj ? { headers: headersObj } : {}),
         },
       },
     },
@@ -129,6 +140,7 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
             type: 'remote',
             url: sseUrl,
             enabled: true,
+            ...(headersObj ? { headers: headersObj } : {}),
           },
         },
       },
@@ -137,7 +149,39 @@ export const McpClientSelectorTabs: React.FC<McpClientSelectorTabsProps> = ({
     2
   );
 
-  const pythonSnippet = `import asyncio
+  const pythonSnippet = authHeader
+    ? `import asyncio
+from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
+
+async def main():
+    # Headers de autenticação para o Caddy Basic Auth (RFC 7617)
+    headers = {
+        "Authorization": "${authHeader}"
+    }
+    
+    async with sse_client("${sseUrl}", headers=headers) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            print("Sessão MCP autenticada inicializada com sucesso!")
+            
+            # 1. Listar bases de conhecimento
+            kbs = await session.call_tool("knowledge_list_kbs", arguments={})
+            print(kbs.content[0].text)
+            
+            # 2. Consultar o Grafo de Conhecimento (GraphRAG)
+            query_res = await session.call_tool(
+                "knowledge_query",
+                arguments={
+                    "kb_id": "<uuid-da-kb>",
+                    "query": "Quais são as principais regras?",
+                    "include_graph_evidence": True
+                }
+            )
+            print(query_res.content[0].text)
+
+asyncio.run(main())`
+    : `import asyncio
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 
@@ -164,7 +208,50 @@ async def main():
 
 asyncio.run(main())`;
 
-  const nodeSnippet = `import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+  const nodeSnippet = authHeader
+    ? `import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+
+async function main() {
+  // Configuração com headers Basic Auth para Caddy
+  const transport = new SSEClientTransport(
+    new URL("${sseUrl}"),
+    {
+      eventSourceInit: {
+        headers: {
+          Authorization: "${authHeader}",
+        },
+      },
+      requestInit: {
+        headers: {
+          Authorization: "${authHeader}",
+        },
+      },
+    }
+  );
+
+  const client = new Client(
+    { name: "substrate-client", version: "1.0.0" },
+    { capabilities: {} }
+  );
+
+  await client.connect(transport);
+  console.log("Conectado ao Substrate MCP com autenticação!");
+
+  // Listar ferramentas
+  const { tools } = await client.listTools();
+  console.log("Ferramentas:", tools.map((t) => t.name));
+
+  // Executar busca rápida
+  const res = await client.callTool({
+    name: "knowledge_search_notes",
+    arguments: { kb_id: "<uuid-da-kb>", query: "conceito" },
+  });
+  console.log(res.content);
+}
+
+main().catch(console.error);`
+    : `import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 async function main() {
@@ -197,34 +284,43 @@ main().catch(console.error);`;
   return (
     <div className="space-y-4">
       {/* Scrollable Tabs header */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-zinc-800/80 scrollbar-thin scrollbar-thumb-zinc-800">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive
-                  ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700/60'
-                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${isActive ? 'text-indigo-400' : 'text-zinc-500'}`} />
-              <span>{tab.name}</span>
-              {tab.badge && (
-                <span
-                  className={`rounded px-1.5 py-0.2 text-[10px] font-medium border ${
-                    tab.badgeColor || 'bg-zinc-800 text-zinc-400 border-zinc-700/40'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2 border-b border-zinc-800/80 scrollbar-thin scrollbar-thumb-zinc-800">
+        <div className="flex items-center gap-1.5">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700/60'
+                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent'
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isActive ? 'text-indigo-400' : 'text-zinc-500'}`} />
+                <span>{tab.name}</span>
+                {tab.badge && (
+                  <span
+                    className={`rounded px-1.5 py-0.2 text-[10px] font-medium border ${
+                      tab.badgeColor || 'bg-zinc-800 text-zinc-400 border-zinc-700/40'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {authHeader && (
+          <div className="hidden lg:flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-800/50 text-[11px] font-medium text-amber-300">
+            <Lock className="h-3 w-3" />
+            <span>Headers de Autenticação Injetados</span>
+          </div>
+        )}
       </div>
 
       {/* Tab Contents */}
@@ -302,7 +398,11 @@ main().catch(console.error);`;
               </span>
               <McpCodeSnippet
                 title="Terminal"
-                code={`claude mcp add --transport sse agentic-substrate ${sseUrl}`}
+                code={
+                  authHeader
+                    ? `claude mcp add --transport sse agentic-substrate ${sseUrl} --header "Authorization: ${authHeader}"`
+                    : `claude mcp add --transport sse agentic-substrate ${sseUrl}`
+                }
                 language="bash"
                 isCommand={true}
               />
@@ -395,7 +495,11 @@ main().catch(console.error);`;
 
             <McpCodeSnippet
               title="Terminal (CLI)"
-              code={`gemini mcp add agentic-substrate --url ${sseUrl}`}
+              code={
+                authHeader
+                  ? `gemini mcp add agentic-substrate --url ${sseUrl} --header "Authorization: ${authHeader}"`
+                  : `gemini mcp add agentic-substrate --url ${sseUrl}`
+              }
               language="bash"
               isCommand={true}
             />
@@ -424,7 +528,11 @@ main().catch(console.error);`;
 
             <McpCodeSnippet
               title="Terminal (CLI)"
-              code={`opencode mcp add agentic-substrate --url ${sseUrl}`}
+              code={
+                authHeader
+                  ? `opencode mcp add agentic-substrate --url ${sseUrl} --header "Authorization: ${authHeader}"`
+                  : `opencode mcp add agentic-substrate --url ${sseUrl}`
+              }
               language="bash"
               isCommand={true}
             />
@@ -464,6 +572,23 @@ main().catch(console.error);`;
                 language="text"
                 badge="SSE Endpoint"
               />
+
+              {authHeader && (
+                <div className="rounded-lg bg-amber-950/30 border border-amber-800/40 p-3 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-300">
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>Autenticação no ChatGPT:</span>
+                  </div>
+                  <p className="text-zinc-300">
+                    Selecione <strong>Custom Header</strong> nas opções de autenticação do conector e adicione:
+                  </p>
+                  <code className="block bg-zinc-950 p-2 rounded text-amber-200 font-mono text-[11px] select-all">
+                    Header: Authorization
+                    <br />
+                    Value: {authHeader}
+                  </code>
+                </div>
+              )}
 
               <p className="text-[11px] text-zinc-500 pt-2 border-t border-zinc-800/80">
                 <strong>Nota:</strong> O ChatGPT exige uma URL pública HTTPS com certificado válido. Se estiver em ambiente local de desenvolvimento, utilize um túnel como <code className="text-zinc-300">ngrok http 8000</code> ou <code className="text-zinc-300">cloudflared</code>.
