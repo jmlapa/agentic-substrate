@@ -1,63 +1,75 @@
-# Implementation Plan: MCP Agent Connect Hub (Marco 1.23)
+# Implementation Plan: Google Drive Folder Data Source & Blue/Green Ingestion (Marco 1.25)
 
 ## 1. Overview
-
-Disponibilizar no console web (`/frontend`) a central de integração **MCP Agent Connect Hub** (`/mcp`), permitindo a qualquer desenvolvedor ou construtor de agentes autônomos descobrir, configurar e validar o servidor MCP do Agentic Substrate para os 9 principais coding agents do mercado (Cursor, Claude Desktop, Claude Code, GitHub Copilot, Antigravity, Gemini CLI, OpenCode, ChatGPT, além de Python/Node SDKs), com verificador de saúde em tempo real e catálogo dinâmico de ferramentas cognitivas.
+Implementar o subsistema de **`DataSource`** no módulo `knowledge` do **Agentic Substrate**, permitindo que uma Knowledge Base seja vinculada a uma ou mais pastas do Google Drive através de Service Account GCP. O conector opera como um **Upstream Producer (Extract & Load)** com streaming em memória $O(1)$ via semáforo assíncrono, desacoplamento via resposta imediata `202 Accepted`, rastreabilidade ponta a ponta através da entidade `DataSourceRun`, e reprocessamento sem downtime através da estratégia **Blue/Green Document Atomic Swap** coordenada por eventos.
 
 ---
 
 ## 2. Architecture Decisions
-
-- **Endpoint REST Introspectivo O(1):** Criar `GET /api/v1/mcp/info` no backend que inspeciona diretamente o `MCPServer` e retorna metadados estruturados das ferramentas registradas sem exigir conexões SSE persistentes do navegador.
-- **Single Class per File & Strict Typing no Backend:** Todos os DTOs (`McpInfoResponseDTO`, `McpToolInfoDTO`, `McpToolParameterDTO`) e o controller (`mcp_controller.py`) em arquivos isolados, com validação Pydantic v2 e Mypy em modo estrito.
-- **Detecção Inteligente de URL no Frontend:** Resolver automaticamente a URL do SSE (`http://localhost:8000/mcp/sse` quando rodando no Vite porta 3000 em dev, ou `window.location.origin + '/mcp/sse'` em produção com Caddy), permitindo edição rápida caso o usuário use túneis (ngrok).
-- **Abas Fiéis à Documentação Oficial dos Agentes:** Cada cliente recebe sua aba formatada exatamente como sua documentação oficial exige (ex: `"servers"` no Copilot, `"serverUrl"` no Antigravity, `"type": "sse"` no Claude, `"type": "remote"` no OpenCode).
-- **Vite Proxy Local para `/mcp`:** Adicionar `/mcp` ao `proxy` do `frontend/vite.config.ts` para paridade de desenvolvimento local.
+- **Clean Architecture Pura:** A entidade `DataSource` e o agregado no domínio são 100% agnósticos a fornecedores externos. A API do Google Drive reside exclusivamente em `infrastructure/adapters/google_drive/google_drive_folder_connector.py`.
+- **Adaptador Granular Especializado:** Em vez de um "God Adapter", o `GoogleDriveFolderConnector` é focado unicamente na lógica de pastas (`folder_id`), varredura hierárquica e conversão de formatos proprietários do Google.
+- **Upstream Producer sem Bloqueio de Sagas:** O worker do conector apenas extrai e persiste os arquivos brutos via `AttachAndStoreDocumentUseCase`, liberando a memória imediatamente e finalizando sua execução física. As Sagas de GraphRAG rodam assincronamente no seu próprio ritmo.
+- **Rastreabilidade por Correlation ID (`DataSourceRun`):** Cada sincronização gera um `sync_run_id` carimbado nos documentos. Um projector orientado a eventos (`DataSourceRunProjector`) escuta `DocumentIndexedEvent` e `DocumentIngestionFailedEvent` para atualizar o progresso e o status final da execução.
+- **Blue/Green Document Atomic Swap:** Ao detectar que um arquivo no Drive teve seu `version_hash` alterado, a nova versão é processada isoladamente enquanto a versão anterior continua ativa. Um handler reativo (`BlueGreenDocumentSwapHandler`) escuta `DocumentIndexedEvent` e purga atomicamente o subgrafo antigo via `DeleteDocumentUseCase`.
+- **Single Class per File & Mypy Strict:** Nenhuma classe, DTO, protocolo ou entidade agrupada em mono-arquivos. Tipagem estrita com `Result[T, DomainError]` em todos os use cases.
 
 ---
 
 ## 3. Dependency Graph
 
 ```
-[Task 1] Backend DTOs e Endpoint de Introspecção (GET /api/v1/mcp/info)
+[Phase 1] Value Objects, Domain Entities, Events e Protocols
     │
-    └── [Task 2] Testes Unitários e Integração do Backend (Mypy + Pytest)
-            │
-            └── [Task 3] Cliente de API e Hook TanStack Query no Frontend (useMcpInfo)
-                    │
-                    └── [Task 4] Componentes de UI (CodeSnippet, HealthBanner, ToolsCatalog)
-                            │
-                            └── [Task 5] Seletor de Agentes (McpClientSelectorTabs com 10 clientes)
-                                    │
-                                    └── [Task 6] Página Principal e Integração de Rotas/Sidebar
-                                            │
-                                            └── [Task 7] Validação dos Gates e Build Final (make pre-commit)
+    ├── [Phase 2] Migração PostgreSQL e Repositórios (DataSource e DataSourceRun)
+    │       │
+    │       └── [Phase 3] Adaptadores de Infraestrutura (Mock, Registry, GoogleDriveFolderConnector)
+    │               │
+    │               └── [Phase 4] Application Layer: Use Cases, Sync Worker e Handlers (Swap & Run Projector)
+    │                       │
+    │                       └── [Phase 5] API Gateway: DTOs, Controller e IoC Container Wiring
+    │                               │
+    │                               └── [Phase 6] Testes de Integração E2E e Gate make pre-commit
 ```
 
 ---
 
 ## 4. Phase Breakdown
 
-### Phase 1: Backend Introspection API & Single Class per File (Tasks 1 & 2)
-- Criação dos DTOs: `McpToolParameterDTO`, `McpToolInfoDTO`, `McpInfoResponseDTO` em `src/api_gateway/dtos/`.
-- Criação do controller `mcp_controller.py` em `src/api_gateway/controllers/`.
-- Registro da rota no `main.py`.
-- Testes unitários com Pytest em `tests/unit/api_gateway/test_mcp_controller.py`.
+### Phase 1: Domain Primitives & Value Objects (Tasks 1 & 2)
+- Value Objects: `DataSourceType`, `DataSourceStatus`, `DataSourceRunStatus`, `GoogleDriveFolderConfig`, `DiscoveredDocumentItem`, `DataSourceChangesBatch`.
+- Entidades de Domínio: `DataSource`, `DataSourceRun`.
+- Eventos de Domínio: `DataSourceCreatedEvent`, `DataSourceSyncStartedEvent`, `DataSourceSyncCompletedEvent`, `DataSourceSyncFailedEvent`, `DataSourceRunCompletedEvent`.
+- Interfaces/Protocols: `IDataSourceConnector`, `IDataSourceConnectorRegistry`, `IDataSourceRepository`, `IDataSourceRunRepository`.
+- Testes unitários do domínio em `tests/unit/test_data_source_domain.py`.
 
-### Phase 2: Frontend Data Layer & Core Components (Tasks 3 & 4)
-- Configuração do proxy `/mcp` em `frontend/vite.config.ts`.
-- Tipagens TypeScript e cliente Axios em `frontend/src/api/mcp-api.ts`.
-- Hook TanStack React Query `useMcpInfo` com polling em `frontend/src/hooks/useMcpInfo.ts`.
-- Componentes modulares `McpCodeSnippet.tsx`, `McpHealthBanner.tsx` e `McpToolsCatalog.tsx`.
+### Phase 2: Relational Persistence & Repositories (Tasks 3 & 4)
+- Migração Alembic `0007_create_knowledge_data_sources.py` criando as tabelas `knowledge_data_sources` e `knowledge_data_source_runs`.
+- Implementações In-Memory e PostgreSQL para `IDataSourceRepository` e `IDataSourceRunRepository`.
+- Testes unitários/integração de persistência em `tests/unit/test_data_source_repositories.py`.
 
-### Phase 3: Agent Selector, Page Assembly & Navigation (Tasks 5 & 6)
-- Componente `McpClientSelectorTabs.tsx` com as 10 variantes homologadas e 1-click copy.
-- Montagem da página principal `McpConnectHubPage.tsx` em `frontend/src/pages/mcp/`.
-- Adição da rota `/mcp` em `frontend/src/App.tsx` e link na `frontend/src/components/layout/Sidebar.tsx`.
+### Phase 3: Infrastructure Adapters & Connectors (Tasks 5 & 6)
+- `InMemoryDataSourceConnector` para testes determinísticos.
+- `DataSourceConnectorRegistry` mapeando `DataSourceType.GOOGLE_DRIVE_FOLDER` para a implementação concreta.
+- `GoogleDriveFolderConnector` utilizando a API v3 do Google Drive (`files.list`, `changes.list`, `files.export`, `files.get`).
+- Testes unitários de adaptador em `tests/unit/test_google_drive_folder_connector.py`.
 
-### Phase 4: Verification & Quality Gates (Task 7)
-- Verificação de compilação frontend (`npm run build`).
-- Execução do gate oficial `make pre-commit` (Ruff, Mypy strict, Pytest com cobertura).
+### Phase 4: Application Layer — Use Cases & Event Handlers (Tasks 7, 8 & 9)
+- Use Cases de Gestão: `CreateDataSourceUseCase`, `ListDataSourcesUseCase`, `ListDataSourceRunsUseCase`, `DeleteDataSourceUseCase`.
+- Sincronização Assíncrona: `SyncDataSourceUseCase` com semáforo de concorrência (`asyncio.Semaphore(max_concurrency=2)`), criação de `DataSourceRun` e handoff para `AttachAndStoreDocumentUseCase`.
+- Handlers Reativos:
+  - `BlueGreenDocumentSwapHandler`: escuta `DocumentIndexedEvent` e purga o doc anterior quando `replaces_doc_id` estiver presente.
+  - `DataSourceRunProjector`: escuta eventos de conclusão e falha para consolidar as métricas de cada execução.
+- Testes unitários de use cases e handlers.
+
+### Phase 5: API Gateway, DTOs & Container Wiring (Tasks 10 & 11)
+- DTOs em `src/api_gateway/dtos/` para request/response de criação, listagem, status e runs.
+- Controller em `src/api_gateway/controllers/data_source_controller.py` com rotas `/api/v1/knowledge-bases/{kb_id}/data-sources`.
+- Injeção de dependências no `Container` (`src/api_gateway/container.py`) e inclusão de rotas no `main.py`.
+
+### Phase 6: E2E Integration Tests & Quality Gates (Task 12)
+- Testes de ponta a ponta na API Gateway (`tests/integration/test_data_source_api_gateway.py`).
+- Teste E2E do fluxo de sincronização e swap atômico no FalkorDB (`tests/integration/test_e2e_data_source_sync_and_swap.py`).
+- Execução dos quality gates oficiais: `make pre-commit` (Ruff linter/formatter, Mypy strict mode, Pytest com 100% de aprovação).
 
 ---
 
@@ -65,7 +77,7 @@ Disponibilizar no console web (`/frontend`) a central de integração **MCP Agen
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Diferença de portas entre Vite (3000) e FastAPI (8000) quebrar o snippet copiado | Alto | Lógica no `McpHealthBanner` que detecta hostname `localhost` e substitui a porta da UI (3000) pela da API (8000), permitindo também edição livre pelo usuário. |
-| Inconsistência de schemas entre agentes (ex: Copilot usa `"servers"` em vez de `"mcpServers"`) | Alto | Cada aba tem gerador de JSON isolado, estritamente baseado nas documentações oficiais pesquisadas. |
-| Violação da regra Single Class per File nos novos DTOs | Alto | Cada DTO em seu próprio arquivo dentro de `src/api_gateway/dtos/`. |
-| Falha de Mypy strict no controller | Médio | Tipagem 100% explícita em todos os retornos e parâmetros de rotas. |
+| Quotas e Rate Limit da Google Drive API v3 (1000 req/100s) | Médio | Extração em streaming com semáforo (`max_concurrency=2`) e caching local de metadados por `version_hash`. |
+| Arquivo Google Docs nativo corrompido ou vazio na exportação | Médio | Tratamento individual de exceções por arquivo: registra falha no `failure_summary` da run e prossegue para os próximos arquivos. |
+| Remoção acidental de subgrafo compartilhado no swap do FalkorDB | Alto | O `DeleteDocumentUseCase` já implementado usa exclusão estrita de nós do documento preservando entidades ontológicas conectadas. |
+| Ingestões concorrentes na mesma pasta do Drive | Médio | Lock no nível da entidade `DataSource` (`status == SYNCING` rejeita novos disparos como No-Op). |

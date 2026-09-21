@@ -341,12 +341,12 @@
 **Description:** Implementa testes de integração ponta a ponta validando o fluxo completo (Criação de DataSource ➔ Disparo de Sync ➔ Ingestão ➔ Swap de Versão no FalkorDB ➔ Rastreabilidade na Run) e executa o gate oficial `make pre-commit`.
 
 **Acceptance criteria:**
-- [ ] `tests/integration/test_data_source_api_gateway.py` valida todas as rotas HTTP do conector.
-- [ ] `tests/integration/test_e2e_data_source_sync_and_swap.py` valida o fluxo completo com simulação de nova versão de documento e verificação de expurgo no FalkorDB.
-- [ ] Execução com 100% de sucesso de `make pre-commit` (Ruff linter/formatter, Mypy strict mode sem warnings, Pytest com cobertura total).
+- [x] `tests/integration/test_data_source_api_gateway.py` valida todas as rotas HTTP do conector.
+- [x] `tests/integration/test_e2e_data_source_sync_and_swap.py` valida o fluxo completo com simulação de nova versão de documento e verificação de expurgo no FalkorDB.
+- [x] Execução com 100% de sucesso de `make pre-commit` (Ruff linter/formatter, Mypy strict mode sem warnings, Pytest com cobertura total).
 
 **Verification:**
-- [ ] `make pre-commit`
+- [x] `make pre-commit`
 
 **Dependencies:** Task 11
 
@@ -359,6 +359,6 @@
 ---
 
 ### Checkpoint 5: Complete Delivery
-- [ ] Todas as 12 tarefas implementadas e verificadas individualmente.
-- [ ] Zero erros de lint, formato ou tipagem estrita no `make pre-commit`.
-- [ ] Documentação e rastreabilidade sincronizadas.
+- [x] Todas as 12 tarefas implementadas e verificadas individualmente.
+- [x] Zero erros de lint, formato ou tipagem estrita no `make pre-commit`.
+- [x] Documentação e rastreabilidade sincronizadas.
