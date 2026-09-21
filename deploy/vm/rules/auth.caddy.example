@@ -1,0 +1,19 @@
+# ==============================================================================
+# Agentic Substrate - Exemplo de Proteção por HTTP Basic Auth
+# ==============================================================================
+# Para ativar na VM de Staging ou Homologação:
+# 1. Copie este arquivo para 'auth.caddy':
+#      cp auth.caddy.example auth.caddy
+#
+# 2. Gere o hash bcrypt da sua senha desejada:
+#      docker run --rm caddy:2.8-alpine caddy hash-password --plaintext "SUA_SENHA_AQUI"
+#
+# 3. Substitua o usuário e o hash abaixo no arquivo 'auth.caddy'.
+#
+# 4. Recarregue o Caddy sem downtime:
+#      docker exec substrate_vm_caddy caddy reload --config /etc/caddy/Caddyfile
+# ==============================================================================
+
+basic_auth {
+    insider $2b$12$ppYQGCi14.fgqiYZ3ccLZOCwUHbQLEYcG8W/ikTB78Tj6cgNUQXF.
+}

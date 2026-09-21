@@ -101,6 +101,7 @@ services:
       - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./rules:/etc/caddy/rules:ro
       - ./data/caddy_data:/data
       - ./data/caddy_config:/config
     networks:

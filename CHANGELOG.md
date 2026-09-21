@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-09-21
+
+### Added
+- **Regras Modulares no Caddy & Deploy Zero-Conflito em VM (Marco 1.23)**:
+  - **Ponto de Extensão Dinâmico (`deploy/vm/Caddyfile`)**:
+    - Adicionada diretiva `import /etc/caddy/rules/*.caddy` permitindo injeção de configurações específicas de ambiente (como `basic_auth`, whitelists de IP e headers customizados) sem alterar o `Caddyfile` rastreado.
+  - **Isolamento de Ambiente e Diretório de Regras (`deploy/vm/rules/`)**:
+    - Montagem do volume `./rules:/etc/caddy/rules:ro` no serviço `caddy` em `docker-compose.yml`.
+    - Criação de `deploy/vm/rules/auth.caddy.example` com template documentado para geração de hash bcrypt via utilitário Caddy.
+    - Criação de `deploy/vm/rules/README.md` com guia de boas práticas de extensão do proxy.
+    - Garantia de criação idempotente do diretório `rules/` no `deploy/vm/setup.sh`.
+  - **Isolamento no Controle de Versão (`.gitignore`)**:
+    - Exclusão de `deploy/vm/rules/*.caddy` do controle de versão para impedir árvores de trabalho sujas (`dirty working tree`) na VM e permitir atualizações limpas com `git pull origin main`.
+  - **Documentação de Acesso Direto por IP**:
+    - Atualização do `deploy/vm/.env.example` documentando o uso de `DOMAIN_NAME=:80` para ambientes de staging sem domínio/TLS.
+  - **Documentação Técnica e Arquitetural**:
+    - Criação de `SPEC-modular-caddy-rules-and-vm-deployment.md` e registro da decisão em `docs/decisions/0013-modular-caddy-rules-and-zero-conflict-deployment.md`.
+
 ## [0.8.0] - 2026-09-18
 
 ### Added

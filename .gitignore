@@ -73,6 +73,9 @@ falkordb_data/
 redis_data/
 caddy_data/
 caddy_config/
+deploy/vm/rules/*.caddy
+!deploy/vm/rules/*.caddy.example
+!deploy/vm/rules/.gitkeep
 *.sqlite
 *.sqlite3
 *.db
