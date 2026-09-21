@@ -15,5 +15,7 @@
 # ==============================================================================
 
 basic_auth {
-    insider $2b$12$ppYQGCi14.fgqiYZ3ccLZOCwUHbQLEYcG8W/ikTB78Tj6cgNUQXF.
+    # Exemplo: usuário 'admin' com hash gerado pelo Caddy
+    # Substitua pelas suas credenciais geradas
+    admin $2a$14$2bYi9v81B3z3xH2qF38fIeJgN8v3L4k7M2p1q0r9s8t7u6v5w4x3y
 }
