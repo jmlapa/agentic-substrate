@@ -221,17 +221,17 @@
 **Description:** Implementa o caso de uso de sincronização assíncrona, orquestrando a descoberta de metadados, controle de vazão via semáforo (`asyncio.Semaphore(max_concurrency=2)`), criação da `DataSourceRun` e handoff imediato para `AttachAndStoreDocumentUseCase` com carimbo de `sync_run_id`.
 
 **Acceptance criteria:**
-- [ ] Cria e persiste a entidade `DataSourceRun` com status `EXTRACTING`.
-- [ ] Consulta `fetch_changes()` no conector resolvido pelo registry.
-- [ ] Loop de extração controlado por semáforo de concorrência liberando a memória RAM após cada entrega ao storage.
-- [ ] Carimba `source_metadata={"data_source_id": id, "sync_run_id": run.id, "version_hash": hash}` em cada documento.
-- [ ] Identifica se o arquivo já existia com outro hash e define `replaces_doc_id = old_doc_id`.
-- [ ] Atualiza a `DataSourceRun` para `INGESTING` e avança o cursor do `DataSource` para o próximo token.
-- [ ] Testes unitários com simulação de 5 arquivos mock em `tests/unit/test_sync_data_source_use_case.py`.
+- [x] Cria e persiste a entidade `DataSourceRun` com status `EXTRACTING`.
+- [x] Consulta `fetch_changes()` no conector resolvido pelo registry.
+- [x] Loop de extração controlado por semáforo de concorrência liberando a memória RAM após cada entrega ao storage.
+- [x] Carimba `source_metadata={"data_source_id": id, "sync_run_id": run.id, "version_hash": hash}` em cada documento.
+- [x] Identifica se o arquivo já existia com outro hash e define `replaces_doc_id = old_doc_id`.
+- [x] Atualiza a `DataSourceRun` para `INGESTING` e avança o cursor do `DataSource` para o próximo token.
+- [x] Testes unitários com simulação de 5 arquivos mock em `tests/unit/test_sync_data_source_use_case.py`.
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/test_sync_data_source_use_case.py -v`
-- [ ] `uv run mypy --strict src/modules/knowledge/application/use_cases/sync_data_source/`
+- [x] `uv run pytest tests/unit/test_sync_data_source_use_case.py -v`
+- [x] `uv run mypy --strict src/modules/knowledge/application/use_cases/sync_data_source/`
 
 **Dependencies:** Tasks 5, 6 e 7
 

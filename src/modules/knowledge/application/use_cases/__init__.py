@@ -61,6 +61,11 @@ from src.modules.knowledge.application.use_cases.reprocess_document import (
     ReprocessDocumentResponse,
     ReprocessDocumentUseCase,
 )
+from src.modules.knowledge.application.use_cases.sync_data_source import (
+    SyncDataSourceRequest,
+    SyncDataSourceResponse,
+    SyncDataSourceUseCase,
+)
 
 __all__ = [
     "AttachAndStoreDocumentRequest",
@@ -102,4 +107,7 @@ __all__ = [
     "ReprocessDocumentRequest",
     "ReprocessDocumentResponse",
     "ReprocessDocumentUseCase",
+    "SyncDataSourceRequest",
+    "SyncDataSourceResponse",
+    "SyncDataSourceUseCase",
 ]

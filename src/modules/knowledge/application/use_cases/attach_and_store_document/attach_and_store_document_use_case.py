@@ -47,6 +47,7 @@ class AttachAndStoreDocumentUseCase:
             content_type=request.content_type,
             enable_ocr=request.enable_ocr,
             ocr_instructions=request.ocr_instructions,
+            metadata=request.source_metadata,
         )
         doc_info = kb.documents[doc_id]
         storage_path = doc_info["storage_path"]

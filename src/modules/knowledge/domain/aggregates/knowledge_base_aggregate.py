@@ -79,6 +79,7 @@ class KnowledgeBaseAggregate(AggregateRoot):
         ocr_instructions: str | None = None,
         source_type: DocumentSourceType | None = None,
         ingested_at: float | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> UUID:
         doc_id = uuid4()
         storage_path = f"{self.storage_partition}/raw/{doc_id}-{file_name}"
@@ -98,6 +99,7 @@ class KnowledgeBaseAggregate(AggregateRoot):
                 ingested_at=resolved_ingested_at,
                 enable_ocr=enable_ocr,
                 ocr_instructions=ocr_instructions,
+                metadata=dict(metadata or {}),
             )
         )
         return doc_id
@@ -223,6 +225,7 @@ class KnowledgeBaseAggregate(AggregateRoot):
             "status": DocumentStatus.PENDING_UPLOAD,
             "enable_ocr": event.enable_ocr,
             "ocr_instructions": event.ocr_instructions,
+            "metadata": event.metadata,
         }
 
     def _apply_document_stored_event(self, event: DocumentStoredEvent) -> None:
