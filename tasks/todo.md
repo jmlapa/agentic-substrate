@@ -193,17 +193,17 @@
 **Description:** Implementa os Use Cases para criação, listagem, remoção e consulta de execuções (runs) de DataSources, seguindo estritamente a convenção Single Class per File com DTOs Request/Response e `Result[T, DomainError]`.
 
 **Acceptance criteria:**
-- [ ] `CreateDataSourceUseCase` valida existência da KB e unicidade do conector.
-- [ ] `ListDataSourcesUseCase` lista os conectores associados a uma KB.
-- [ ] `ListDataSourceRunsUseCase` lista o histórico de execuções de um conector.
-- [ ] `DeleteDataSourceUseCase` remove a entidade com segurança.
-- [ ] Testes unitários para todos os casos de uso em `tests/unit/test_manage_data_source_use_cases.py`.
+- [x] `CreateDataSourceUseCase` valida existência da KB e unicidade do conector.
+- [x] `ListDataSourcesUseCase` lista os conectores associados a uma KB.
+- [x] `ListDataSourceRunsUseCase` lista o histórico de execuções de um conector.
+- [x] `DeleteDataSourceUseCase` remove a entidade com segurança.
+- [x] Testes unitários para todos os casos de uso em `tests/unit/test_manage_data_source_use_cases.py`.
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/test_manage_data_source_use_cases.py -v`
-- [ ] `uv run mypy --strict src/modules/knowledge/application/use_cases/`
+- [x] `uv run pytest tests/unit/test_manage_data_source_use_cases.py -v`
+- [x] `uv run mypy --strict src/modules/knowledge/application/use_cases/`
 
-**Dependencies:** Task 4
+**Dependencies:** Task 4, Task 5
 
 **Files likely touched:**
 - `src/modules/knowledge/application/use_cases/create_data_source/create_data_source_use_case.py`

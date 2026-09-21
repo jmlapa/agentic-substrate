@@ -29,6 +29,28 @@ from src.modules.knowledge.application.use_cases.list_knowledge_bases import (
     ListKnowledgeBasesResponse,
     ListKnowledgeBasesUseCase,
 )
+from src.modules.knowledge.application.use_cases.create_data_source import (
+    CreateDataSourceRequest,
+    CreateDataSourceResponse,
+    CreateDataSourceUseCase,
+)
+from src.modules.knowledge.application.use_cases.delete_data_source import (
+    DeleteDataSourceRequest,
+    DeleteDataSourceResponse,
+    DeleteDataSourceUseCase,
+)
+from src.modules.knowledge.application.use_cases.list_data_source_runs import (
+    DataSourceRunItemDTO,
+    ListDataSourceRunsRequest,
+    ListDataSourceRunsResponse,
+    ListDataSourceRunsUseCase,
+)
+from src.modules.knowledge.application.use_cases.list_data_sources import (
+    DataSourceItemDTO,
+    ListDataSourcesRequest,
+    ListDataSourcesResponse,
+    ListDataSourcesUseCase,
+)
 from src.modules.knowledge.application.use_cases.query_knowledge import (
     QueryKnowledgeRequest,
     QueryKnowledgeResponse,
@@ -44,9 +66,17 @@ __all__ = [
     "AttachAndStoreDocumentRequest",
     "AttachAndStoreDocumentResponse",
     "AttachAndStoreDocumentUseCase",
+    "CreateDataSourceRequest",
+    "CreateDataSourceResponse",
+    "CreateDataSourceUseCase",
     "CreateKnowledgeBaseRequest",
     "CreateKnowledgeBaseResponse",
     "CreateKnowledgeBaseUseCase",
+    "DataSourceItemDTO",
+    "DataSourceRunItemDTO",
+    "DeleteDataSourceRequest",
+    "DeleteDataSourceResponse",
+    "DeleteDataSourceUseCase",
     "DeleteDocumentRequest",
     "DeleteDocumentResponse",
     "DeleteDocumentUseCase",
@@ -57,6 +87,12 @@ __all__ = [
     "DeleteOntologyTemplateResponse",
     "DeleteOntologyTemplateUseCase",
     "KnowledgeBaseSummaryDTO",
+    "ListDataSourceRunsRequest",
+    "ListDataSourceRunsResponse",
+    "ListDataSourceRunsUseCase",
+    "ListDataSourcesRequest",
+    "ListDataSourcesResponse",
+    "ListDataSourcesUseCase",
     "ListKnowledgeBasesRequest",
     "ListKnowledgeBasesResponse",
     "ListKnowledgeBasesUseCase",
