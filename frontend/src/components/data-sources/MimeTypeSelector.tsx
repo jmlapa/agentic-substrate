@@ -3,15 +3,38 @@ import { Check } from 'lucide-react';
 
 interface MimeTypeSelectorProps {
   selectedMimes: string[];
-  onToggleMime: (mime: string) => void;
+  onToggleMime: (mime: string, related?: string[]) => void;
 }
 
-export const MIME_OPTIONS = [
+export interface MimeOption {
+  label: string;
+  mime: string;
+  related?: string[];
+}
+
+export const MIME_OPTIONS: MimeOption[] = [
   { label: 'PDF (.pdf)', mime: 'application/pdf' },
+  {
+    label: 'Word (.docx, .doc)',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    related: ['application/msword'],
+  },
   { label: 'Google Docs', mime: 'application/vnd.google-apps.document' },
-  { label: 'Google Sheets', mime: 'application/vnd.google-apps.spreadsheet' },
-  { label: 'Texto e Markdown (.txt, .md)', mime: 'text/markdown' },
-  { label: 'Áudios (.mp3, .wav, .m4a)', mime: 'audio/mpeg' },
+  {
+    label: 'Excel e Planilhas (.xlsx, .csv)',
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    related: ['application/vnd.google-apps.spreadsheet', 'application/vnd.ms-excel'],
+  },
+  {
+    label: 'Texto e Markdown (.txt, .md)',
+    mime: 'text/markdown',
+    related: ['text/plain'],
+  },
+  {
+    label: 'Áudios (.mp3, .wav, .m4a)',
+    mime: 'audio/mpeg',
+    related: ['audio/wav', 'audio/x-m4a'],
+  },
 ];
 
 export const MimeTypeSelector: React.FC<MimeTypeSelectorProps> = ({
@@ -30,7 +53,7 @@ export const MimeTypeSelector: React.FC<MimeTypeSelectorProps> = ({
             <button
               key={opt.mime}
               type="button"
-              onClick={() => onToggleMime(opt.mime)}
+              onClick={() => onToggleMime(opt.mime, opt.related)}
               className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
                 active
                   ? 'border-indigo-600/70 bg-indigo-950/40 text-indigo-200'

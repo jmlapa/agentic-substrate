@@ -27,8 +27,11 @@ export const CreateDataSourceModal: React.FC<CreateDataSourceModalProps> = ({
   const [recursive, setRecursive] = useState(true);
   const [selectedMimes, setSelectedMimes] = useState<string[]>([
     'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
     'application/vnd.google-apps.document',
     'application/vnd.google-apps.spreadsheet',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/markdown',
     'text/plain',
     'audio/mpeg',
@@ -47,10 +50,16 @@ export const CreateDataSourceModal: React.FC<CreateDataSourceModalProps> = ({
     setFolderInput(extracted);
   };
 
-  const toggleMime = (mime: string) => {
-    setSelectedMimes((prev) =>
-      prev.includes(mime) ? prev.filter((m) => m !== mime) : [...prev, mime]
-    );
+  const toggleMime = (mime: string, related: string[] = []) => {
+    setSelectedMimes((prev) => {
+      const allToToggle = [mime, ...related];
+      const isPresent = prev.includes(mime);
+      if (isPresent) {
+        return prev.filter((m) => !allToToggle.includes(m));
+      } else {
+        return [...prev, ...allToToggle.filter((m) => !prev.includes(m))];
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
