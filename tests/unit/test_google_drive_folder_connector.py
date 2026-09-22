@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -174,3 +175,38 @@ async def test_download_document_google_doc_export() -> None:
     assert mime == "text/plain"
     assert len(v_hash) == 64
     mock_service.files().export_media.assert_called_with(fileId="gdoc-1", mimeType="text/plain")
+
+
+def test_get_service_raises_clear_error_when_service_account_path_not_found(tmp_path: Path) -> None:
+    missing_file = tmp_path / "non_existent_credentials.json"
+    connector = GoogleDriveFolderConnector(service_account_path=str(missing_file))
+    with pytest.raises(
+        FileNotFoundError, match="Arquivo de credenciais do Google Cloud não encontrado"
+    ):
+        connector._get_service()
+
+
+def test_get_service_resolves_alternative_hyphen_underscore_filename(tmp_path: Path) -> None:
+    # File created with underscores on disk
+    real_file = tmp_path / "google_application_credentials.json"
+    real_file.write_text("{}", encoding="utf-8")
+
+    # Configured path uses hyphens
+    configured_path = tmp_path / "google-application-credentials.json"
+    connector = GoogleDriveFolderConnector(service_account_path=str(configured_path))
+
+    with (
+        patch(
+            "google.oauth2.service_account.Credentials.from_service_account_file"
+        ) as mock_from_file,
+        patch("googleapiclient.discovery.build") as mock_build,
+    ):
+        mock_creds = MagicMock()
+        mock_from_file.return_value = mock_creds
+        mock_build.return_value = MagicMock()
+
+        connector._get_service()
+
+        mock_from_file.assert_called_once_with(
+            str(real_file), scopes=["https://www.googleapis.com/auth/drive.readonly"]
+        )

@@ -3,6 +3,7 @@ import hashlib
 import io
 import logging
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from src.kernel.application.logger import Logger
@@ -69,8 +70,29 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
                 self._service_account_info, scopes=scopes
             )
         elif self._service_account_path:
+            path = Path(self._service_account_path)
+            if not path.is_file():
+                # Suporte a variações comuns de nomenclatura (hífen vs underscore)
+                filename = path.name
+                alt_filename = (
+                    filename.replace("-", "_") if "-" in filename else filename.replace("_", "-")
+                )
+                alt_path = path.with_name(alt_filename)
+                if alt_path.is_file():
+                    self._log_info(
+                        f"[GoogleDriveFolderConnector] Caminho '{path}' não encontrado, "
+                        f"usando correspondência alternativa: '{alt_path}'"
+                    )
+                    path = alt_path
+                else:
+                    raise FileNotFoundError(
+                        "Arquivo de credenciais do Google Cloud não encontrado em "
+                        f"'{self._service_account_path}'. Certifique-se de que o arquivo "
+                        "existe no disco (ou volume montado no container) e que o caminho "
+                        "em GOOGLE_APPLICATION_CREDENTIALS está correto."
+                    )
             creds = service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
-                self._service_account_path, scopes=scopes
+                str(path), scopes=scopes
             )
         else:
             # Tenta autenticação padrão do ambiente
