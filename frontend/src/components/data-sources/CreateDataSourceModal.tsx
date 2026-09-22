@@ -37,7 +37,7 @@ export const CreateDataSourceModal: React.FC<CreateDataSourceModalProps> = ({
 
   const cleanFolderId = (raw: string): string => {
     const trimmed = raw.trim();
-    const urlMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    const urlMatch = trimmed.match(/\/(?:folders|shared-drives)\/([a-zA-Z0-9_-]+)/);
     if (urlMatch) return urlMatch[1];
     return trimmed;
   };

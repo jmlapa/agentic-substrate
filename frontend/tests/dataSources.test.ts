@@ -5,7 +5,7 @@ import { MIME_OPTIONS } from '../src/components/data-sources/MimeTypeSelector';
 describe('Data Sources Configuration & Helpers', () => {
   const cleanFolderId = (raw: string): string => {
     const trimmed = raw.trim();
-    const urlMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    const urlMatch = trimmed.match(/\/(?:folders|shared-drives)\/([a-zA-Z0-9_-]+)/);
     if (urlMatch) return urlMatch[1];
     return trimmed;
   };
@@ -18,6 +18,12 @@ describe('Data Sources Configuration & Helpers', () => {
     const url =
       'https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs?usp=sharing';
     expect(cleanFolderId(url)).toBe('1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs');
+  });
+
+  it('extracts folder ID from a shared-drives Google Drive URL', () => {
+    const url =
+      'https://drive.google.com/drive/u/0/shared-drives/0ABcDeFg_12345/folders/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs';
+    expect(cleanFolderId(url)).toBe('0ABcDeFg_12345');
   });
 
   it('preserves clean folder IDs entered directly', () => {
