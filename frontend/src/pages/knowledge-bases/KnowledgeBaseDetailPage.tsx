@@ -16,9 +16,11 @@ import {
   Tag,
   Trash2,
   AlertTriangle,
+  Cloud,
 } from 'lucide-react';
 import { usePipelineMonitor } from '../../hooks/usePipelineMonitor';
 import { useDeleteKnowledgeBase, useDeleteDocument } from '../../hooks/useKnowledgeBases';
+import { useDataSources } from '../../hooks/useDataSources';
 import { knowledgeApi } from '../../api/knowledge-api';
 import { DocumentSummary } from '../../api/types';
 import { PageContainer } from '../../components/layout/PageContainer';
@@ -31,6 +33,7 @@ import { ErrorBanner } from '../../components/feedback/ErrorBanner';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { DocumentUploadModal } from '../ingestion/DocumentUploadModal';
 import { PipelineStatusTracker } from '../ingestion/PipelineStatusTracker';
+import { DataSourcesListSection } from '../../components/data-sources';
 
 export const KnowledgeBaseDetailPage: React.FC = () => {
   const { kbId } = useParams<{ kbId: string }>();
@@ -41,6 +44,8 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [reprocessingDocId, setReprocessingDocId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'documents' | 'connectors'>('documents');
+  const { data: dataSources } = useDataSources(kbId);
 
   const [isDeleteKbModalOpen, setIsDeleteKbModalOpen] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<DocumentSummary | null>(null);
@@ -154,7 +159,7 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
       {kb && (
         <div className="space-y-8">
           {/* Metrics summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="flex items-center gap-3.5">
               <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-400">
                 <Database className="w-5 h-5" />
@@ -184,6 +189,16 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
               <div>
                 <p className="text-xs text-zinc-400">Indexados no Grafo</p>
                 <p className="text-base font-bold text-emerald-400">{indexedDocsCount} concluídos</p>
+              </div>
+            </Card>
+
+            <Card className="flex items-center gap-3.5">
+              <div className="p-2.5 rounded-xl bg-sky-950/80 border border-sky-800 text-sky-400">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Fontes de Dados</p>
+                <p className="text-base font-bold text-sky-400">{dataSources?.length || 0} conectores</p>
               </div>
             </Card>
 
@@ -294,159 +309,191 @@ export const KnowledgeBaseDetailPage: React.FC = () => {
             )}
           </Card>
 
-          {/* Documents Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-indigo-400" />
-                Documentos & Status do Pipeline ({docs.length})
-              </h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsUploadModalOpen(true)}
-                leftIcon={<UploadCloud className="w-3.5 h-3.5" />}
-              >
-                Adicionar Arquivo
-              </Button>
-            </div>
-
-            {docs.length === 0 ? (
-              <EmptyState
-                icon={FileText}
-                title="Nenhum arquivo enviado para esta KB"
-                description="Faça o upload do seu primeiro arquivo (PDF, TXT, MD) para acompanhar a extração hierárquica e ontológica."
-                actionLabel="Fazer Upload Agora"
-                onAction={() => setIsUploadModalOpen(true)}
-              />
-            ) : (
-              <div className="space-y-4">
-                {docs.map((doc) => (
-                  <Card key={doc.id} className="space-y-4 bg-zinc-900/90 border-zinc-800">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="font-semibold text-sm text-zinc-100">{doc.file_name}</span>
-                        <span className="text-[11px] font-mono text-zinc-500">({doc.id})</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Media badge */}
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
-                            doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
-                              ? 'bg-amber-950/80 border border-amber-800/80 text-amber-300'
-                              : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
-                              ? 'bg-purple-950/80 border border-purple-800/80 text-purple-300'
-                              : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
-                          }`}
-                        >
-                          {doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
-                            ? '🎙️ Áudio'
-                            : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
-                            ? '🖼️ Imagem'
-                            : '📄 Doc'}
-                        </span>
-                        {doc.enable_ocr && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800 text-emerald-300">
-                            <Eye className="w-3 h-3 text-emerald-400" /> OCR Vision Ativo
-                          </span>
-                        )}
-
-                        <Badge
-                          variant={
-                            doc.status === 'INDEXED'
-                              ? 'success'
-                              : doc.status === 'FAILED'
-                              ? 'error'
-                              : 'purple'
-                          }
-                        >
-                          {doc.status}
-                        </Badge>
-                        {doc.status !== 'INDEXED' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleReprocess(doc.id)}
-                            isLoading={reprocessingDocId === doc.id}
-                            leftIcon={<RefreshCw className="w-3 h-3" />}
-                            title="Reinicia a saga reaproveitando páginas e chunks já gravados em cache ($0.00)"
-                          >
-                            Retomar Ingestão
-                          </Button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeletingDoc(doc);
-                          }}
-                          className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
-                          title="Excluir Documento"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* OCR Instructions if provided */}
-                    {doc.ocr_instructions && (
-                      <div className="text-xs bg-zinc-950/70 border border-zinc-800/80 rounded-lg p-2.5 text-zinc-300">
-                        <span className="font-semibold text-zinc-400 block text-[10px] uppercase tracking-wider mb-1">
-                          Diretrizes de OCR / MarkItDown:
-                        </span>
-                        <p className="italic text-zinc-300 font-mono text-[11px]">
-                          &ldquo;{doc.ocr_instructions}&rdquo;
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Metadata Chips: Chunks & Graph Stats */}
-                    {(doc.total_parents || doc.total_children || doc.indexed_nodes_count) && (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-300 pt-1">
-                        {doc.total_parents && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
-                            <Layers className="w-3 h-3 text-indigo-400" />
-                            <strong>{doc.total_parents}</strong> Seções Parent
-                          </span>
-                        )}
-                        {doc.total_children && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
-                            <Layers className="w-3 h-3 text-emerald-400" />
-                            <strong>{doc.total_children}</strong> Chunks Filhos (pgvector)
-                          </span>
-                        )}
-                        {doc.indexed_nodes_count !== undefined && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
-                            <Sparkles className="w-3 h-3 text-amber-400" />
-                            <strong>{doc.indexed_nodes_count}</strong> Nós / <strong>{doc.indexed_edges_count || 0}</strong> Arestas (FalkorDB)
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Timeline stepper */}
-                    <div className="pt-2 border-t border-zinc-800/60">
-                      <PipelineStatusTracker
-                        status={doc.status}
-                        enableOcr={doc.enable_ocr}
-                        totalParents={doc.total_parents}
-                        totalChildren={doc.total_children}
-                        indexedNodesCount={doc.indexed_nodes_count}
-                        indexedEdgesCount={doc.indexed_edges_count}
-                        progressStep={doc.progress_step}
-                        progressCurrent={doc.progress_current}
-                        progressTotal={doc.progress_total}
-                        progressPercentage={doc.progress_percentage}
-                        progressMessage={doc.progress_message}
-                        errorStep={doc.error?.step}
-                        errorMessage={doc.error?.message || doc.error?.error_message}
-                      />
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-2 border-b border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('documents')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+                activeTab === 'documents'
+                  ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              Documentos ({docs.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('connectors')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+                activeTab === 'connectors'
+                  ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+              }`}
+            >
+              <Cloud className="w-4 h-4" />
+              Fontes de Dados / Google Drive ({dataSources?.length || 0})
+            </button>
           </div>
+
+          {activeTab === 'documents' ? (
+            /* Documents Section */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4 text-indigo-400" />
+                  Documentos & Status do Pipeline ({docs.length})
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  leftIcon={<UploadCloud className="w-3.5 h-3.5" />}
+                >
+                  Adicionar Arquivo
+                </Button>
+              </div>
+
+              {docs.length === 0 ? (
+                <EmptyState
+                  icon={FileText}
+                  title="Nenhum arquivo enviado para esta KB"
+                  description="Faça o upload do seu primeiro arquivo (PDF, TXT, MD) para acompanhar a extração hierárquica e ontológica."
+                  actionLabel="Fazer Upload Agora"
+                  onAction={() => setIsUploadModalOpen(true)}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {docs.map((doc) => (
+                    <Card key={doc.id} className="space-y-4 bg-zinc-900/90 border-zinc-800">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <span className="font-semibold text-sm text-zinc-100">{doc.file_name}</span>
+                          <span className="text-[11px] font-mono text-zinc-500">({doc.id})</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Media badge */}
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                              doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
+                                ? 'bg-amber-950/80 border border-amber-800/80 text-amber-300'
+                                : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
+                                ? 'bg-purple-950/80 border border-purple-800/80 text-purple-300'
+                                : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
+                            }`}
+                          >
+                            {doc.file_name.match(/\.(mp3|m4a|ogg|opus|wav|webm|aac|caf|amr|3gp)$/i)
+                              ? '🎙️ Áudio'
+                              : doc.file_name.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)
+                              ? '🖼️ Imagem'
+                              : '📄 Doc'}
+                          </span>
+                          {doc.enable_ocr && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800 text-emerald-300">
+                              <Eye className="w-3 h-3 text-emerald-400" /> OCR Vision Ativo
+                            </span>
+                          )}
+
+                          <Badge
+                            variant={
+                              doc.status === 'INDEXED'
+                                ? 'success'
+                                : doc.status === 'FAILED'
+                                ? 'error'
+                                : 'purple'
+                            }
+                          >
+                            {doc.status}
+                          </Badge>
+                          {doc.status !== 'INDEXED' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleReprocess(doc.id)}
+                              isLoading={reprocessingDocId === doc.id}
+                              leftIcon={<RefreshCw className="w-3 h-3" />}
+                              title="Reinicia a saga reaproveitando páginas e chunks já gravados em cache ($0.00)"
+                            >
+                              Retomar Ingestão
+                            </Button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeletingDoc(doc);
+                            }}
+                            className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                            title="Excluir Documento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* OCR Instructions if provided */}
+                      {doc.ocr_instructions && (
+                        <div className="text-xs bg-zinc-950/70 border border-zinc-800/80 rounded-lg p-2.5 text-zinc-300">
+                          <span className="font-semibold text-zinc-400 block text-[10px] uppercase tracking-wider mb-1">
+                            Diretrizes de OCR / MarkItDown:
+                          </span>
+                          <p className="italic text-zinc-300 font-mono text-[11px]">
+                            &ldquo;{doc.ocr_instructions}&rdquo;
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Metadata Chips: Chunks & Graph Stats */}
+                      {(doc.total_parents || doc.total_children || doc.indexed_nodes_count) && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-300 pt-1">
+                          {doc.total_parents && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                              <Layers className="w-3 h-3 text-indigo-400" />
+                              <strong>{doc.total_parents}</strong> Seções Parent
+                            </span>
+                          )}
+                          {doc.total_children && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                              <Layers className="w-3 h-3 text-emerald-400" />
+                              <strong>{doc.total_children}</strong> Chunks Filhos (pgvector)
+                            </span>
+                          )}
+                          {doc.indexed_nodes_count !== undefined && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/60 text-[11px]">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              <strong>{doc.indexed_nodes_count}</strong> Nós / <strong>{doc.indexed_edges_count || 0}</strong> Arestas (FalkorDB)
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Timeline stepper */}
+                      <div className="pt-2 border-t border-zinc-800/60">
+                        <PipelineStatusTracker
+                          status={doc.status}
+                          enableOcr={doc.enable_ocr}
+                          totalParents={doc.total_parents}
+                          totalChildren={doc.total_children}
+                          indexedNodesCount={doc.indexed_nodes_count}
+                          indexedEdgesCount={doc.indexed_edges_count}
+                          progressStep={doc.progress_step}
+                          progressCurrent={doc.progress_current}
+                          progressTotal={doc.progress_total}
+                          progressPercentage={doc.progress_percentage}
+                          progressMessage={doc.progress_message}
+                          errorStep={doc.error?.step}
+                          errorMessage={doc.error?.message || doc.error?.error_message}
+                        />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            kbId && <DataSourcesListSection kbId={kbId} />
+          )}
         </div>
       )}
 

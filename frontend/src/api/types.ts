@@ -226,3 +226,70 @@ export interface QuickSearchResponse {
   results: QuickSearchResult[];
 }
 
+export type DataSourceType = 'google_drive_folder' | 'local_directory';
+
+export type DataSourceStatus = 'IDLE' | 'SYNCING' | 'FAILED' | 'DISABLED';
+
+export type DataSourceRunStatus =
+  | 'EXTRACTING'
+  | 'INGESTING'
+  | 'COMPLETED'
+  | 'PARTIALLY_FAILED'
+  | 'FAILED';
+
+export interface GoogleDriveFolderConfigDTO {
+  folder_id: string;
+  recursive?: boolean;
+  baseline_days?: number;
+  include_mime_types?: string[];
+}
+
+export interface DataSourceSummary {
+  id: string;
+  kb_id: string;
+  name: string;
+  data_source_type: DataSourceType | string;
+  status: DataSourceStatus | string;
+  cursor?: string | null;
+  sync_interval_minutes: number;
+  last_synced_at?: string | null;
+  error_message?: string | null;
+  config: GoogleDriveFolderConfigDTO | Record<string, unknown>;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface CreateDataSourceDTO {
+  name: string;
+  data_source_type: DataSourceType;
+  config: GoogleDriveFolderConfigDTO | Record<string, unknown>;
+  sync_interval_minutes: number;
+}
+
+export interface SyncDataSourceResponse {
+  data_source_id: string;
+  sync_run_id: string;
+  total_items_discovered: number;
+  status: string;
+  message: string;
+}
+
+export interface DataSourceRunFailureItem {
+  item_id?: string;
+  name?: string;
+  error: string;
+}
+
+export interface DataSourceRunSummary {
+  id: string;
+  data_source_id: string;
+  kb_id: string;
+  status: DataSourceRunStatus | string;
+  total_files_discovered: number;
+  indexed_files_count: number;
+  failed_files_count: number;
+  failure_summary: DataSourceRunFailureItem[];
+  started_at: string;
+  completed_at?: string | null;
+}
+
