@@ -78,9 +78,26 @@ if ! grep -q -E "^(OPENROUTER_API_KEY|GEMINI_API_KEY)=..*" "${ENV_FILE}"; then
     echo "    Edite ${ENV_FILE} para adicionar suas chaves antes de realizar ingestões ou síntese GraphRAG."
 fi
 
-# Orientação sobre Google Drive Service Account
+# Orientação e validação de credenciais do Google Drive (Service Account)
 if grep -q -E "^GOOGLE_APPLICATION_CREDENTIALS=..*" "${ENV_FILE}"; then
-    echo "ℹ️  Google Drive Service Account configurada em GOOGLE_APPLICATION_CREDENTIALS."
+    GDRIVE_KEY_PATH="$(grep -E "^GOOGLE_APPLICATION_CREDENTIALS=" "${ENV_FILE}" | cut -d '=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ')"
+    KEY_BASENAME="$(basename "${GDRIVE_KEY_PATH}")"
+    HOST_CRED_FILE="${SCRIPT_DIR}/credentials/${KEY_BASENAME}"
+
+    if [ -f "${HOST_CRED_FILE}" ]; then
+        echo "✔ Arquivo de credenciais da Service Account detectado: ${HOST_CRED_FILE}"
+    else
+        FOUND_JSONS="$(find "${SCRIPT_DIR}/credentials" -maxdepth 1 -name "*.json" 2>/dev/null || true)"
+        if [ -n "${FOUND_JSONS}" ]; then
+            echo "⚠️  ATENÇÃO: O arquivo '${KEY_BASENAME}' não foi encontrado em ${SCRIPT_DIR}/credentials/."
+            echo "    No entanto, foram encontrados os seguintes arquivos JSON:"
+            echo "${FOUND_JSONS}"
+            echo "    Certifique-se de que o nome do arquivo em GOOGLE_APPLICATION_CREDENTIALS coincida exatamente com o arquivo no disco."
+        else
+            echo "ℹ️  Lembrete Google Drive: Para sincronizar pastas do Google Drive, copie a chave JSON da Service Account"
+            echo "    para ${SCRIPT_DIR}/credentials/${KEY_BASENAME} e compartilhe as pastas com o e-mail da Service Account."
+        fi
+    fi
 fi
 
 echo "==> [3/6] Preparando diretórios locais de persistência de dados..."

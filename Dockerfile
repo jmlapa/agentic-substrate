@@ -21,9 +21,8 @@ RUN uv pip install --system --no-cache -e .
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
-
-# Create storage data directory
-RUN mkdir -p /app/data/storage
+# Create storage data, secrets, and credentials mount directories
+RUN mkdir -p /app/data/storage /app/secrets /app/credentials
 
 EXPOSE 8000
 

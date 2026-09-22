@@ -47,8 +47,10 @@ htmlcov/
 *.cert
 *.crt
 *.p12
-*.pfx
-secrets/
+secrets/*
+!secrets/.gitkeep
+deploy/vm/credentials/*
+!deploy/vm/credentials/.gitkeep
 
 # IDEs and Editors
 .DS_Store
