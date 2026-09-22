@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderGit2, Link2 } from 'lucide-react';
+import { FolderGit2, Link2, Info } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -106,6 +106,13 @@ export const CreateDataSourceModal: React.FC<CreateDataSourceModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMessage && <ErrorBanner message={errorMessage} />}
+
+        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-sky-950/30 border border-sky-900/50 text-xs text-sky-200">
+          <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <strong>Acesso via Service Account:</strong> Compartilhe a pasta no Google Drive com o e-mail da conta de serviço do sistema como <em>Leitor (Viewer)</em>. As credenciais mestras são gerenciadas no backend via <code className="font-mono bg-sky-950 px-1 rounded text-[11px]">GOOGLE_APPLICATION_CREDENTIALS</code>.
+          </p>
+        </div>
 
         <Input
           label="Nome do Conector"

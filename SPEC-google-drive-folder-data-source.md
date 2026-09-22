@@ -341,3 +341,23 @@ CREATE INDEX idx_data_source_runs_status ON knowledge_data_source_runs(status);
    - O subgrafo e chunks da versão obsoleta são excluídos do FalkorDB e storage.
    - O grafo resultante não contém nós duplicados da mesma entidade ou texto conflitante.
 5. **Quality Gates:** 100% de aprovação no comando oficial `make pre-commit` (Mypy estrito, Ruff linter e formatador).
+
+---
+
+## 10. Modelo de Segurança, Implantação e Gestão de Chaves de Service Account
+
+### 1. Gestão Central de Credenciais no Backend (Zero Chaves no Browser)
+- **Não há upload de chaves privadas no frontend**: O formulário do console web nunca aceita arquivos `.json` de Service Account, mitigando riscos de vazamento de credenciais mestras do GCP.
+- **Configuração no Host / VM**: A chave privada RSA da Service Account é salva exclusivamente no disco da VM (ex: `deploy/vm/credentials/google-service-account.json`) com permissões `600` ou `700`.
+- **Montagem Segura no Docker**: O Docker Compose monta `./credentials:/app/credentials:ro` no serviço `api`.
+- **Variável de Ambiente**: Configura-se `GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-service-account.json` no `.env` do backend/VM. Em ambientes GCP gerenciados (Compute Engine, Cloud Run, GKE), o conector herda automaticamente as credenciais da instância via Application Default Credentials (ADC).
+
+### 2. Modelo de Autorização Baseado em Compartilhamento
+- O usuário do sistema abre a pasta no Google Drive, clica em **Compartilhar** e convida o e-mail da Service Account (ex: `bot@meu-projeto.iam.gserviceaccount.com`) com perfil de **Leitor (Viewer)**.
+- O conector só tem visibilidade sobre arquivos e pastas explicitamente compartilhados com a sua conta.
+
+### 3. Interface de Usuário no Frontend (`/frontend`)
+- **Aba "Fontes de Dados / Google Drive"** em cada Knowledge Base (`/knowledge-bases/:kbId`).
+- **`CreateDataSourceModal`**: Auto-extrai e sanitiza IDs de pastas a partir de URLs completas do Google Drive, oferecendo seletor de MIME types, intervalo de sync e baseline days.
+- **`DataSourceCard`**: Exibe status em tempo real (`IDLE`, `SYNCING`, `FAILED`, `DISABLED`), último sync e ações de trigger e exclusão.
+- **`DataSourceRunsModal`**: Permite auditar cada execução de ingestão com contadores de arquivos descobertos, indexados e resumo detalhado de falhas.

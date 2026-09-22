@@ -78,6 +78,11 @@ if ! grep -q -E "^(OPENROUTER_API_KEY|GEMINI_API_KEY)=..*" "${ENV_FILE}"; then
     echo "    Edite ${ENV_FILE} para adicionar suas chaves antes de realizar ingestões ou síntese GraphRAG."
 fi
 
+# Orientação sobre Google Drive Service Account
+if grep -q -E "^GOOGLE_APPLICATION_CREDENTIALS=..*" "${ENV_FILE}"; then
+    echo "ℹ️  Google Drive Service Account configurada em GOOGLE_APPLICATION_CREDENTIALS."
+fi
+
 echo "==> [3/6] Preparando diretórios locais de persistência de dados..."
 mkdir -p "${SCRIPT_DIR}/data/postgres"
 mkdir -p "${SCRIPT_DIR}/data/falkordb"
@@ -86,12 +91,14 @@ mkdir -p "${SCRIPT_DIR}/data/storage"
 mkdir -p "${SCRIPT_DIR}/data/caddy_data"
 mkdir -p "${SCRIPT_DIR}/data/caddy_config"
 mkdir -p "${SCRIPT_DIR}/rules"
+mkdir -p "${SCRIPT_DIR}/credentials"
 
-# Configurar permissões nos diretórios de banco
+# Configurar permissões nos diretórios de banco e credenciais sensíveis
 chmod 700 "${SCRIPT_DIR}/data/postgres" || true
 chmod 700 "${SCRIPT_DIR}/data/falkordb" || true
 chmod 700 "${SCRIPT_DIR}/data/redis" || true
-echo "✔ Diretórios locais de dados persistentes prontos."
+chmod 700 "${SCRIPT_DIR}/credentials" || true
+echo "✔ Diretórios locais de dados persistentes e credenciais prontos."
 
 echo "==> [4/6] Inicializando containers no modo All-in-One..."
 docker compose --project-directory "${SCRIPT_DIR}" -f "${SCRIPT_DIR}/docker-compose.yml" up -d --build

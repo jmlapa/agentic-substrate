@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-22
+
+### Added
+- **Google Drive Folder Data Source & Blue/Green Ingestion (Marco 1.25)**:
+  - **Domínio e Casos de Uso (`src/modules/knowledge/`)**:
+    - Entidade `DataSource` com ciclo de vida de status (`IDLE`, `SYNCING`, `FAILED`, `DISABLED`) e avanço de cursor delta.
+    - Value Objects: `GoogleDriveFolderConfig` (validação alfanumérica estrita, `extra="forbid"`), `DiscoveredDocumentItem`, `DataSourceChangesBatch`, `DataSourceRun`.
+    - Adaptador `GoogleDriveFolderConnector` integrando a Google Drive API v3 via Service Account do GCP.
+    - Casos de Uso: `CreateDataSourceUseCase`, `ListDataSourcesUseCase`, `DeleteDataSourceUseCase`, `SyncDataSourceUseCase`, `ListDataSourceRunsUseCase`.
+    - Repositórios Postgres e In-Memory: `PostgresDataSourceRepository` e `PostgresDataSourceRunRepository` (Migração `0007_data_sources_and_runs.py`).
+  - **Blue/Green Document Swap & Ingestão Contínua**:
+    - Ingestão em partição isolada (*Green*); substituição atômica no FalkorDB e storage apenas após 100% de sucesso na indexação ontológica e vetorial, eliminando downtime de busca e contradições factuais.
+  - **Hardening de Segurança e Isolamento**:
+    - Prevenção BOLA/IDOR com verificação explícita de `kb_id` nas rotas de deleção, sincronização e histórico de runs.
+    - Proteção contra Drive Query Injection via regex restritiva `^(root|[a-zA-Z0-9_-]+)$`.
+    - Defesa contra DoS com limite de tamanho de arquivo de 50MB (`max_file_size_bytes`) e higienização contra Path Traversal (`Path(item.name).name`).
+  - **Interface Web no Frontend Console (`frontend/src/components/data-sources/`)**:
+    - Aba dedicada **"Fontes de Dados / Google Drive"** na visualização da Knowledge Base (`KnowledgeBaseDetailPage.tsx`).
+    - `CreateDataSourceModal`: Formulário com auto-extração de Folder ID a partir de links completos do navegador (`/folders/...` e `/shared-drives/...`), seletor de MIME types, baseline days e flag recursiva.
+    - `DataSourceCard`: Card com badges de status em tempo real, último sync, intervalo e acionamento manual ("Sincronizar Agora").
+    - `DataSourceRunsModal`: Auditoria completa de execuções com contadores de descobertos, indexados, falhas e accordion para inspecionar erros específicos por arquivo.
+    - Hooks reativos (`useDataSources.ts`) com polling inteligente de 2.5s durante sincronizações ativas.
+  - **Infraestrutura, VM Deploy & Documentação**:
+    - Mapeamento de `GOOGLE_APPLICATION_CREDENTIALS` em `AppSettings` e injeção automática no `container.py`.
+    - Montagem do volume `./credentials:/app/credentials:ro` no `docker-compose.yml` e automação no `deploy/vm/setup.sh`.
+    - Guia detalhado de deploy no `README.md`, `SPEC-vm-all-in-one-deploy.md`, `SPEC-google-drive-folder-data-source.md` e ADR-0014.
+
 ## [0.9.0] - 2026-09-21
 
 ### Added

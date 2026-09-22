@@ -57,7 +57,9 @@ deploy/
     ├── docker-compose.yml     → Orquestração All-in-One (caddy, api, frontend, postgres, falkordb, redis)
     ├── Caddyfile              → Configuração de proxy reverso, HTTPS automático e rotas (/ e /api/*)
     ├── .env.example           → Template de variáveis com presets seguros para deploy em VM
-    └── setup.sh               → Script de 1 comando (instalação do Docker, configuração e inicialização)
+    ├── setup.sh               → Script de 1 comando (instalação do Docker, configuração e inicialização)
+    ├── credentials/           → Diretório montado no container (:ro) para chaves de Service Account (Google Drive)
+    └── rules/                 → Regras dinâmicas de Caddyfile (ex: auth.caddy)
 docs/
 └── ideas/
     └── staging-cloud-deployment.md → Artefato conceitual de refinamento da arquitetura
@@ -80,6 +82,7 @@ O modo All-in-One separa estritamente **variáveis de topologia interna** (que j
   - `ACME_EMAIL`: E-mail para emissão automática do certificado TLS Let's Encrypt no Caddy
   - `OPENROUTER_API_KEY` e/ou `GEMINI_API_KEY`: Credenciais para extração e síntese
   - `POSTGRES_PASSWORD`: Senha do PostgreSQL (gerada automaticamente se omitida)
+  - `GOOGLE_APPLICATION_CREDENTIALS`: Caminho para a chave de Service Account montada no container (`/app/credentials/google-service-account.json`) para integração com o Google Drive
 
 ### 2. Padrões de Injeção de Variáveis pelo Usuário
 

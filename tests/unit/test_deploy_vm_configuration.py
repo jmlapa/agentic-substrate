@@ -51,6 +51,7 @@ def test_docker_compose_structure_and_security_isolation() -> None:
     assert any("falkordb" in str(v) for v in services["falkordb"]["volumes"])
     assert any("redis" in str(v) for v in services["redis"]["volumes"])
     assert any("storage" in str(v) for v in services["api"]["volumes"])
+    assert any("credentials" in str(v) for v in services["api"]["volumes"])
     assert any("caddy_data" in str(v) for v in services["caddy"]["volumes"])
 
     # Network verification
@@ -117,6 +118,7 @@ def test_env_example_contains_all_required_settings() -> None:
         "STORAGE_LOCAL_BASE_DIR=/app/data/storage",
         "OPENROUTER_API_KEY=",
         "GEMINI_API_KEY=",
+        "GOOGLE_APPLICATION_CREDENTIALS=",
     ]
 
     for var_entry in required_vars:

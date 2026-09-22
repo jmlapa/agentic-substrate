@@ -57,6 +57,7 @@ services:
       - .env
     volumes:
       - ./data/storage:/app/data/storage
+      - ./credentials:/app/credentials:ro
     networks:
       - substrate_net
     depends_on:

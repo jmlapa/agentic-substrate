@@ -91,6 +91,12 @@ The **Agentic Substrate** is built on **Hexagonal Architecture (Ports & Adapters
   - `knowledge_list_kbs`: Lists all available Knowledge Bases with status and document counts.
   - `knowledge_search_notes`: Fast-path instant lexical and structural header search without LLM token cost.
 
+### 8. Google Drive Folder Data Sources & Blue/Green Ingestion
+- **Automated Continuous Synchronization**: Ingest entire Google Drive folders with delta detection and recursive subfolder traversal.
+- **Enterprise-Grade Blue/Green Ingestion**: Ingests changed files into an isolated Green partition; once all files are successfully chunked, embedded, and mapped to the graph, an atomic swap promotes the new version with zero search downtime.
+- **Secure Service Account Integration**: Private RSA keys stay protected on the VM disk (`GOOGLE_APPLICATION_CREDENTIALS`). End users never upload credentials in the browser; they simply share target Google Drive folders with the Service Account email.
+- **Frontend Management**: Dedicated UI for configuring connectors, monitoring live execution runs, and inspecting granular file failure summaries.
+
 ---
 
 ## 🚀 Quick Start
@@ -188,11 +194,37 @@ resource "aws_instance" "substrate_vm" {
     ACME_EMAIL="devops@yourdomain.com"
     OPENROUTER_API_KEY="${var.openrouter_api_key}"
     GEMINI_API_KEY="${var.gemini_api_key}"
+    GOOGLE_APPLICATION_CREDENTIALS="/app/credentials/google-service-account.json"
     ENV
     cd /opt/agentic-substrate && bash deploy/vm/setup.sh
   EOF
 }
 ```
+
+### Google Drive Connector Deployment (Service Account Key)
+When deploying to a VM, Google Drive folder synchronization requires a **GCP Service Account JSON key** placed on the VM disk and mounted into the backend API container:
+
+1. **Create Service Account in GCP Console**:
+   - In your Google Cloud Project, enable the **Google Drive API**.
+   - Create a Service Account (e.g. `agentic-substrate-drive@<project-id>.iam.gserviceaccount.com`).
+   - Create and download a new private key in JSON format.
+2. **Copy the JSON key to the VM Disk**:
+   - Save the key file on your VM host inside `deploy/vm/credentials/`:
+     ```bash
+     mkdir -p deploy/vm/credentials
+     cp /path/to/downloaded-key.json deploy/vm/credentials/google-service-account.json
+     chmod 600 deploy/vm/credentials/google-service-account.json
+     ```
+   - *Note:* The `deploy/vm/credentials/` directory is automatically mounted read-only into `/app/credentials` inside the API container via Docker Compose.
+3. **Configure the Environment Variable**:
+   - In `deploy/vm/.env`, set:
+     ```bash
+     GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-service-account.json
+     ```
+4. **Share Target Folders in Google Drive**:
+   - Open any folder in Google Drive you wish to index.
+   - Click **Share (Compartilhar)** and add your Service Account email (`agentic-substrate-drive@...`) with **Viewer (Leitor)** permission.
+   - In the frontend console (`/knowledge-bases/<kbId>`), paste the Folder ID or full Drive URL to trigger synchronization!
 
 ---
 

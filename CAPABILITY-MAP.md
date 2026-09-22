@@ -32,7 +32,7 @@
 - `SPEC-streamable-mcp-server.md` (Marco 1.22 - Streamable HTTP/SSE MCP Server & Modular Tool Providers) — Concluído (v0.8.0)
 - `SPEC-modular-caddy-rules-and-vm-deployment.md` (Marco 1.23 - Regras Modulares no Caddy & Deploy Zero-Conflito em VM) — Concluído (v0.8.1)
 - `SPEC-mcp-agent-connect-hub.md` (Marco 1.24 - MCP Agent Connect Hub & Dynamic Tool Catalog) — Concluído (v0.9.0)
-- `SPEC-google-drive-folder-data-source.md` (Marco 1.25 - Google Drive Folder Data Source, Upstream Producer & Blue/Green Ingestion) — Especificado (v0.10.0)
+- `SPEC-google-drive-folder-data-source.md` (Marco 1.25 - Google Drive Folder Data Source, Upstream Producer & Blue/Green Ingestion) — Concluído (v0.10.0)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -48,6 +48,7 @@
 - `docs/decisions/0011-deprecation-of-pydantic-ai-legacy-parsers-and-env-hardening.md`
 - `docs/decisions/0012-streamable-http-sse-mcp-server.md`
 - `docs/decisions/0013-modular-caddy-rules-and-zero-conflict-deployment.md`
+- `docs/decisions/0014-google-drive-folder-data-source-and-blue-green-sync.md`
 
 ## Ordem de Construção
 1. **Marco 1 & 1.5 (Concluído):** `kernel` ──→ `knowledge` ──→ `api-gateway` (com infraestrutura real local: Postgres, FalkorDB, Redis, Local Storage)
@@ -65,7 +66,7 @@
 13. **Marco 1.22 (Concluído - v0.8.0):** `api-gateway:streamable-mcp-server` (Streamable HTTP/SSE Model Context Protocol Server & Modular Knowledge Tool Providers)
 14. **Marco 1.23 (Concluído - v0.8.1):** `deploy:modular-caddy-rules` (Regras Modulares no Caddy & Deploy Zero-Conflito em VM)
 15. **Marco 1.24 (Concluído - v0.9.0):** `frontend-console:mcp-agent-connect-hub` (MCP Agent Connect Hub, Quickstart por Agente e Catálogo Dinâmico de Ferramentas)
-16. **Marco 1.25 (Planejado - v0.10.0):** `knowledge:data-source-google-drive-folder` (Entidade DataSource, GoogleDriveFolderConnector, Polling Delta, Blue/Green Atomic Swap)
+16. **Marco 1.25 (Concluído - v0.10.0):** `knowledge:data-source-google-drive-folder` & `frontend-console:data-source-connector-ui` (Entidade DataSource, GoogleDriveFolderConnector, Polling Delta, Blue/Green Atomic Swap, Hardening de Segurança BOLA/DoS, Console UI e Executions Inspector)
 17. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 
 

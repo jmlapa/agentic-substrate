@@ -34,6 +34,11 @@ class AppSettings(BaseSettings):
     )
     embedding_dimension: int = Field(default=768, alias="EMBEDDING_DIMENSION")
 
+    # Google Cloud & Google Drive Connector
+    google_application_credentials: str | None = Field(
+        default=None, alias="GOOGLE_APPLICATION_CREDENTIALS"
+    )
+
     # OpenRouter & Multimodal OCR / Graph Extraction
     openrouter_api_key: SecretStr | None = Field(default=None, alias="OPENROUTER_API_KEY")
     openrouter_base_url: str = Field(

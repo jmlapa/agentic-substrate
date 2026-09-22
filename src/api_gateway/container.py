@@ -458,7 +458,9 @@ def create_app_container(
 
     # Data Sources Connector Registry & Google Drive Connector
     connector_registry = DataSourceConnectorRegistry()
-    gdrive_connector = GoogleDriveFolderConnector()
+    gdrive_connector = GoogleDriveFolderConnector(
+        service_account_path=cfg.google_application_credentials
+    )
     connector_registry.register(DataSourceType.GOOGLE_DRIVE_FOLDER, gdrive_connector)
 
     # Data Sources Use Cases
