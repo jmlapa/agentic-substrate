@@ -210,3 +210,58 @@ def test_get_service_resolves_alternative_hyphen_underscore_filename(tmp_path: P
         mock_from_file.assert_called_once_with(
             str(real_file), scopes=["https://www.googleapis.com/auth/drive.readonly"]
         )
+
+
+def test_parse_file_to_item_resolves_shortcuts_correctly() -> None:
+    connector = GoogleDriveFolderConnector()
+    include_mimes = ["application/vnd.google-apps.document", "application/pdf"]
+
+    shortcut_file = {
+        "id": "shortcut-123",
+        "name": "Meeting Notes",
+        "mimeType": "application/vnd.google-apps.shortcut",
+        "shortcutDetails": {
+            "targetId": "target-doc-456",
+            "targetMimeType": "application/vnd.google-apps.document",
+        },
+        "modifiedTime": "2026-09-22T10:00:00Z",
+    }
+
+    item = connector._parse_file_to_item(shortcut_file, include_mimes)
+    assert item is not None
+    assert item.external_id == "target-doc-456"
+    assert item.name == "Meeting Notes"
+    assert item.mime_type == "application/vnd.google-apps.document"
+
+
+def test_parse_file_to_item_ignores_shortcut_with_unmatched_target_mime() -> None:
+    connector = GoogleDriveFolderConnector()
+    include_mimes = ["application/pdf"]
+
+    shortcut_video = {
+        "id": "shortcut-video",
+        "name": "Recording.mp4",
+        "mimeType": "application/vnd.google-apps.shortcut",
+        "shortcutDetails": {
+            "targetId": "target-video-999",
+            "targetMimeType": "video/mp4",
+        },
+    }
+
+    item = connector._parse_file_to_item(shortcut_video, include_mimes)
+    assert item is None
+
+
+@pytest.mark.asyncio
+async def test_download_document_raises_permission_error_on_http_404() -> None:
+    from googleapiclient.errors import HttpError
+    from httplib2 import Response  # type: ignore[import-untyped]
+
+    mock_service = MagicMock()
+    connector = GoogleDriveFolderConnector(drive_service=mock_service)
+
+    fake_resp = Response({"status": "404"})
+    mock_service.files().get_media.side_effect = HttpError(fake_resp, b"File not found")
+
+    with pytest.raises(PermissionError, match="Falha de acesso ao arquivo"):
+        await connector.download_document(external_id="target-123", mime_type="application/pdf")

@@ -112,10 +112,11 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
 
         baseline_days = int(config.get("baseline_days", 30))
         include_mimes: list[str] = config.get("include_mime_types", [])
+        recursive: bool = bool(config.get("recursive", True))
 
         self._log_info(
             f"[GoogleDriveFolderConnector] Iniciando fetch_changes para folder_id='{folder_id}' "
-            f"(cursor={'None (Baseline)' if cursor is None else cursor})"
+            f"(cursor={'None (Baseline)' if cursor is None else cursor}, recursive={recursive})"
         )
 
         service = self._get_service()
@@ -127,6 +128,7 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
                 folder_id,
                 baseline_days,
                 include_mimes,
+                recursive,
             )
         else:
             return await asyncio.to_thread(
@@ -143,53 +145,88 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
         folder_id: str,
         baseline_days: int,
         include_mimes: list[str],
+        recursive: bool = True,
     ) -> DataSourceChangesBatch:
-        cutoff = datetime.now(UTC) - timedelta(days=baseline_days)
-        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+        cutoff = datetime.now(UTC) - timedelta(days=baseline_days) if baseline_days > 0 else None
 
-        query = f"'{folder_id}' in parents and trashed = false and modifiedTime >= '{cutoff_str}'"
         fields = (
-            "nextPageToken, files(id, name, mimeType, modifiedTime, size, md5Checksum, version)"
+            "nextPageToken, files(id, name, mimeType, modifiedTime, size, md5Checksum, "
+            "version, shortcutDetails)"
         )
 
-        discovered_items: list[DiscoveredDocumentItem] = []
-        page_token: str | None = None
+        discovered_items_by_id: dict[str, DiscoveredDocumentItem] = {}
+        folders_to_scan: list[str] = [folder_id]
+        scanned_folder_ids: set[str] = set()
 
-        while True:
-            response = (
-                service.files()
-                .list(
-                    q=query,
-                    fields=fields,
-                    pageSize=100,
-                    pageToken=page_token,
-                    supportsAllDrives=True,
-                    includeItemsFromAllDrives=True,
+        while folders_to_scan:
+            current_folder_id = folders_to_scan.pop(0)
+            if current_folder_id in scanned_folder_ids:
+                continue
+            scanned_folder_ids.add(current_folder_id)
+
+            query = f"'{current_folder_id}' in parents and trashed = false"
+            page_token: str | None = None
+
+            while True:
+                response = (
+                    service.files()
+                    .list(
+                        q=query,
+                        fields=fields,
+                        pageSize=100,
+                        pageToken=page_token,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                    )
+                    .execute()
                 )
-                .execute()
-            )
 
-            files = response.get("files", [])
-            for f in files:
-                item = self._parse_file_to_item(f, include_mimes)
-                if item:
-                    discovered_items.append(item)
+                files = response.get("files", [])
+                for f in files:
+                    mime = f.get("mimeType", "")
+                    if mime == "application/vnd.google-apps.folder":
+                        if recursive and f["id"] not in scanned_folder_ids:
+                            folders_to_scan.append(f["id"])
+                        continue
 
-            page_token = response.get("nextPageToken")
-            if not page_token:
-                break
+                    if mime == "application/vnd.google-apps.shortcut":
+                        shortcut_details = f.get("shortcutDetails") or {}
+                        if (
+                            shortcut_details.get("targetMimeType")
+                            == "application/vnd.google-apps.folder"
+                        ):
+                            target_folder_id = shortcut_details.get("targetId")
+                            if (
+                                recursive
+                                and target_folder_id
+                                and target_folder_id not in scanned_folder_ids
+                            ):
+                                folders_to_scan.append(target_folder_id)
+                            continue
+
+                    item = self._parse_file_to_item(f, include_mimes)
+                    if item:
+                        if cutoff and item.modified_time < cutoff:
+                            continue
+                        if item.external_id not in discovered_items_by_id:
+                            discovered_items_by_id[item.external_id] = item
+
+                page_token = response.get("nextPageToken")
+                if not page_token:
+                    break
 
         # Obtém o startPageToken atual para servir como cursor do próximo delta sync
         start_token_resp = service.changes().getStartPageToken(supportsAllDrives=True).execute()
         next_cursor = start_token_resp.get("startPageToken")
 
+        items_list = list(discovered_items_by_id.values())
         self._log_info(
-            f"[GoogleDriveFolderConnector] Baseline concluído: {len(discovered_items)} arquivos "
-            f"encontrados. Próximo cursor: '{next_cursor}'"
+            f"[GoogleDriveFolderConnector] Baseline concluído: {len(items_list)} arquivos "
+            f"encontrados em {len(scanned_folder_ids)} pasta(s). Próximo cursor: '{next_cursor}'"
         )
 
         return DataSourceChangesBatch(
-            items=discovered_items,
+            items=items_list,
             next_cursor=next_cursor,
             deleted_external_ids=[],
         )
@@ -214,7 +251,8 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
                     fields=(
                         "nextPageToken, newStartPageToken, "
                         "changes(fileId, removed, file(id, name, mimeType, "
-                        "modifiedTime, size, md5Checksum, version, parents, trashed))"
+                        "modifiedTime, size, md5Checksum, version, parents, trashed, "
+                        "shortcutDetails))"
                     ),
                     supportsAllDrives=True,
                     includeItemsFromAllDrives=True,
@@ -272,7 +310,20 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
         if mime == "application/vnd.google-apps.folder":
             return None
 
-        if include_mimes and mime not in include_mimes:
+        effective_id = f["id"]
+        effective_mime = mime
+
+        # Resolução de atalhos do Google Drive
+        if mime == "application/vnd.google-apps.shortcut":
+            shortcut_details = f.get("shortcutDetails") or {}
+            target_id = shortcut_details.get("targetId")
+            target_mime = shortcut_details.get("targetMimeType")
+            if not target_id or target_mime == "application/vnd.google-apps.folder":
+                return None
+            effective_id = target_id
+            effective_mime = target_mime
+
+        if include_mimes and effective_mime not in include_mimes:
             return None
 
         mtime_str = f.get("modifiedTime")
@@ -287,9 +338,9 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
         version_hash = f.get("md5Checksum") or f.get("version") or str(int(mod_time.timestamp()))
 
         return DiscoveredDocumentItem(
-            external_id=f["id"],
-            name=f.get("name", f["id"]),
-            mime_type=mime,
+            external_id=effective_id,
+            name=f.get("name", effective_id),
+            mime_type=effective_mime,
             version_hash=str(version_hash),
             modified_time=mod_time,
             size_bytes=int(f.get("size", 0)),
@@ -306,33 +357,46 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
     def _execute_download(
         self, service: Any, external_id: str, mime_type: str
     ) -> tuple[bytes, str, str]:
-        resolved_mime = mime_type
-
-        # Tratamento de documentos nativos do Google Workspace
-        if mime_type == "application/vnd.google-apps.document":
-            self._log_debug(
-                f"[GoogleDriveFolderConnector] Exportando Google Doc '{external_id}' "
-                "para text/plain"
-            )
-            request = service.files().export_media(fileId=external_id, mimeType="text/plain")
-            resolved_mime = "text/plain"
-        elif mime_type == "application/vnd.google-apps.spreadsheet":
-            self._log_debug(
-                f"[GoogleDriveFolderConnector] Exportando Google Sheet '{external_id}' "
-                "para text/csv"
-            )
-            request = service.files().export_media(fileId=external_id, mimeType="text/csv")
-            resolved_mime = "text/csv"
-        else:
-            request = service.files().get_media(fileId=external_id, supportsAllDrives=True)
-
+        from googleapiclient.errors import HttpError
         from googleapiclient.http import MediaIoBaseDownload
 
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
+        resolved_mime = mime_type
+
+        try:
+            # Tratamento de documentos nativos do Google Workspace
+            if mime_type == "application/vnd.google-apps.document":
+                self._log_debug(
+                    f"[GoogleDriveFolderConnector] Exportando Google Doc '{external_id}' "
+                    "para text/plain"
+                )
+                request = service.files().export_media(fileId=external_id, mimeType="text/plain")
+                resolved_mime = "text/plain"
+            elif mime_type == "application/vnd.google-apps.spreadsheet":
+                self._log_debug(
+                    f"[GoogleDriveFolderConnector] Exportando Google Sheet '{external_id}' "
+                    "para text/csv"
+                )
+                request = service.files().export_media(fileId=external_id, mimeType="text/csv")
+                resolved_mime = "text/csv"
+            else:
+                request = service.files().get_media(fileId=external_id, supportsAllDrives=True)
+
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+        except HttpError as e:
+            if e.resp.status in (404, 403):
+                raise PermissionError(
+                    f"Falha de acesso ao arquivo '{external_id}' no Google Drive "
+                    f"(status {e.resp.status}). Se este arquivo for proveniente de um "
+                    "atalho ou pasta compartilhada (como reuniões gravadas ou notas "
+                    "do Meet/Gemini), certifique-se de que o arquivo original ou sua "
+                    "pasta de origem (ex: 'Meet Recordings') foi compartilhado com a "
+                    "Service Account com permissão de Leitor."
+                ) from e
+            raise
 
         content = fh.getvalue()
         v_hash = hashlib.sha256(content).hexdigest()
