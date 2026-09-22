@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from collections.abc import Callable, Coroutine
 from typing import Any
 from uuid import UUID
@@ -7,6 +8,7 @@ from uuid import UUID
 from src.kernel.application.event_bus import EventBus
 from src.kernel.application.event_store import EventStore
 from src.kernel.application.logger import Logger
+from src.kernel.domain.domain_error import DomainError
 from src.kernel.domain.domain_event import DomainEvent
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
@@ -164,6 +166,58 @@ class DocumentIngestionSagaCoordinator:
             expected_version=expected_version,
         )
 
+    async def _execute_atomic_aggregate_mutation(
+        self,
+        kb_id: UUID,
+        mutate_fn: Callable[[KnowledgeBaseAggregate], None],
+        max_retries: int = 5,
+    ) -> KnowledgeBaseAggregate:
+        """
+        Executa a mutação no agregado sob lock por KB com retry exponencial em caso de conflito.
+        """
+        last_err: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                kb = await self._load_aggregate(kb_id)
+                mutate_fn(kb)
+                await self._save_aggregate(kb)
+                return kb
+            except DomainError as err:
+                if "Concurrency conflict" in str(err) or err.code == "CONCURRENCY_ERROR":
+                    last_err = err
+                    backoff = (0.02 * (2**attempt)) + random.uniform(0.01, 0.03)
+                    await asyncio.sleep(backoff)
+                    continue
+                raise
+            except Exception as err:
+                last_err = err
+                raise
+        if last_err:
+            raise last_err
+        raise RuntimeError("Falha inesperada na mutação atômica do agregado")
+
+    async def _record_failure_safely(
+        self,
+        kb_id: UUID,
+        document_id: UUID,
+        step: str,
+        error_message: str,
+    ) -> None:
+        try:
+            await self._execute_atomic_aggregate_mutation(
+                kb_id=kb_id,
+                mutate_fn=lambda kb: kb.mark_processing_failed(
+                    document_id=document_id,
+                    step=step,
+                    error_message=error_message,
+                ),
+            )
+        except Exception as e:
+            if self._logger:
+                self._logger.error(
+                    f"Falha ao registrar falha de processamento para doc {document_id}: {e}"
+                )
+
     @staticmethod
     def _calculate_percentage(current: int, total: int) -> int:
         if total <= 0:
@@ -216,17 +270,21 @@ class DocumentIngestionSagaCoordinator:
             md_path = f"{kb.storage_partition}/markdown/{event.document_id}.md"
             await self._storage.put_object(md_path, markdown_text.encode("utf-8"), "text/markdown")
 
-            kb.mark_document_parsed(
-                document_id=event.document_id,
-                markdown_storage_path=md_path,
-                markdown_preview=markdown_text[:200],
+            await self._execute_atomic_aggregate_mutation(
+                kb_id=event.aggregate_id,
+                mutate_fn=lambda fresh_kb: fresh_kb.mark_document_parsed(
+                    document_id=event.document_id,
+                    markdown_storage_path=md_path,
+                    markdown_preview=markdown_text[:200],
+                ),
             )
-            await self._save_aggregate(kb)
         except Exception as e:
-            kb.mark_processing_failed(
-                event.document_id, step="PARSE_MARKDOWN", error_message=str(e)
+            await self._record_failure_safely(
+                kb_id=event.aggregate_id,
+                document_id=event.document_id,
+                step="PARSE_MARKDOWN",
+                error_message=str(e),
             )
-            await self._save_aggregate(kb)
 
     async def handle_document_parsed(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentParsedToMarkdownEvent):
@@ -282,20 +340,22 @@ class DocumentIngestionSagaCoordinator:
                 for p in chunk_collection.parents
             ]
 
-            kb.mark_document_chunked(
-                document_id=event.document_id,
-                total_parents=len(chunk_collection.parents),
-                total_children=len(chunk_collection.children),
-                chunks_summary=summary,
+            await self._execute_atomic_aggregate_mutation(
+                kb_id=event.aggregate_id,
+                mutate_fn=lambda fresh_kb: fresh_kb.mark_document_chunked(
+                    document_id=event.document_id,
+                    total_parents=len(chunk_collection.parents),
+                    total_children=len(chunk_collection.children),
+                    chunks_summary=summary,
+                ),
             )
-            await self._save_aggregate(kb)
         except Exception as e:
-            kb.mark_processing_failed(
-                event.document_id,
+            await self._record_failure_safely(
+                kb_id=event.aggregate_id,
+                document_id=event.document_id,
                 step="MARKDOWN_CHUNKING",
                 error_message=str(e),
             )
-            await self._save_aggregate(kb)
 
     async def handle_document_chunked(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentChunkedEvent):
@@ -520,13 +580,19 @@ class DocumentIngestionSagaCoordinator:
                 nodes=list(all_nodes.values()),
                 edges=all_edges,
             )
-            kb.mark_graph_extracted(event.document_id, combined_graph)
-            await self._save_aggregate(kb)
-        except Exception as e:
-            kb.mark_processing_failed(
-                event.document_id, step="GRAPH_EXTRACTION", error_message=str(e)
+            await self._execute_atomic_aggregate_mutation(
+                kb_id=event.aggregate_id,
+                mutate_fn=lambda fresh_kb: fresh_kb.mark_graph_extracted(
+                    event.document_id, combined_graph
+                ),
             )
-            await self._save_aggregate(kb)
+        except Exception as e:
+            await self._record_failure_safely(
+                kb_id=event.aggregate_id,
+                document_id=event.document_id,
+                step="GRAPH_EXTRACTION",
+                error_message=str(e),
+            )
 
     async def handle_graph_extracted(self, event: DomainEvent) -> None:
         if not isinstance(event, GraphExtractedFromDocumentEvent):
@@ -550,12 +616,14 @@ class DocumentIngestionSagaCoordinator:
                 kb.id, event.extracted_graph
             )
 
-            kb.mark_knowledge_indexed(
-                document_id=event.document_id,
-                indexed_nodes=indexed_nodes,
-                indexed_edges=indexed_edges,
+            await self._execute_atomic_aggregate_mutation(
+                kb_id=event.aggregate_id,
+                mutate_fn=lambda fresh_kb: fresh_kb.mark_knowledge_indexed(
+                    document_id=event.document_id,
+                    indexed_nodes=indexed_nodes,
+                    indexed_edges=indexed_edges,
+                ),
             )
-            await self._save_aggregate(kb)
 
             await self._bus.publish(
                 [
@@ -571,5 +639,9 @@ class DocumentIngestionSagaCoordinator:
                 ]
             )
         except Exception as e:
-            kb.mark_processing_failed(event.document_id, step="INDEXING", error_message=str(e))
-            await self._save_aggregate(kb)
+            await self._record_failure_safely(
+                kb_id=event.aggregate_id,
+                document_id=event.document_id,
+                step="INDEXING",
+                error_message=str(e),
+            )
