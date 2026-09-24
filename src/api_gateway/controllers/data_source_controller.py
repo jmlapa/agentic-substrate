@@ -17,6 +17,9 @@ from src.api_gateway.dtos.data_source_response_dto import DataSourceResponseDTO
 from src.api_gateway.dtos.data_source_run_response_dto import (
     DataSourceRunResponseDTO,
 )
+from src.api_gateway.dtos.retry_failed_data_source_items_response_dto import (
+    RetryFailedDataSourceItemsResponseDto,
+)
 from src.api_gateway.dtos.sync_data_source_response_dto import (
     SyncDataSourceResponseDTO,
 )
@@ -32,6 +35,9 @@ from src.modules.knowledge.application.use_cases.list_data_source_runs import (
 )
 from src.modules.knowledge.application.use_cases.list_data_sources import (
     ListDataSourcesRequest,
+)
+from src.modules.knowledge.application.use_cases.retry_failed_data_source_items import (
+    RetryFailedDataSourceItemsRequest,
 )
 from src.modules.knowledge.application.use_cases.sync_data_source import (
     SyncDataSourceRequest,
@@ -275,3 +281,60 @@ async def list_data_source_runs(
         )
 
     return [DataSourceRunResponseDTO.from_item_dto(run) for run in res.value.runs]
+
+
+@router.post(
+    "/{kb_id}/data-sources/{data_source_id}/runs/{run_id}/retry",
+    response_model=RetryFailedDataSourceItemsResponseDto,
+    status_code=status.HTTP_200_OK,
+)
+async def retry_failed_data_source_items(
+    kb_id: UUID,
+    data_source_id: UUID,
+    run_id: UUID,
+    container: AppContainer = Depends(get_container),
+) -> RetryFailedDataSourceItemsResponseDto:
+    _logger.info(
+        f"[DataSourceController] POST retry_failed_data_source_items kb_id={kb_id}, "
+        f"data_source_id={data_source_id}, run_id={run_id}"
+    )
+    if container.retry_failed_data_source_items_use_case is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="RetryFailedDataSourceItemsUseCase não configurado no container",
+        )
+
+    res = await container.retry_failed_data_source_items_use_case.execute(
+        RetryFailedDataSourceItemsRequest(
+            data_source_id=data_source_id,
+            run_id=run_id,
+            kb_id=kb_id,
+        )
+    )
+    if isinstance(res, Err):
+        _logger.warning(
+            f"[DataSourceController] Erro ao reprocessar itens falhos do Run {run_id}: "
+            f"{res.error.code} - {res.error.message}"
+        )
+        if res.error.code in ("DATA_SOURCE_NOT_FOUND", "DATA_SOURCE_RUN_NOT_FOUND"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        if res.error.code == "DATA_SOURCE_ALREADY_SYNCING":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": res.error.code, "message": res.error.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": res.error.code, "message": res.error.message},
+        )
+
+    return RetryFailedDataSourceItemsResponseDto(
+        data_source_id=res.value.data_source_id,
+        run_id=res.value.run_id,
+        reprocessed_count=res.value.reprocessed_count,
+        remaining_failed_count=res.value.remaining_failed_count,
+        status=res.value.status,
+    )

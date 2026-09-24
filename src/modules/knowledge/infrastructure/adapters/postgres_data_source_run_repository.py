@@ -78,6 +78,81 @@ class PostgresDataSourceRunRepository(IDataSourceRunRepository):
             rows = await conn.fetch(query, data_source_id, limit)
             return [self._map_row_to_entity(r) for r in rows]
 
+    async def record_document_indexed(
+        self, run_id: UUID
+    ) -> tuple[UUID, UUID, int, int, int, str] | None:
+        query = """
+        UPDATE knowledge_data_source_runs
+        SET indexed_files_count = indexed_files_count + 1,
+            status = CASE 
+                WHEN total_files_discovered > 0 
+                     AND indexed_files_count + failed_files_count + 1 >= total_files_discovered THEN
+                    CASE WHEN failed_files_count > 0 THEN 'PARTIALLY_FAILED' ELSE 'COMPLETED' END
+                ELSE status 
+            END,
+            completed_at = CASE 
+                WHEN total_files_discovered > 0 
+                     AND indexed_files_count + failed_files_count + 1 >= total_files_discovered THEN
+                    NOW()
+                ELSE completed_at 
+            END
+        WHERE id = $1 AND status NOT IN ('COMPLETED', 'PARTIALLY_FAILED', 'FAILED')
+        RETURNING 
+            data_source_id, kb_id, indexed_files_count, failed_files_count, 
+            total_files_discovered, status;
+        """
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, run_id)
+            if not row:
+                return None
+            return (
+                row["data_source_id"],
+                row["kb_id"],
+                row["indexed_files_count"],
+                row["failed_files_count"],
+                row["total_files_discovered"],
+                str(row["status"]),
+            )
+
+    async def record_document_failed(
+        self, run_id: UUID, failure_item: dict[str, object]
+    ) -> tuple[UUID, UUID, int, int, int, str] | None:
+        query = """
+        UPDATE knowledge_data_source_runs
+        SET failed_files_count = failed_files_count + 1,
+            failure_summary = (
+                COALESCE(failure_summary, '[]'::jsonb) || jsonb_build_array($2::jsonb)
+            ),
+            status = CASE 
+                WHEN total_files_discovered > 0 
+                     AND indexed_files_count + failed_files_count + 1 >= total_files_discovered THEN
+                    CASE WHEN indexed_files_count > 0 THEN 'PARTIALLY_FAILED' ELSE 'FAILED' END
+                ELSE status 
+            END,
+            completed_at = CASE 
+                WHEN total_files_discovered > 0 
+                     AND indexed_files_count + failed_files_count + 1 >= total_files_discovered THEN
+                    NOW()
+                ELSE completed_at 
+            END
+        WHERE id = $1 AND status NOT IN ('COMPLETED', 'PARTIALLY_FAILED', 'FAILED')
+        RETURNING 
+            data_source_id, kb_id, indexed_files_count, failed_files_count, 
+            total_files_discovered, status;
+        """
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, run_id, json.dumps(failure_item))
+            if not row:
+                return None
+            return (
+                row["data_source_id"],
+                row["kb_id"],
+                row["indexed_files_count"],
+                row["failed_files_count"],
+                row["total_files_discovered"],
+                str(row["status"]),
+            )
+
     def _map_row_to_entity(self, row: asyncpg.Record) -> DataSourceRun:
         raw_summary = row["failure_summary"]
         summary_list = (

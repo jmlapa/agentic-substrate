@@ -26,6 +26,9 @@ from src.modules.knowledge.application.use_cases.list_data_sources import (
     DataSourceItemDTO,
     ListDataSourcesResponse,
 )
+from src.modules.knowledge.application.use_cases.retry_failed_data_source_items import (
+    RetryFailedDataSourceItemsResponse,
+)
 from src.modules.knowledge.application.use_cases.sync_data_source import (
     SyncDataSourceResponse,
 )
@@ -39,6 +42,7 @@ def mock_container() -> MagicMock:
     container.list_data_source_runs_use_case = MagicMock()
     container.delete_data_source_use_case = MagicMock()
     container.sync_data_source_use_case = MagicMock()
+    container.retry_failed_data_source_items_use_case = MagicMock()
     return container
 
 
@@ -352,6 +356,7 @@ def test_use_cases_not_configured_returns_500() -> None:
     empty_container.delete_data_source_use_case = None
     empty_container.sync_data_source_use_case = None
     empty_container.list_data_source_runs_use_case = None
+    empty_container.retry_failed_data_source_items_use_case = None
 
     app = FastAPI()
     app.include_router(router)
@@ -378,3 +383,69 @@ def test_use_cases_not_configured_returns_500() -> None:
 
     resp = client.get(f"/api/v1/knowledge-bases/{kb_id}/data-sources/{ds_id}/runs")
     assert resp.status_code == 500
+
+    resp = client.post(f"/api/v1/knowledge-bases/{kb_id}/data-sources/{ds_id}/runs/{uuid4()}/retry")
+    assert resp.status_code == 500
+
+
+def test_retry_failed_data_source_items_success(
+    client: TestClient, mock_container: MagicMock
+) -> None:
+    kb_id = uuid4()
+    ds_id = uuid4()
+    run_id = uuid4()
+
+    mock_container.retry_failed_data_source_items_use_case.execute = AsyncMock(
+        return_value=Ok(
+            RetryFailedDataSourceItemsResponse(
+                data_source_id=ds_id,
+                run_id=run_id,
+                reprocessed_count=3,
+                remaining_failed_count=0,
+                status="COMPLETED",
+            )
+        )
+    )
+
+    resp = client.post(f"/api/v1/knowledge-bases/{kb_id}/data-sources/{ds_id}/runs/{run_id}/retry")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["data_source_id"] == str(ds_id)
+    assert data["run_id"] == str(run_id)
+    assert data["reprocessed_count"] == 3
+    assert data["remaining_failed_count"] == 0
+    assert data["status"] == "COMPLETED"
+
+
+def test_retry_failed_data_source_items_not_found(
+    client: TestClient, mock_container: MagicMock
+) -> None:
+    kb_id = uuid4()
+    ds_id = uuid4()
+    run_id = uuid4()
+
+    mock_container.retry_failed_data_source_items_use_case.execute = AsyncMock(
+        return_value=Err(DomainError("Run não encontrado", "DATA_SOURCE_RUN_NOT_FOUND"))
+    )
+
+    resp = client.post(f"/api/v1/knowledge-bases/{kb_id}/data-sources/{ds_id}/runs/{run_id}/retry")
+    assert resp.status_code == 404
+    data = resp.json()
+    assert data["detail"]["code"] == "DATA_SOURCE_RUN_NOT_FOUND"
+
+
+def test_retry_failed_data_source_items_conflict(
+    client: TestClient, mock_container: MagicMock
+) -> None:
+    kb_id = uuid4()
+    ds_id = uuid4()
+    run_id = uuid4()
+
+    mock_container.retry_failed_data_source_items_use_case.execute = AsyncMock(
+        return_value=Err(DomainError("Syncing", "DATA_SOURCE_ALREADY_SYNCING"))
+    )
+
+    resp = client.post(f"/api/v1/knowledge-bases/{kb_id}/data-sources/{ds_id}/runs/{run_id}/retry")
+    assert resp.status_code == 409
+    data = resp.json()
+    assert data["detail"]["code"] == "DATA_SOURCE_ALREADY_SYNCING"

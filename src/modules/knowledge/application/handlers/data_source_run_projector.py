@@ -72,22 +72,27 @@ class DataSourceRunProjector:
         except (ValueError, AttributeError):
             return
 
-        run = await self._run_repo.get_by_id(run_id)
-        if run is None:
-            self._log_debug(f"[DataSourceRunProjector] Run '{run_id}' não encontrada.")
+        res = await self._run_repo.record_document_indexed(run_id)
+        if res is None:
             return
 
-        run.record_document_indexed()
-        processed = run.indexed_files_count + run.failed_files_count
+        data_source_id, kb_id, indexed, failed, total, status = res
+        processed = indexed + failed
         self._log_info(
-            f"[DataSourceRunProjector] Doc '{event.document_id}' indexado na run '{run.id}'. "
-            f"Progresso: {processed}/{run.total_files_discovered}"
+            f"[DataSourceRunProjector] Doc '{event.document_id}' indexado na run '{run_id}'. "
+            f"Progresso: {processed}/{total}"
         )
 
-        if run.completed_at is not None and self._event_bus:
-            await self._publish_run_completed(run)
-
-        await self._run_repo.save(run)
+        if status in ("COMPLETED", "PARTIALLY_FAILED", "FAILED") and self._event_bus:
+            await self._publish_run_completed_raw(
+                run_id=run_id,
+                data_source_id=data_source_id,
+                kb_id=kb_id,
+                status=status,
+                total=total,
+                indexed=indexed,
+                failed=failed,
+            )
 
     async def _handle_document_failed(self, event: DocumentProcessingFailedEvent) -> None:
         sync_run_id_val = event.metadata.get("sync_run_id")
@@ -99,48 +104,73 @@ class DataSourceRunProjector:
         except (ValueError, AttributeError):
             return
 
-        run = await self._run_repo.get_by_id(run_id)
-        if run is None:
-            self._log_debug(f"[DataSourceRunProjector] Run '{run_id}' não encontrada.")
+        file_name = str(event.metadata.get("file_name") or event.document_id)
+        failure_item: dict[str, object] = {
+            "doc_id": str(event.document_id),
+            "file_name": file_name,
+            "error": event.error_message,
+        }
+        res = await self._run_repo.record_document_failed(run_id, failure_item)
+        if res is None:
             return
 
-        file_name = str(event.metadata.get("file_name") or event.document_id)
-        run.record_document_failed(
-            doc_id=event.document_id,
-            file_name=file_name,
-            error=event.error_message,
-        )
-        processed = run.indexed_files_count + run.failed_files_count
+        data_source_id, kb_id, indexed, failed, total, status = res
+        processed = indexed + failed
         self._log_error(
-            f"[DataSourceRunProjector] Doc '{event.document_id}' falhou na run '{run.id}': "
-            f"{event.error_message}. Progresso: {processed}/{run.total_files_discovered}"
+            f"[DataSourceRunProjector] Doc '{event.document_id}' falhou na run '{run_id}': "
+            f"{event.error_message}. Progresso: {processed}/{total}"
         )
 
-        if run.completed_at is not None and self._event_bus:
-            await self._publish_run_completed(run)
+        if status in ("COMPLETED", "PARTIALLY_FAILED", "FAILED") and self._event_bus:
+            await self._publish_run_completed_raw(
+                run_id=run_id,
+                data_source_id=data_source_id,
+                kb_id=kb_id,
+                status=status,
+                total=total,
+                indexed=indexed,
+                failed=failed,
+            )
 
-        await self._run_repo.save(run)
-
-    async def _publish_run_completed(self, run: DataSourceRun) -> None:
+    async def _publish_run_completed_raw(
+        self,
+        run_id: UUID,
+        data_source_id: UUID,
+        kb_id: UUID,
+        status: str,
+        total: int,
+        indexed: int,
+        failed: int,
+    ) -> None:
         if not self._event_bus:
             return
         self._log_info(
-            f"[DataSourceRunProjector] Run '{run.id}' finalizada com status '{run.status.value}'. "
-            f"(Total={run.total_files_discovered}, Sucesso={run.indexed_files_count}, "
-            f"Falhas={run.failed_files_count})"
+            f"[DataSourceRunProjector] Run '{run_id}' finalizada com status '{status}'. "
+            f"(Total={total}, Sucesso={indexed}, Falhas={failed})"
         )
         await self._event_bus.publish(
             [
                 DataSourceRunCompletedEvent(
-                    aggregate_id=run.id,
+                    aggregate_id=run_id,
                     aggregate_type="DataSourceRun",
-                    run_id=run.id,
-                    data_source_id=run.data_source_id,
-                    kb_id=run.kb_id,
-                    status=run.status.value,
-                    total_files=run.total_files_discovered,
-                    indexed_files=run.indexed_files_count,
-                    failed_files=run.failed_files_count,
+                    run_id=run_id,
+                    data_source_id=data_source_id,
+                    kb_id=kb_id,
+                    status=status,
+                    total_files=total,
+                    indexed_files=indexed,
+                    failed_files=failed,
                 )
             ]
+        )
+
+    async def _publish_run_completed(self, run: DataSourceRun) -> None:
+        await self._publish_run_completed_raw(
+            run_id=run.id,
+            data_source_id=run.data_source_id,
+            kb_id=run.kb_id,
+            status=run.status.value,
+            total=run.total_files_discovered,
+            indexed=run.indexed_files_count,
+            failed=run.failed_files_count,
         )

@@ -12,6 +12,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { DataSourceSummary } from '../../api/types';
+import { useDataSourceRuns } from '../../hooks/useDataSources';
 
 interface DataSourceCardProps {
   dataSource: DataSourceSummary;
@@ -28,6 +29,9 @@ export const DataSourceCard: React.FC<DataSourceCardProps> = ({
   onDelete,
   isSyncingCurrent,
 }) => {
+  const { data: runs } = useDataSourceRuns(dataSource.kb_id, dataSource.id);
+  const latestRun = runs && runs.length > 0 ? runs[0] : null;
+
   const isSyncing = dataSource.status === 'SYNCING' || isSyncingCurrent;
   const config = dataSource.config as { folder_id?: string; recursive?: boolean };
 
@@ -47,32 +51,43 @@ export const DataSourceCard: React.FC<DataSourceCardProps> = ({
   };
 
   const getStatusBadge = () => {
-    switch (dataSource.status) {
-      case 'SYNCING':
-        return (
-          <Badge variant="purple" className="flex items-center gap-1">
-            <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />
-            Sincronizando
-          </Badge>
-        );
-      case 'FAILED':
-        return (
-          <Badge variant="error" className="flex items-center gap-1">
-            <AlertCircle className="w-3 h-3 text-rose-400" />
-            Falha
-          </Badge>
-        );
-      case 'DISABLED':
-        return <Badge variant="warning">Desativado</Badge>;
-      case 'IDLE':
-      default:
-        return (
-          <Badge variant="success" className="flex items-center gap-1">
-            <CheckCircle className="w-3 h-3 text-emerald-400" />
-            Pronto
-          </Badge>
-        );
+    if (isSyncing) {
+      return (
+        <Badge variant="purple" className="flex items-center gap-1">
+          <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />
+          Sincronizando
+        </Badge>
+      );
     }
+
+    if (dataSource.status === 'DISABLED') {
+      return <Badge variant="warning">Desativado</Badge>;
+    }
+
+    if (latestRun?.status === 'PARTIALLY_FAILED') {
+      return (
+        <Badge variant="warning" className="flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-amber-400" />
+          Falha Parcial ({latestRun.failed_files_count})
+        </Badge>
+      );
+    }
+
+    if (latestRun?.status === 'FAILED' || dataSource.status === 'FAILED') {
+      return (
+        <Badge variant="error" className="flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-rose-400" />
+          Falha
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="success" className="flex items-center gap-1">
+        <CheckCircle className="w-3 h-3 text-emerald-400" />
+        Pronto
+      </Badge>
+    );
   };
 
   return (
@@ -132,6 +147,24 @@ export const DataSourceCard: React.FC<DataSourceCardProps> = ({
           </button>
         </div>
       </div>
+
+      {latestRun && latestRun.failed_files_count > 0 && !isSyncing && (
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-950/30 border border-amber-900/50 text-xs text-amber-300">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="truncate">
+              A última sincronização falhou em {latestRun.failed_files_count} arquivo(s).
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onViewRuns(dataSource)}
+            className="text-amber-400 hover:text-amber-200 underline font-medium text-[11px] shrink-0 ml-2"
+          >
+            Ver e Reprocessar
+          </button>
+        </div>
+      )}
 
       {dataSource.error_message && (
         <div className="flex items-start gap-2 p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/50 text-xs text-rose-300">

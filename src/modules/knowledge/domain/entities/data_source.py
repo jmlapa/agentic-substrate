@@ -111,6 +111,22 @@ class DataSource(Entity[UUID]):
         self._error_message = error_message
         self._updated_at = datetime.now(UTC)
 
+    @property
+    def pending_cursor(self) -> str | None:
+        return self._config.get("pending_cursor")
+
+    def set_pending_cursor(self, cursor: str | None) -> None:
+        if cursor is not None:
+            self._config["pending_cursor"] = cursor
+        elif "pending_cursor" in self._config:
+            del self._config["pending_cursor"]
+        self._updated_at = datetime.now(UTC)
+
+    def promote_pending_cursor(self) -> None:
+        if "pending_cursor" in self._config:
+            self._cursor = self._config.pop("pending_cursor")
+            self._updated_at = datetime.now(UTC)
+
     def disable(self) -> None:
         self._status = DataSourceStatus.DISABLED
         self._updated_at = datetime.now(UTC)

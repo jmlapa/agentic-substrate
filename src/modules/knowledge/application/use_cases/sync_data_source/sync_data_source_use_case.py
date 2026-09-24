@@ -151,35 +151,94 @@ class SyncDataSourceUseCase:
 
             kb = await self._kb_repo.get_by_id(data_source.kb_id)
             existing_docs_by_name: dict[str, UUID] = {}
+            existing_docs_by_external_id: dict[str, dict[str, Any]] = {}
             if kb:
                 for doc_id, doc_info in kb.documents.items():
                     name = doc_info.get("file_name")
                     if name:
                         existing_docs_by_name[name] = doc_id
+                    meta = doc_info.get("metadata") or {}
+                    ext_id = meta.get("external_id")
+                    status_doc = doc_info.get("status")
+                    if ext_id and status_doc in (
+                        "INDEXED",
+                        "INGESTING",
+                        "UPLOADED",
+                        "CHUNKED",
+                        "PARSED",
+                    ):
+                        existing_docs_by_external_id[str(ext_id)] = {
+                            "doc_id": doc_id,
+                            "version_hash": meta.get("version_hash"),
+                        }
 
             semaphore = asyncio.Semaphore(self._max_concurrency)
+            attach_lock = asyncio.Lock()
 
             async def _process_item(item: DiscoveredDocumentItem) -> None:
                 async with semaphore:
                     safe_name = Path(item.name).name or item.name
+
+                    # Idempotency Gate: pula download e attach se já indexado com mesma versão
+                    existing = existing_docs_by_external_id.get(str(item.external_id))
+                    if existing and existing.get("version_hash") == item.version_hash:
+                        self._log_info(
+                            f"[SyncDataSourceUseCase] Item '{safe_name}' (id={item.external_id}) "
+                            "já indexado e inalterado. Pulando download."
+                        )
+                        run.record_document_indexed()
+                        return
+
                     if item.size_bytes > self._max_file_size_bytes:
                         err_msg = (
                             f"File '{item.name}' exceeds maximum allowed size "
                             f"({item.size_bytes} > {self._max_file_size_bytes} bytes)"
                         )
                         self._log_error(f"[SyncDataSourceUseCase] {err_msg}")
-                        run.record_document_failed(doc_id=None, file_name=safe_name, error=err_msg)
+                        run.record_document_failed(
+                            doc_id=None,
+                            file_name=safe_name,
+                            error=err_msg,
+                            external_id=item.external_id,
+                            mime_type=item.mime_type,
+                            version_hash=item.version_hash,
+                            size_bytes=item.size_bytes,
+                        )
                         return
 
                     content: bytes | None = None
                     try:
-                        self._log_info(
-                            f"[SyncDataSourceUseCase] Baixando item '{safe_name}' "
-                            f"(id={item.external_id})..."
-                        )
-                        content, resolved_mime, version_hash = await connector.download_document(
-                            item.external_id, item.mime_type
-                        )
+                        max_retries = 3
+                        resolved_mime = item.mime_type
+                        version_hash = item.version_hash
+
+                        for attempt in range(1, max_retries + 1):
+                            try:
+                                self._log_info(
+                                    f"[SyncDataSourceUseCase] Baixando item '{safe_name}' "
+                                    f"(id={item.external_id}, tentativa {attempt}/{max_retries})..."
+                                )
+                                (
+                                    content,
+                                    resolved_mime,
+                                    version_hash,
+                                ) = await connector.download_document(
+                                    item.external_id, item.mime_type
+                                )
+                                break
+                            except Exception as dl_err:
+                                if attempt == max_retries:
+                                    raise
+                                backoff = 2**attempt
+                                self._log_info(
+                                    f"[SyncDataSourceUseCase] Falha transitória ao baixar "
+                                    f"'{safe_name}' na tentativa {attempt}: {dl_err}. "
+                                    f"Aguardando {backoff}s para retry..."
+                                )
+                                await asyncio.sleep(backoff)
+
+                        if content is None:
+                            raise RuntimeError(f"Conteúdo vazio após download de '{safe_name}'")
 
                         replaces_doc_id = existing_docs_by_name.get(safe_name)
                         source_metadata: dict[str, Any] = {
@@ -202,14 +261,47 @@ class SyncDataSourceUseCase:
                             file_content=content,
                             source_metadata=source_metadata,
                         )
-                        attach_res = await self._attach_use_case.execute(attach_req)
-                        if isinstance(attach_res, Err):
-                            err_msg = f"Falha no attach_document: {attach_res.error.message}"
+                        attach_res = None
+                        for attach_attempt in range(1, 5):
+                            try:
+                                async with attach_lock:
+                                    attach_res = await self._attach_use_case.execute(attach_req)
+                            except Exception as attach_ex:
+                                attach_res = Err(
+                                    DomainError(str(attach_ex), code="ATTACH_EXCEPTION")
+                                )
+
+                            if isinstance(attach_res, Ok):
+                                break
+                            if (
+                                "Concurrency conflict" in attach_res.error.message
+                                or "CONCURRENCY" in attach_res.error.code
+                            ):
+                                self._log_info(
+                                    f"[SyncDataSourceUseCase] Concurrency conflict no attach de "
+                                    f"'{safe_name}'. Retentando ({attach_attempt}/4)..."
+                                )
+                                await asyncio.sleep(0.2 * attach_attempt)
+                                continue
+                            break
+
+                        if attach_res is None or isinstance(attach_res, Err):
+                            err_msg = (
+                                f"Falha no attach_document: {attach_res.error.message}"
+                                if attach_res
+                                else "Falha desconhecida no attach_document"
+                            )
                             self._log_error(
                                 f"[SyncDataSourceUseCase] Erro no item '{safe_name}': {err_msg}"
                             )
                             run.record_document_failed(
-                                doc_id=None, file_name=safe_name, error=err_msg
+                                doc_id=None,
+                                file_name=safe_name,
+                                error=err_msg,
+                                external_id=item.external_id,
+                                mime_type=item.mime_type,
+                                version_hash=item.version_hash,
+                                size_bytes=item.size_bytes,
                             )
                         else:
                             self._log_info(
@@ -222,7 +314,15 @@ class SyncDataSourceUseCase:
                             f"[SyncDataSourceUseCase] Falha ao processar item '{safe_name}': "
                             f"{err_msg}"
                         )
-                        run.record_document_failed(doc_id=None, file_name=safe_name, error=err_msg)
+                        run.record_document_failed(
+                            doc_id=None,
+                            file_name=safe_name,
+                            error=err_msg,
+                            external_id=item.external_id,
+                            mime_type=item.mime_type,
+                            version_hash=item.version_hash,
+                            size_bytes=item.size_bytes,
+                        )
                     finally:
                         content = None
 
@@ -231,10 +331,41 @@ class SyncDataSourceUseCase:
 
             latest_run = await self._run_repo.get_by_id(run.id)
             if latest_run is not None:
+                for fail in run.failure_summary:
+                    if not any(
+                        f.get("file_name") == fail.get("file_name")
+                        for f in latest_run.failure_summary
+                    ):
+                        latest_run.record_document_failed(
+                            doc_id=UUID(fail["doc_id"]) if fail.get("doc_id") else None,
+                            file_name=fail["file_name"],
+                            error=fail["error"],
+                            external_id=fail.get("external_id"),
+                            mime_type=fail.get("mime_type"),
+                            version_hash=fail.get("version_hash"),
+                            size_bytes=fail.get("size_bytes"),
+                        )
                 run = latest_run
 
-            data_source.complete_sync(new_cursor=changes.next_cursor)
+            # Gestão segura do cursor incremental
+            if run.failed_files_count > 0:
+                data_source.set_pending_cursor(changes.next_cursor)
+                data_source.complete_sync(new_cursor=None)
+                self._log_info(
+                    f"[SyncDataSourceUseCase] Sincronização com {run.failed_files_count} "
+                    f"falha(s). Cursor mantido em '{data_source.cursor}', "
+                    f"pending_cursor='{changes.next_cursor}'."
+                )
+            else:
+                data_source.complete_sync(new_cursor=changes.next_cursor)
+                data_source.set_pending_cursor(None)
+                self._log_info(
+                    f"[SyncDataSourceUseCase] Sincronização finalizada com sucesso total. "
+                    f"Novo cursor='{changes.next_cursor}'."
+                )
+
             await self._ds_repo.save(data_source)
+            await self._run_repo.save(run)
 
             if self._event_bus:
                 await self._event_bus.publish(
@@ -245,13 +376,13 @@ class SyncDataSourceUseCase:
                             data_source_id=data_source.id,
                             run_id=run.id,
                             synced_files_count=len(changes.items),
-                            new_cursor=changes.next_cursor,
+                            new_cursor=data_source.cursor,
                         )
                     ]
                 )
 
             self._log_info(
-                f"[SyncDataSourceUseCase] Sincronização concluída com sucesso para DataSource "
+                f"[SyncDataSourceUseCase] Sincronização concluída para DataSource "
                 f"'{data_source.id}' (run_id={run.id}, status={run.status.value})"
             )
 

@@ -84,3 +84,17 @@ export const useDataSourceRuns = (
     },
   });
 };
+
+export const useRetryFailedDataSourceItems = (kbId: string, dataSourceId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (runId: string) =>
+      dataSourcesApi.retryFailedItems(kbId, dataSourceId, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-sources', kbId] });
+      queryClient.invalidateQueries({ queryKey: ['data-source-runs', kbId, dataSourceId] });
+      queryClient.invalidateQueries({ queryKey: ['knowledge-bases', kbId] });
+    },
+  });
+};

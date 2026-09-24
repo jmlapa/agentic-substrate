@@ -277,7 +277,21 @@ export interface SyncDataSourceResponse {
 export interface DataSourceRunFailureItem {
   item_id?: string;
   name?: string;
+  file_name?: string;
+  doc_id?: string | null;
   error: string;
+  external_id?: string | null;
+  mime_type?: string | null;
+  version_hash?: string | null;
+  size_bytes?: number | null;
+}
+
+export interface RetryFailedDataSourceItemsResponse {
+  data_source_id: string;
+  run_id: string;
+  reprocessed_count: number;
+  remaining_failed_count: number;
+  status: string;
 }
 
 export interface DataSourceRunSummary {

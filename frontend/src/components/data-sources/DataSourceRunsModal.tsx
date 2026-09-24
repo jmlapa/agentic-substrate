@@ -7,12 +7,13 @@ import {
   Clock,
   Layers,
   RefreshCw,
+  RotateCcw,
   XCircle,
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
 import { LoadingSpinner } from '../feedback/LoadingSpinner';
-import { useDataSourceRuns } from '../../hooks/useDataSources';
+import { useDataSourceRuns, useRetryFailedDataSourceItems } from '../../hooks/useDataSources';
 import { DataSourceRunSummary, DataSourceSummary } from '../../api/types';
 
 interface DataSourceRunsModalProps {
@@ -32,7 +33,20 @@ export const DataSourceRunsModal: React.FC<DataSourceRunsModalProps> = ({
     kbId,
     dataSource?.id || null
   );
+  const retryMutation = useRetryFailedDataSourceItems(kbId, dataSource?.id || '');
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
+
+  const handleRetry = async (runId: string) => {
+    setRetryingRunId(runId);
+    try {
+      await retryMutation.mutateAsync(runId);
+    } catch (err) {
+      console.error('Falha ao reprocessar itens que falharam', err);
+    } finally {
+      setRetryingRunId(null);
+    }
+  };
 
   if (!dataSource) return null;
 
@@ -130,10 +144,22 @@ export const DataSourceRunsModal: React.FC<DataSourceRunsModalProps> = ({
                       Indexados: <strong>{run.indexed_files_count}</strong>
                     </span>
                     {run.failed_files_count > 0 && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-300">
-                        <XCircle className="w-3 h-3 text-rose-400" />
-                        Falhas: <strong>{run.failed_files_count}</strong>
-                      </span>
+                      <>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-300">
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          Falhas: <strong>{run.failed_files_count}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={retryingRunId === run.id || retryMutation.isPending}
+                          onClick={() => handleRetry(run.id)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs font-medium transition-colors disabled:opacity-50"
+                          title="Reprocessar apenas os arquivos que falharam nesta execução"
+                        >
+                          <RotateCcw className={`w-3 h-3 ${retryingRunId === run.id ? 'animate-spin' : ''}`} />
+                          <span>{retryingRunId === run.id ? 'Reprocessando...' : 'Reprocessar Falhas'}</span>
+                        </button>
+                      </>
                     )}
 
                     {hasFailures && (
@@ -154,12 +180,19 @@ export const DataSourceRunsModal: React.FC<DataSourceRunsModalProps> = ({
                       <p className="font-semibold text-zinc-400 text-[10px] uppercase tracking-wider">
                         Erros Reportados ({run.failure_summary.length}):
                       </p>
-                      <ul className="space-y-1">
-                        {run.failure_summary.map((fail, idx) => (
-                          <li key={idx} className="text-rose-300 text-[11px] font-mono break-all">
-                            • {fail.name ? `${fail.name}: ` : ''}{fail.error}
-                          </li>
-                        ))}
+                      <ul className="space-y-1.5">
+                        {run.failure_summary.map((fail, idx) => {
+                          const fileName = fail.file_name || fail.name || 'Arquivo';
+                          return (
+                            <li key={idx} className="text-rose-300 text-[11px] font-mono break-all flex items-start gap-1.5">
+                              <span className="text-rose-500 mt-0.5">•</span>
+                              <div>
+                                <strong className="text-zinc-200">{fileName}: </strong>
+                                <span>{fail.error}</span>
+                              </div>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}

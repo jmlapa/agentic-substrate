@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -117,64 +117,47 @@ async def test_fetch_changes_delta_sync() -> None:
 @pytest.mark.asyncio
 async def test_download_document_regular_binary() -> None:
     mock_service = MagicMock()
-    connector = GoogleDriveFolderConnector(drive_service=mock_service)
-
+    mock_http_client = MagicMock()
     fake_content = b"PDF binary content"
+    mock_http_client.download_file = AsyncMock(return_value=fake_content)
 
-    def fake_downloader_init(fh: MagicMock, req: MagicMock) -> MagicMock:
-        downloader = MagicMock()
+    connector = GoogleDriveFolderConnector(
+        drive_service=mock_service,
+        http_client=mock_http_client,
+    )
 
-        def next_chunk() -> tuple[MagicMock, bool]:
-            fh.write(fake_content)
-            return (MagicMock(), True)
-
-        downloader.next_chunk = next_chunk
-        return downloader
-
-    with patch(
-        "googleapiclient.http.MediaIoBaseDownload",
-        side_effect=fake_downloader_init,
-    ):
-        content, mime, v_hash = await connector.download_document(
-            external_id="file-1",
-            mime_type="application/pdf",
-        )
+    content, mime, v_hash = await connector.download_document(
+        external_id="file-1",
+        mime_type="application/pdf",
+    )
 
     assert content == fake_content
     assert mime == "application/pdf"
     assert len(v_hash) == 64  # sha256 hex string
+    mock_http_client.download_file.assert_awaited_once_with("file-1")
 
 
 @pytest.mark.asyncio
 async def test_download_document_google_doc_export() -> None:
     mock_service = MagicMock()
-    connector = GoogleDriveFolderConnector(drive_service=mock_service)
-
+    mock_http_client = MagicMock()
     fake_content = b"PlainText representation of Google Doc"
+    mock_http_client.export_file = AsyncMock(return_value=fake_content)
 
-    def fake_downloader_init(fh: MagicMock, req: MagicMock) -> MagicMock:
-        downloader = MagicMock()
+    connector = GoogleDriveFolderConnector(
+        drive_service=mock_service,
+        http_client=mock_http_client,
+    )
 
-        def next_chunk() -> tuple[MagicMock, bool]:
-            fh.write(fake_content)
-            return (MagicMock(), True)
-
-        downloader.next_chunk = next_chunk
-        return downloader
-
-    with patch(
-        "googleapiclient.http.MediaIoBaseDownload",
-        side_effect=fake_downloader_init,
-    ):
-        content, mime, v_hash = await connector.download_document(
-            external_id="gdoc-1",
-            mime_type="application/vnd.google-apps.document",
-        )
+    content, mime, v_hash = await connector.download_document(
+        external_id="gdoc-1",
+        mime_type="application/vnd.google-apps.document",
+    )
 
     assert content == fake_content
     assert mime == "text/plain"
     assert len(v_hash) == 64
-    mock_service.files().export_media.assert_called_with(fileId="gdoc-1", mimeType="text/plain")
+    mock_http_client.export_file.assert_awaited_once_with("gdoc-1", "text/plain")
 
 
 def test_get_service_raises_clear_error_when_service_account_path_not_found(tmp_path: Path) -> None:
@@ -254,14 +237,16 @@ def test_parse_file_to_item_ignores_shortcut_with_unmatched_target_mime() -> Non
 
 @pytest.mark.asyncio
 async def test_download_document_raises_permission_error_on_http_404() -> None:
-    from googleapiclient.errors import HttpError
-    from httplib2 import Response  # type: ignore[import-untyped]
-
     mock_service = MagicMock()
-    connector = GoogleDriveFolderConnector(drive_service=mock_service)
+    mock_http_client = MagicMock()
+    mock_http_client.download_file = AsyncMock(
+        side_effect=PermissionError("Falha de acesso ao arquivo target-123 no Google Drive")
+    )
 
-    fake_resp = Response({"status": "404"})
-    mock_service.files().get_media.side_effect = HttpError(fake_resp, b"File not found")
+    connector = GoogleDriveFolderConnector(
+        drive_service=mock_service,
+        http_client=mock_http_client,
+    )
 
     with pytest.raises(PermissionError, match="Falha de acesso ao arquivo"):
         await connector.download_document(external_id="target-123", mime_type="application/pdf")

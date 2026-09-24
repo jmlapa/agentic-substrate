@@ -21,6 +21,7 @@ class DataSourceRun(Entity[UUID]):
         failure_summary: list[dict[str, Any]] | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
+        pending_cursor: str | None = None,
     ) -> None:
         super().__init__(id or uuid4())
         if data_source_id is None:
@@ -34,6 +35,7 @@ class DataSourceRun(Entity[UUID]):
         self._indexed_files_count = max(0, indexed_files_count)
         self._failed_files_count = max(0, failed_files_count)
         self._failure_summary: list[dict[str, Any]] = list(failure_summary or [])
+        self._pending_cursor = pending_cursor
         now = datetime.now(UTC)
         self._started_at = started_at or now
         self._completed_at = completed_at
@@ -67,6 +69,13 @@ class DataSourceRun(Entity[UUID]):
         return list(self._failure_summary)
 
     @property
+    def pending_cursor(self) -> str | None:
+        return self._pending_cursor
+
+    def set_pending_cursor(self, cursor: str | None) -> None:
+        self._pending_cursor = cursor
+
+    @property
     def started_at(self) -> datetime:
         return self._started_at
 
@@ -82,19 +91,45 @@ class DataSourceRun(Entity[UUID]):
         else:
             self._status = DataSourceRunStatus.INGESTING
 
+    def mark_retrying(self) -> None:
+        self._status = DataSourceRunStatus.INGESTING
+        self._completed_at = None
+
     def record_document_indexed(self) -> None:
         self._indexed_files_count += 1
         self._check_completion()
 
-    def record_document_failed(self, doc_id: UUID | None, file_name: str, error: str) -> None:
+    def record_document_failed(
+        self,
+        doc_id: UUID | None,
+        file_name: str,
+        error: str,
+        external_id: str | None = None,
+        mime_type: str | None = None,
+        version_hash: str | None = None,
+        size_bytes: int | None = None,
+    ) -> None:
         self._failed_files_count += 1
         self._failure_summary.append(
             {
                 "doc_id": str(doc_id) if doc_id else None,
                 "file_name": file_name,
                 "error": error,
+                "external_id": external_id,
+                "mime_type": mime_type,
+                "version_hash": version_hash,
+                "size_bytes": size_bytes,
             }
         )
+        self._check_completion()
+
+    def resolve_item_success(self, file_name: str) -> None:
+        """Remove o item do failure_summary e incrementa os indexados com sucesso."""
+        self._failure_summary = [
+            f for f in self._failure_summary if f.get("file_name") != file_name
+        ]
+        self._failed_files_count = len(self._failure_summary)
+        self._indexed_files_count += 1
         self._check_completion()
 
     def _check_completion(self) -> None:

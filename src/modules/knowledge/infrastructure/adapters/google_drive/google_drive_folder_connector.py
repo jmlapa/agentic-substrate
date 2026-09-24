@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import io
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,6 +14,9 @@ from src.modules.knowledge.domain.value_objects.data_source_changes_batch import
 )
 from src.modules.knowledge.domain.value_objects.discovered_document_item import (
     DiscoveredDocumentItem,
+)
+from src.modules.knowledge.infrastructure.adapters.google_drive.google_drive_http_client import (
+    GoogleDriveHttpClient,
 )
 
 _standard_logger = logging.getLogger("agentic_substrate.connectors.google_drive")
@@ -31,11 +33,13 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
         service_account_info: dict[str, Any] | None = None,
         service_account_path: str | None = None,
         drive_service: Any = None,
+        http_client: GoogleDriveHttpClient | None = None,
         logger: Logger | None = None,
     ) -> None:
         self._service_account_info = service_account_info
         self._service_account_path = service_account_path
         self._drive_service = drive_service
+        self._http_client = http_client
         self._logger = logger
 
     def _log_info(self, message: str) -> None:
@@ -56,17 +60,13 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
         else:
             _standard_logger.debug(message)
 
-    def _get_service(self) -> Any:
-        if self._drive_service is not None:
-            return self._drive_service
-
+    def _get_credentials(self) -> Any:
         from google.oauth2 import service_account
-        from googleapiclient.discovery import build
 
         scopes = ["https://www.googleapis.com/auth/drive.readonly"]
 
         if self._service_account_info:
-            creds = service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
+            return service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
                 self._service_account_info, scopes=scopes
             )
         elif self._service_account_path:
@@ -91,7 +91,7 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
                         "existe no disco (ou volume montado no container) e que o caminho "
                         "em GOOGLE_APPLICATION_CREDENTIALS está correto."
                     )
-            creds = service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
+            return service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
                 str(path), scopes=scopes
             )
         else:
@@ -99,9 +99,23 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
             import google.auth
 
             creds, _ = google.auth.default(scopes=scopes)
+            return creds
 
+    def _get_service(self) -> Any:
+        if self._drive_service is not None:
+            return self._drive_service
+
+        from googleapiclient.discovery import build
+
+        creds = self._get_credentials()
         self._drive_service = build("drive", "v3", credentials=creds, cache_discovery=False)
         return self._drive_service
+
+    def _get_http_client(self) -> GoogleDriveHttpClient:
+        if self._http_client is None:
+            creds = self._get_credentials()
+            self._http_client = GoogleDriveHttpClient(credentials=creds)
+        return self._http_client
 
     async def fetch_changes(
         self, config: dict[str, Any], cursor: str | None
@@ -351,58 +365,35 @@ class GoogleDriveFolderConnector(IDataSourceConnector):
             f"[GoogleDriveFolderConnector] Baixando arquivo external_id='{external_id}', "
             f"mime='{mime_type}'"
         )
-        service = self._get_service()
-        return await asyncio.to_thread(self._execute_download, service, external_id, mime_type)
-
-    def _execute_download(
-        self, service: Any, external_id: str, mime_type: str
-    ) -> tuple[bytes, str, str]:
-        from googleapiclient.errors import HttpError
-        from googleapiclient.http import MediaIoBaseDownload
-
+        http_client = self._get_http_client()
         resolved_mime = mime_type
 
-        try:
-            # Tratamento de documentos nativos do Google Workspace
-            if mime_type == "application/vnd.google-apps.document":
-                self._log_debug(
-                    f"[GoogleDriveFolderConnector] Exportando Google Doc '{external_id}' "
-                    "para text/plain"
-                )
-                request = service.files().export_media(fileId=external_id, mimeType="text/plain")
-                resolved_mime = "text/plain"
-            elif mime_type == "application/vnd.google-apps.spreadsheet":
-                self._log_debug(
-                    f"[GoogleDriveFolderConnector] Exportando Google Sheet '{external_id}' "
-                    "para text/csv"
-                )
-                request = service.files().export_media(fileId=external_id, mimeType="text/csv")
-                resolved_mime = "text/csv"
-            else:
-                request = service.files().get_media(fileId=external_id, supportsAllDrives=True)
+        # Tratamento de documentos nativos do Google Workspace
+        if mime_type == "application/vnd.google-apps.document":
+            self._log_debug(
+                f"[GoogleDriveFolderConnector] Exportando Google Doc '{external_id}' "
+                "para text/plain"
+            )
+            content = await http_client.export_file(external_id, "text/plain")
+            resolved_mime = "text/plain"
+        elif mime_type == "application/vnd.google-apps.spreadsheet":
+            self._log_debug(
+                f"[GoogleDriveFolderConnector] Exportando Google Sheet '{external_id}' "
+                "para text/csv"
+            )
+            content = await http_client.export_file(external_id, "text/csv")
+            resolved_mime = "text/csv"
+        else:
+            content = await http_client.download_file(external_id)
 
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                _, done = downloader.next_chunk()
-        except HttpError as e:
-            if e.resp.status in (404, 403):
-                raise PermissionError(
-                    f"Falha de acesso ao arquivo '{external_id}' no Google Drive "
-                    f"(status {e.resp.status}). Se este arquivo for proveniente de um "
-                    "atalho ou pasta compartilhada (como reuniões gravadas ou notas "
-                    "do Meet/Gemini), certifique-se de que o arquivo original ou sua "
-                    "pasta de origem (ex: 'Meet Recordings') foi compartilhado com a "
-                    "Service Account com permissão de Leitor."
-                ) from e
-            raise
-
-        content = fh.getvalue()
         v_hash = hashlib.sha256(content).hexdigest()
-
         self._log_info(
             f"[GoogleDriveFolderConnector] Download concluído: external_id='{external_id}' "
             f"({len(content)} bytes, sha256={v_hash[:12]}...)"
         )
         return content, resolved_mime, v_hash
+
+    async def aclose(self) -> None:
+        """Fecha o cliente HTTP assíncrono se inicializado."""
+        if self._http_client is not None:
+            await self._http_client.aclose()

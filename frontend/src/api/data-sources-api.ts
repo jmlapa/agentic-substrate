@@ -3,6 +3,7 @@ import {
   CreateDataSourceDTO,
   DataSourceRunSummary,
   DataSourceSummary,
+  RetryFailedDataSourceItemsResponse,
   SyncDataSourceResponse,
 } from './types';
 
@@ -54,6 +55,17 @@ export const dataSourcesApi = {
     const response = await apiClient.get<DataSourceRunSummary[]>(
       `/api/v1/knowledge-bases/${kbId}/data-sources/${dataSourceId}/runs`,
       { params: { limit } }
+    );
+    return response.data;
+  },
+
+  async retryFailedItems(
+    kbId: string,
+    dataSourceId: string,
+    runId: string
+  ): Promise<RetryFailedDataSourceItemsResponse> {
+    const response = await apiClient.post<RetryFailedDataSourceItemsResponse>(
+      `/api/v1/knowledge-bases/${kbId}/data-sources/${dataSourceId}/runs/${runId}/retry`
     );
     return response.data;
   },

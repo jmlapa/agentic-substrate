@@ -13,3 +13,11 @@ class IDataSourceRunRepository(Protocol):
     async def list_by_data_source_id(
         self, data_source_id: UUID, limit: int = 50
     ) -> list[DataSourceRun]: ...
+
+    async def record_document_indexed(
+        self, run_id: UUID
+    ) -> tuple[UUID, UUID, int, int, int, str] | None: ...
+
+    async def record_document_failed(
+        self, run_id: UUID, failure_item: dict[str, object]
+    ) -> tuple[UUID, UUID, int, int, int, str] | None: ...
