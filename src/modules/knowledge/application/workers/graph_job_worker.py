@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
@@ -7,6 +8,10 @@ import asyncpg
 
 from src.kernel.application.event_bus import EventBus
 from src.kernel.infrastructure.atomic_job_barrier import AtomicJobBarrier
+from src.modules.knowledge.domain.aggregates.document_aggregate import DocumentAggregate
+from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
+    DocumentKnowledgeIndexedEvent,
+)
 from src.modules.knowledge.domain.interfaces.i_document_repository import (
     IDocumentRepository,
 )
@@ -25,6 +30,8 @@ from src.modules.knowledge.domain.value_objects.parent_graph_job_payload import 
 from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_storage import (
     ParentGraphCheckpointStorage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GraphJobWorker:
@@ -93,12 +100,11 @@ class GraphJobWorker:
                 count=count,
             )
 
-        processed = 0
-        for msg_id, task in tasks:
-            success = await self.process_task(msg_id, task)
-            if success:
-                processed += 1
-        return processed
+        results = await asyncio.gather(
+            *(self.process_task(msg_id, task) for msg_id, task in tasks),
+            return_exceptions=True,
+        )
+        return sum(1 for r in results if r is True)
 
     async def process_task(self, msg_id: str, task: JobTask) -> bool:
         """Executa a extração ontológica de um Parent Chunk com checkpoint durável."""
@@ -137,11 +143,20 @@ class GraphJobWorker:
                     graph=extracted,
                 )
 
-            # 2. Emite heartbeat
-            await self._emit_heartbeat(payload.document_id)
-
-            # 3. Barreira de junção atômica
+            # 2. Barreira de junção atômica
             is_last = await self._barrier.increment_and_check(payload.document_id, step="graph")
+
+            # 3. Emite heartbeat com telemetria em tempo real
+            completed, total = 0, 0
+            if hasattr(self._barrier, "get_progress"):
+                try:
+                    completed, total = await self._barrier.get_progress(
+                        payload.document_id, step="graph"
+                    )
+                except Exception:
+                    pass
+            await self._emit_heartbeat(payload.document_id, completed=completed, total=total)
+
             if is_last:
                 await self._consolidate_and_index(payload)
 
@@ -149,15 +164,37 @@ class GraphJobWorker:
             await self._stream_queue.ack_task(self._stream_name, self._group_name, msg_id)
             return True
 
-        except Exception:
+        except Exception as e:
+            logger.error(
+                f"[GraphJobWorker] Erro ao processar chunk '{msg_id}': {e}",
+                exc_info=True,
+            )
             return False
 
-    async def _emit_heartbeat(self, doc_id: UUID) -> None:
+    async def _emit_heartbeat(self, doc_id: UUID, completed: int = 0, total: int = 0) -> None:
         if self._pool is None:
             return
+        percentage = int((completed / total) * 100) if total > 0 else 0
+        message = (
+            f"Extraindo subgrafos ontológicos: {completed}/{total} chunks concluídos..."
+            if total > 0
+            else "Extraindo subgrafos ontológicos..."
+        )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE attached_documents SET updated_at = NOW() WHERE id = $1;",
+                """
+                UPDATE attached_documents
+                SET progress_current = $1,
+                    progress_total = $2,
+                    progress_percentage = $3,
+                    progress_message = $4,
+                    updated_at = NOW()
+                WHERE id = $5;
+                """,
+                completed,
+                total,
+                percentage,
+                message,
                 doc_id,
             )
 
@@ -224,18 +261,63 @@ class GraphJobWorker:
 
         # Atualiza o DocumentAggregate em stream autônomo O(1)
         doc = await self._document_repo.get_by_id(payload.document_id)
-        if doc is not None:
-            doc.mark_graph_extracted(
-                node_count=len(merged_graph.nodes),
-                edge_count=len(merged_graph.edges),
-                subgraph_storage_path=subgraph_path,
-                extracted_graph=None,
+        if doc is None:
+            doc = DocumentAggregate.create(
+                document_id=payload.document_id,
+                kb_id=payload.kb_id,
+                file_name=f"doc_{payload.document_id}",
+                content_type="application/octet-stream",
+                storage_path=subgraph_path,
+                metadata=payload.metadata,
             )
-            doc.mark_knowledge_indexed(
-                indexed_nodes=len(merged_graph.nodes),
-                indexed_edges=len(merged_graph.edges),
+
+        doc.mark_graph_extracted(
+            node_count=len(merged_graph.nodes),
+            edge_count=len(merged_graph.edges),
+            subgraph_storage_path=subgraph_path,
+            extracted_graph=None,
+        )
+        doc.mark_knowledge_indexed(
+            indexed_nodes=len(merged_graph.nodes),
+            indexed_edges=len(merged_graph.edges),
+        )
+        await self._document_repo.save(doc)
+
+        # Garantia de atualização direta no Read Model (PostgreSQL)
+        if self._pool is not None:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE attached_documents
+                    SET status = 'INDEXED',
+                        indexed_nodes_count = $1,
+                        indexed_edges_count = $2,
+                        progress_step = 'INDEXED',
+                        progress_current = progress_total,
+                        progress_percentage = 100,
+                        progress_message = 'Processamento e indexação ontológica concluídos',
+                        updated_at = NOW()
+                    WHERE id = $3;
+                    """,
+                    len(merged_graph.nodes),
+                    len(merged_graph.edges),
+                    payload.document_id,
+                )
+
+        if self._event_bus is not None:
+            await self._event_bus.publish(
+                [
+                    DocumentKnowledgeIndexedEvent(
+                        aggregate_id=payload.document_id,
+                        aggregate_type="DocumentAggregate",
+                        document_id=payload.document_id,
+                        kb_id=payload.kb_id,
+                        indexed_nodes_count=len(merged_graph.nodes),
+                        indexed_edges_count=len(merged_graph.edges),
+                        metadata=payload.metadata,
+                    )
+                ]
             )
-            await self._document_repo.save(doc)
 
         if self._on_completed is not None:
             await self._on_completed(payload, merged_graph)

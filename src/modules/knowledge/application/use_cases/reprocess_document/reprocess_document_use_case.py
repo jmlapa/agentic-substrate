@@ -60,7 +60,7 @@ class ReprocessDocumentUseCase:
             async with self._pool.acquire() as conn:
                 doc_row = await conn.fetchrow(
                     """
-                    SELECT file_name, storage_path, byte_size
+                    SELECT file_name, storage_path
                     FROM attached_documents
                     WHERE id = $1;
                     """,
@@ -69,7 +69,6 @@ class ReprocessDocumentUseCase:
             if doc_row is not None:
                 file_name = doc_row["file_name"]
                 storage_path = doc_row["storage_path"]
-                byte_size = doc_row.get("byte_size") or 0
                 content_type = (
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     if file_name.endswith(".docx")
@@ -86,8 +85,6 @@ class ReprocessDocumentUseCase:
                     content_type=content_type,
                     storage_path=storage_path,
                 )
-                doc.mark_stored(storage_path, byte_size)
-                await self._doc_repo.save(doc)
 
         if doc is None:
             return Err(

@@ -47,6 +47,25 @@ class AtomicJobBarrier:
 
         return int(completed) == total
 
+    async def increment_and_status(
+        self, doc_id: UUID, step: str = "default"
+    ) -> tuple[bool, int, int]:
+        """
+        Incrementa atomicamente o contador via HINCRBY e retorna (is_last, completed, total).
+        """
+        key = self._get_key(doc_id, step)
+        completed = await self._client.hincrby(key, "completed", 1)
+
+        total_raw = await self._client.hget(key, "total")
+        if total_raw is None:
+            return (False, int(completed), 0)
+
+        if isinstance(total_raw, bytes):
+            total_raw = total_raw.decode("utf-8")
+        total = int(total_raw)
+
+        return (int(completed) == total, int(completed), total)
+
     async def get_progress(self, doc_id: UUID, step: str = "default") -> tuple[int, int]:
         """Retorna o progresso atual no formato (completed, total)."""
         key = self._get_key(doc_id, step)
