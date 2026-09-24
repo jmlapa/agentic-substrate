@@ -131,11 +131,19 @@ async def test_falkordb_graph_store_store_structural_document() -> None:
     nodes, edges = await adapter.store_structural_document(kb_id, doc)
     assert nodes == 5  # 1 doc + 3 parents + 1 child
     assert edges == 6  # 3 HAS_PARENT + 1 CONTAINS_CHILD + 2 NEXT (p1->p2, p2->p3)
-    # Total queries: 1 doc + 3 parents + 1 child + 1 BATCHED UNWIND NEXT = 6 queries (not 7)
-    assert mock_graph_handle.query.call_count == 6
+    # Total queries: 1 doc + 1 BATCHED parents + 1 BATCHED children + 1 BATCHED NEXT = 4
+    assert mock_graph_handle.query.call_count == 4
 
-    # Verify that the batched query uses UNWIND $pairs
-    last_query_args = mock_graph_handle.query.call_args_list[-1]
+    # Verify that the batched queries use UNWIND
+    parent_query_call = mock_graph_handle.query.call_args_list[1]
+    assert "UNWIND $parents AS p_data" in parent_query_call[0][0]
+    assert len(parent_query_call[0][1]["parents"]) == 3
+
+    child_query_call = mock_graph_handle.query.call_args_list[2]
+    assert "UNWIND $children AS c_data" in child_query_call[0][0]
+    assert len(child_query_call[0][1]["children"]) == 1
+
+    last_query_args = mock_graph_handle.query.call_args_list[3]
     assert "UNWIND $pairs AS pair" in last_query_args[0][0]
     assert len(last_query_args[0][1]["pairs"]) == 2
 

@@ -1,7 +1,10 @@
 import asyncio
 import logging
 import re
-from typing import Any
+from collections import defaultdict
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, TypeVar
 from uuid import UUID
 
 from falkordb import FalkorDB
@@ -17,6 +20,8 @@ from src.modules.knowledge.domain.value_objects.structural_graph_document import
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
 
 class FalkorDbGraphStoreAdapter(IGraphStore):
     def __init__(
@@ -24,8 +29,10 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         host: str = "localhost",
         port: int = 6380,
         client: Any | None = None,
+        max_workers: int = 64,
     ) -> None:
         self._client = client or FalkorDB(host=host, port=port)
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="falkordb")
 
     def _sanitize_identifier(self, identifier: str) -> str:
         sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", identifier)
@@ -47,8 +54,11 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         except Exception:
             pass
 
-        # Cria índices de range para queries filtradas de alta performance
+        # Cria índices de range para queries filtradas de alta performance e lookup rápido de IDs
         range_queries = [
+            "CREATE INDEX FOR (d:Document) ON (d.id)",
+            "CREATE INDEX FOR (p:ParentChunk) ON (p.id)",
+            "CREATE INDEX FOR (c:ChildChunk) ON (c.id)",
             "CREATE INDEX FOR (p:ParentChunk) ON (p.source_type)",
             "CREATE INDEX FOR (p:ParentChunk) ON (p.ingested_at)",
             "CREATE INDEX FOR (c:ChildChunk) ON (c.source_type)",
@@ -66,28 +76,36 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
 
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
 
-        # 1. Upsert nodes
+        # 1. Upsert nodes em lote por label via UNWIND
+        nodes_by_label: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for node in graph.nodes:
             label = self._sanitize_identifier(node.node_type)
-            query = f"MERGE (n:{label} {{id: $id}}) SET n += $props"
-            graph_handle.query(query, {"id": node.id, "props": node.properties})
+            nodes_by_label[label].append({"id": node.id, "props": node.properties})
 
-        # 2. Upsert edges
+        for label, batch in nodes_by_label.items():
+            query = f"UNWIND $batch AS item MERGE (n:{label} {{id: item.id}}) SET n += item.props"
+            graph_handle.query(query, {"batch": batch})
+
+        # 2. Upsert edges em lote por relationship_type via UNWIND
+        edges_by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for edge in graph.edges:
             rel_type = self._sanitize_identifier(edge.relationship_type.upper())
-            query = (
-                f"MATCH (src {{id: $src_id}}), (dst {{id: $dst_id}}) "
-                f"MERGE (src)-[r:{rel_type}]->(dst) "
-                f"SET r += $props"
-            )
-            graph_handle.query(
-                query,
+            edges_by_type[rel_type].append(
                 {
                     "src_id": edge.source_id,
                     "dst_id": edge.target_id,
                     "props": edge.properties,
-                },
+                }
             )
+
+        for rel_type, batch in edges_by_type.items():
+            query = (
+                f"UNWIND $batch AS item "
+                f"MATCH (src {{id: item.src_id}}), (dst {{id: item.dst_id}}) "
+                f"MERGE (src)-[r:{rel_type}]->(dst) "
+                f"SET r += item.props"
+            )
+            graph_handle.query(query, {"batch": batch})
 
         return len(graph.nodes), len(graph.edges)
 
@@ -119,61 +137,65 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         nodes_count = 1 + len(document.parents) + len(document.children)
         edges_count = 0
 
-        # 2. Merge Parent Chunks & HAS_PARENT edges
-        for parent in document.parents:
-            source_type = parent.metadata.get("source_type", "document")
-            ingested_at = parent.metadata.get("ingested_at")
-            p_query = (
+        # 2. Merge Parent Chunks em lote via UNWIND
+        if document.parents:
+            parents_data = [
+                {
+                    "id": p.id,
+                    "header_path": p.header_path,
+                    "content": p.content,
+                    "token_count": p.token_count,
+                    "source_type": p.metadata.get("source_type", "document"),
+                    "ingested_at": p.metadata.get("ingested_at"),
+                }
+                for p in document.parents
+            ]
+            p_batch_query = (
                 "MATCH (d:Document {id: $doc_id}) "
-                "MERGE (p:ParentChunk {id: $parent_id}) "
+                "UNWIND $parents AS p_data "
+                "MERGE (p:ParentChunk {id: p_data.id}) "
                 "SET p.kb_id = $kb_id, p.document_id = $doc_id, "
-                "p.header_path = $header_path, p.content = $content, p.token_count = $token_count, "
-                "p.source_type = $source_type, p.ingested_at = $ingested_at "
+                "p.header_path = p_data.header_path, p.content = p_data.content, "
+                "p.token_count = p_data.token_count, "
+                "p.source_type = p_data.source_type, p.ingested_at = p_data.ingested_at "
                 "MERGE (d)-[r:HAS_PARENT]->(p)"
             )
             graph_handle.query(
-                p_query,
-                {
-                    "doc_id": doc_id_str,
-                    "kb_id": kb_id_str,
-                    "parent_id": parent.id,
-                    "header_path": parent.header_path,
-                    "content": parent.content,
-                    "token_count": parent.token_count,
-                    "source_type": source_type,
-                    "ingested_at": ingested_at,
-                },
+                p_batch_query,
+                {"doc_id": doc_id_str, "kb_id": kb_id_str, "parents": parents_data},
             )
-            edges_count += 1
+            edges_count += len(document.parents)
 
-        # 3. Merge Child Chunks & CONTAINS_CHILD edges
-        for child in document.children:
-            child_source_type = child.metadata.get("source_type", "document")
-            child_ingested_at = child.metadata.get("ingested_at")
-            c_query = (
-                "MATCH (p:ParentChunk {id: $parent_id}) "
-                "MERGE (c:ChildChunk {id: $child_id}) "
-                "SET c.kb_id = $kb_id, c.parent_chunk_id = $parent_id, "
-                "c.chunk_index = $chunk_index, c.header_path = $header_path, "
-                "c.content = $content, c.embedding = vecf32($embedding), "
-                "c.source_type = $source_type, c.ingested_at = $ingested_at "
+        # 3. Merge Child Chunks em lote via UNWIND
+        if document.children:
+            children_data = [
+                {
+                    "id": c.id,
+                    "parent_id": c.parent_chunk_id,
+                    "chunk_index": c.chunk_index,
+                    "header_path": c.header_path,
+                    "content": c.content,
+                    "embedding": c.embedding or [],
+                    "source_type": c.metadata.get("source_type", "document"),
+                    "ingested_at": c.metadata.get("ingested_at"),
+                }
+                for c in document.children
+            ]
+            c_batch_query = (
+                "UNWIND $children AS c_data "
+                "MATCH (p:ParentChunk {id: c_data.parent_id}) "
+                "MERGE (c:ChildChunk {id: c_data.id}) "
+                "SET c.kb_id = $kb_id, c.parent_chunk_id = c_data.parent_id, "
+                "c.chunk_index = c_data.chunk_index, c.header_path = c_data.header_path, "
+                "c.content = c_data.content, c.embedding = vecf32(c_data.embedding), "
+                "c.source_type = c_data.source_type, c.ingested_at = c_data.ingested_at "
                 "MERGE (p)-[r:CONTAINS_CHILD]->(c)"
             )
             graph_handle.query(
-                c_query,
-                {
-                    "parent_id": child.parent_chunk_id,
-                    "child_id": child.id,
-                    "kb_id": kb_id_str,
-                    "chunk_index": child.chunk_index,
-                    "header_path": child.header_path,
-                    "content": child.content,
-                    "embedding": child.embedding or [],
-                    "source_type": child_source_type,
-                    "ingested_at": child_ingested_at,
-                },
+                c_batch_query,
+                {"kb_id": kb_id_str, "children": children_data},
             )
-            edges_count += 1
+            edges_count += len(document.children)
 
         # 4. Merge sequential [:NEXT] edges in batch between consecutive Parent Chunks
         if len(document.parents) > 1:
@@ -202,21 +224,21 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
 
         graph_handle = self._client.select_graph(self._get_graph_name(kb_id))
 
-        # Link parent chunk to each extracted entity
-        mention_edges = 0
-        for node in graph.nodes:
-            query = (
-                "MATCH (p:ParentChunk {id: $parent_id}), (e {id: $entity_id}) "
-                "MERGE (p)-[r:MENTIONS]->(e)"
-            )
-            graph_handle.query(
-                query,
-                {
-                    "parent_id": parent_chunk_id,
-                    "entity_id": node.id,
-                },
-            )
-            mention_edges += 1
+        # Link parent chunk to each extracted entity in batch via UNWIND
+        mentions_data = [{"entity_id": node.id} for node in graph.nodes]
+        mention_query = (
+            "UNWIND $mentions AS m "
+            "MATCH (p:ParentChunk {id: $parent_id}), (e {id: m.entity_id}) "
+            "MERGE (p)-[r:MENTIONS]->(e)"
+        )
+        graph_handle.query(
+            mention_query,
+            {
+                "parent_id": parent_chunk_id,
+                "mentions": mentions_data,
+            },
+        )
+        mention_edges = len(graph.nodes)
 
         return nodes_stored, edges_stored + mention_edges
 
@@ -396,30 +418,36 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
                 )
         return results
 
+    async def _run_async(self, func: Callable[..., T], *args: Any) -> T:
+        loop = asyncio.get_running_loop()
+        res: T = await loop.run_in_executor(self._executor, func, *args)
+        return res
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False)
+
     async def ensure_vector_index(
         self, kb_id: UUID, dimension: int = 768, similarity_function: str = "cosine"
     ) -> None:
-        await asyncio.to_thread(
-            self._ensure_vector_index_sync, kb_id, dimension, similarity_function
-        )
+        await self._run_async(self._ensure_vector_index_sync, kb_id, dimension, similarity_function)
 
     async def store_graph(self, kb_id: UUID, graph: ExtractedGraph) -> tuple[int, int]:
-        return await asyncio.to_thread(self._store_graph_sync, kb_id, graph)
+        return await self._run_async(self._store_graph_sync, kb_id, graph)
 
     async def store_structural_document(
         self, kb_id: UUID, document: StructuralGraphDocument
     ) -> tuple[int, int]:
-        return await asyncio.to_thread(self._store_structural_document_sync, kb_id, document)
+        return await self._run_async(self._store_structural_document_sync, kb_id, document)
 
     async def store_parent_mentions(
         self, kb_id: UUID, parent_chunk_id: str, graph: ExtractedGraph
     ) -> tuple[int, int]:
-        return await asyncio.to_thread(
+        return await self._run_async(
             self._store_parent_mentions_sync, kb_id, parent_chunk_id, graph
         )
 
     async def query_subgraph(self, kb_id: UUID, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(self._query_subgraph_sync, kb_id, query, top_k)
+        return await self._run_async(self._query_subgraph_sync, kb_id, query, top_k)
 
     async def query_hybrid(
         self,
@@ -432,7 +460,7 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
         time_to: float | None = None,
         document_id: UUID | None = None,
     ) -> list[HybridSearchResult]:
-        return await asyncio.to_thread(
+        return await self._run_async(
             self._query_hybrid_sync,
             kb_id,
             query_embedding,
@@ -469,7 +497,7 @@ class FalkorDbGraphStoreAdapter(IGraphStore):
             logger.warning("Failed to delete graph %s in FalkorDB: %s", graph_name, e)
 
     async def delete_document_subgraph(self, kb_id: UUID, document_id: UUID) -> None:
-        await asyncio.to_thread(self._delete_document_subgraph_sync, kb_id, document_id)
+        await self._run_async(self._delete_document_subgraph_sync, kb_id, document_id)
 
     async def delete_graph(self, kb_id: UUID) -> None:
-        await asyncio.to_thread(self._delete_graph_sync, kb_id)
+        await self._run_async(self._delete_graph_sync, kb_id)
