@@ -34,6 +34,8 @@
 - `SPEC-mcp-agent-connect-hub.md` (Marco 1.24 - MCP Agent Connect Hub & Dynamic Tool Catalog) — Concluído (v0.9.0)
 - `SPEC-google-drive-folder-data-source.md` (Marco 1.25 - Google Drive Folder Data Source, Upstream Producer & Blue/Green Ingestion) — Concluído (v0.10.0)
 - `SPEC-saga-concurrency-resilience.md` (Marco 1.26 - Resiliência de Concorrência na Saga de Ingestão & Deferred Atomic Commit) — Concluído (v0.10.1)
+- `SPEC-resilient-data-source-sync.md` (Marco 1.27 - Sincronização Resiliente de Fontes de Dados, Native Async Client, Semáforo, Retry & DLQ) — Especificado (v0.10.2)
+- `SPEC-resilient-distributed-ingestion-engine.md` (Marco 1.28 - Motor de Ingestão Resiliente e Distribuído: Decomposição DDD DocumentAggregate, Redis Streams At-Least-Once, UNWIND Batching no FalkorDB e Watchdog Blindado) — Especificado (v0.10.3)
 
 ## Architecture Decision Records (ADRs)
 - `docs/decisions/0001-hexagonal-event-sourced-architecture.md`
@@ -69,6 +71,8 @@
 15. **Marco 1.24 (Concluído - v0.9.0):** `frontend-console:mcp-agent-connect-hub` (MCP Agent Connect Hub, Quickstart por Agente e Catálogo Dinâmico de Ferramentas)
 16. **Marco 1.25 (Concluído - v0.10.0):** `knowledge:data-source-google-drive-folder` & `frontend-console:data-source-connector-ui` (Entidade DataSource, GoogleDriveFolderConnector, Polling Delta, Blue/Green Atomic Swap, Hardening de Segurança BOLA/DoS, Console UI e Executions Inspector)
 17. **Marco 1.26 (Concluído - v0.10.1):** `knowledge:saga-concurrency-resilience` (Deferred Atomic Commit, Mutex por KB, Retry Exponencial Otimista e Recuperação Zero-Token-Waste)
-18. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
+18. **Marco 1.27 (Especificado - v0.10.2):** `knowledge:resilient-data-source-sync` (Sincronização Resiliente de Fontes de Dados, Native Async Client, Semáforo, Retry & DLQ)
+19. **Marco 1.28 (Especificado - v0.10.3):** `knowledge:resilient-distributed-ingestion-engine` (Motor de Ingestão Resiliente e Distribuído: Decomposição DDD DocumentAggregate, Redis Streams At-Least-Once, UNWIND Batching no FalkorDB e Watchdog Blindado)
+20. **Marco 2 (Próximo):** `memory` ──→ `tool-registry` ──→ `execution`
 
 
