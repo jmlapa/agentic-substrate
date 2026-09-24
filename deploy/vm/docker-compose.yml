@@ -3,6 +3,14 @@ services:
     image: pgvector/pgvector:0.8.6-pg16
     container_name: substrate_vm_postgres
     restart: unless-stopped
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=200
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -37,6 +45,7 @@ services:
     image: redis:7.4.10-alpine
     container_name: substrate_vm_redis
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "60", "1000"]
     volumes:
       - ./data/redis:/data
     networks:
