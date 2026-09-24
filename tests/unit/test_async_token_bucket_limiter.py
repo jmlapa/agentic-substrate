@@ -61,3 +61,17 @@ async def test_limiter_concurrency() -> None:
     results = await asyncio.gather(*(worker(i) for i in range(10)))
     assert len(results) == 10
     assert sorted(results) == list(range(10))
+
+
+@pytest.mark.asyncio
+async def test_limiter_tokens_exceeding_max_tpm_clamped() -> None:
+    # Quando uma requisição pede mais tokens que o max_tpm,
+    # ela deve ser clampada para max_tpm e não entrar em loop infinito
+    limiter = AsyncTokenBucketLimiter(max_rpm=10, max_tpm=500, window_seconds=0.2)
+
+    start = time.monotonic()
+    await limiter.acquire(10_000)  # Pede 10.000 tokens em limiter de 500
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.1
+    assert limiter.current_tpm_usage == 500

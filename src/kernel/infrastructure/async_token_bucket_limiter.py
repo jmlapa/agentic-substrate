@@ -1,4 +1,5 @@
 import asyncio
+import random
 import time
 from collections import deque
 
@@ -46,7 +47,7 @@ class AsyncTokenBucketLimiter:
         Adquire cota para 1 requisição com estimated_tokens.
         Se a cota de RPM ou TPM estiver cheia, aguarda não-bloqueante até liberar slot.
         """
-        tokens = max(1, estimated_tokens)
+        tokens = min(max(1, estimated_tokens), self._max_tpm)
         while True:
             sleep_time = 0.0
             async with self._lock:
@@ -75,7 +76,9 @@ class AsyncTokenBucketLimiter:
                 oldest_req = self._requests[0] if self._requests else now
                 oldest_tok = self._token_events[0][0] if self._token_events else now
                 earliest_event = min(oldest_req, oldest_tok)
-                sleep_time = max(0.01, (earliest_event + self._window) - now)
+                # Jitter de 10ms a 50ms para descorrelacionar o thundering herd
+                jitter = random.uniform(0.01, 0.05)
+                sleep_time = max(0.01, (earliest_event + self._window) - now + jitter)
 
             # Aguarda fora do lock para liberar outras corrotinas
             await asyncio.sleep(sleep_time)
