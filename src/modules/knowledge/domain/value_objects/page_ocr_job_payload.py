@@ -14,3 +14,4 @@ class PageOcrJobPayload(BaseModel):
     total_pages: int
     hierarchy_hint: str | None = None
     effective_prompt: str = ""
+    page_image_storage_path: str | None = None
