@@ -7,11 +7,13 @@ from src.kernel.infrastructure.app_settings import AppSettings
 from src.kernel.infrastructure.async_token_bucket_limiter import (
     AsyncTokenBucketLimiter,
 )
+from src.kernel.infrastructure.atomic_job_barrier import AtomicJobBarrier
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.kernel.infrastructure.in_memory_job_queue import InMemoryJobQueue
 from src.kernel.infrastructure.postgres_event_store import PostgresEventStore
 from src.kernel.infrastructure.redis_job_queue import RedisJobQueue
+from src.kernel.infrastructure.redis_stream_job_queue import RedisStreamJobQueue
 from src.modules.knowledge.application.handlers.blue_green_document_swap_handler import (
     BlueGreenDocumentSwapHandler,
 )
@@ -72,9 +74,17 @@ from src.modules.knowledge.application.use_cases.quick_search_notes import (
 from src.modules.knowledge.application.use_cases.reprocess_document import (
     ReprocessDocumentUseCase,
 )
+from src.modules.knowledge.application.use_cases.retry_failed_data_source_items import (
+    RetryFailedDataSourceItemsUseCase,
+)
 from src.modules.knowledge.application.use_cases.sync_data_source import (
     SyncDataSourceUseCase,
 )
+from src.modules.knowledge.application.workers.graph_job_worker import GraphJobWorker
+from src.modules.knowledge.application.workers.ingestion_watchdog import (
+    IngestionWatchdog,
+)
+from src.modules.knowledge.application.workers.ocr_job_worker import OcrJobWorker
 from src.modules.knowledge.domain.events.document_knowledge_indexed_event import (
     DocumentKnowledgeIndexedEvent,
 )
@@ -91,6 +101,9 @@ from src.modules.knowledge.domain.interfaces.i_data_source_run_repository import
     IDataSourceRunRepository,
 )
 from src.modules.knowledge.domain.interfaces.i_document_parser import IDocumentParser
+from src.modules.knowledge.domain.interfaces.i_document_repository import (
+    IDocumentRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
     IEmbeddingService,
 )
@@ -111,6 +124,9 @@ from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
+)
+from src.modules.knowledge.domain.interfaces.i_stream_job_queue import (
+    IStreamJobQueue,
 )
 from src.modules.knowledge.domain.value_objects.data_source_type import (
     DataSourceType,
@@ -181,6 +197,9 @@ from src.modules.knowledge.infrastructure.adapters.postgres_data_source_reposito
 from src.modules.knowledge.infrastructure.adapters.postgres_data_source_run_repository import (
     PostgresDataSourceRunRepository,
 )
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
+)
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
@@ -246,8 +265,16 @@ class AppContainer:
     list_data_source_runs_use_case: ListDataSourceRunsUseCase | None = None
     delete_data_source_use_case: DeleteDataSourceUseCase | None = None
     sync_data_source_use_case: SyncDataSourceUseCase | None = None
+    retry_failed_data_source_items_use_case: RetryFailedDataSourceItemsUseCase | None = None
     blue_green_swap_handler: BlueGreenDocumentSwapHandler | None = None
     data_source_run_projector: DataSourceRunProjector | None = None
+    # Distributed Ingestion Engine (Marco 1.28)
+    document_repository: IDocumentRepository | None = None
+    stream_job_queue: IStreamJobQueue | None = None
+    job_barrier: AtomicJobBarrier | None = None
+    ocr_worker: OcrJobWorker | None = None
+    graph_worker: GraphJobWorker | None = None
+    ingestion_watchdog: IngestionWatchdog | None = None
 
 
 def create_app_container(
@@ -282,7 +309,7 @@ def create_app_container(
         ds_repo = PostgresDataSourceRepository(pool=postgres_pool)
         ds_run_repo = PostgresDataSourceRunRepository(pool=postgres_pool)
     else:
-        repo = InMemoryKnowledgeBaseRepository()
+        repo = InMemoryKnowledgeBaseRepository(event_bus=bus)
         ontology_repo = InMemoryOntologyRepository()
         ds_repo = InMemoryDataSourceRepository()
         ds_run_repo = InMemoryDataSourceRunRepository()
@@ -399,6 +426,37 @@ def create_app_container(
     else:
         synthesis_service = InMemoryRagSynthesizer()
 
+    doc_repo: IDocumentRepository = PostgresDocumentRepository(
+        event_store=store,
+        pool=postgres_pool,
+    )
+
+    stream_queue: IStreamJobQueue | None = None
+    barrier: AtomicJobBarrier | None = None
+    ocr_worker: OcrJobWorker | None = None
+    graph_worker: GraphJobWorker | None = None
+    if redis_client is not None:
+        stream_queue = RedisStreamJobQueue(client=redis_client)
+        barrier = AtomicJobBarrier(client=redis_client)
+        ocr_worker = OcrJobWorker(
+            stream_queue=stream_queue,
+            storage=storage,
+            checkpoint_storage=page_checkpoint,
+            barrier=barrier,
+            pool=postgres_pool,
+        )
+        graph_worker = GraphJobWorker(
+            stream_queue=stream_queue,
+            storage=storage,
+            checkpoint_storage=parent_graph_checkpoint,
+            barrier=barrier,
+            graph_extractor=extractor,
+            graph_store=graph_store,
+            document_repo=doc_repo,
+            pool=postgres_pool,
+            event_bus=bus,
+        )
+
     saga = DocumentIngestionSagaCoordinator(
         event_bus=bus,
         event_store=store,
@@ -412,6 +470,9 @@ def create_app_container(
         page_checkpoint_storage=page_checkpoint,
         parent_graph_checkpoint_storage=parent_graph_checkpoint,
         run_in_background=run_in_background,
+        document_repo=doc_repo,
+        stream_queue=stream_queue,
+        barrier=barrier,
     )
 
     create_kb = CreateKnowledgeBaseUseCase(
@@ -421,7 +482,20 @@ def create_app_container(
     )
     list_kbs = ListKnowledgeBasesUseCase(repo)
     attach_doc = AttachAndStoreDocumentUseCase(store, repo, storage)
-    reprocess_doc = ReprocessDocumentUseCase(store, repo, bus)
+    reprocess_doc = ReprocessDocumentUseCase(
+        event_store=store,
+        repository=repo,
+        event_bus=bus,
+        document_repo=doc_repo,
+        pool=postgres_pool,
+    )
+
+    watchdog: IngestionWatchdog | None = None
+    if postgres_pool is not None:
+        watchdog = IngestionWatchdog(
+            pool=postgres_pool,
+            reprocess_use_case=reprocess_doc,
+        )
     query_kb = QueryKnowledgeUseCase(
         graph_store=graph_store,
         embedding_service=embedding_service,
@@ -430,6 +504,7 @@ def create_app_container(
     get_doc_content = GetDocumentContentUseCase(
         kb_repository=repo,
         storage=storage,
+        document_repo=doc_repo,
     )
     quick_search = QuickSearchNotesUseCase(
         kb_repository=repo,
@@ -453,6 +528,7 @@ def create_app_container(
         graph_store=graph_store,
         event_store=store,
         event_bus=bus,
+        document_repo=doc_repo,
     )
     delete_ont = DeleteOntologyTemplateUseCase(repository=ontology_repo)
 
@@ -487,6 +563,13 @@ def create_app_container(
         attach_use_case=attach_doc,
         event_bus=bus,
         max_concurrency=2,
+    )
+    retry_failed_data_source_items_uc = RetryFailedDataSourceItemsUseCase(
+        data_source_repository=ds_repo,
+        data_source_run_repository=ds_run_repo,
+        connector_registry=connector_registry,
+        attach_use_case=attach_doc,
+        reprocess_document_use_case=reprocess_doc,
     )
 
     # Reactive Handlers (Blue/Green Document Swap & DataSourceRun Progress Projector)
@@ -548,6 +631,13 @@ def create_app_container(
         list_data_source_runs_use_case=list_data_source_runs_uc,
         delete_data_source_use_case=delete_data_source_uc,
         sync_data_source_use_case=sync_data_source_uc,
+        retry_failed_data_source_items_use_case=retry_failed_data_source_items_uc,
         blue_green_swap_handler=swap_handler,
         data_source_run_projector=run_projector,
+        document_repository=doc_repo,
+        stream_job_queue=stream_queue,
+        job_barrier=barrier,
+        ocr_worker=ocr_worker,
+        graph_worker=graph_worker,
+        ingestion_watchdog=watchdog,
     )

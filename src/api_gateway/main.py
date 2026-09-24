@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI
@@ -37,16 +38,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             user=cfg.postgres_user,
             password=password,
             database=cfg.postgres_db,
-            min_size=1,
-            max_size=10,
-            timeout=5.0,
+            min_size=10,
+            max_size=40,
+            timeout=20.0,
         )
     except Exception:
         pool = None
 
+    import redis.asyncio as aioredis
+
+    redis_client: Any | None = None
+    try:
+        redis_client = aioredis.from_url(
+            f"redis://{cfg.redis_host}:{cfg.redis_port}/{cfg.redis_db}",
+            decode_responses=False,
+        )
+    except Exception:
+        redis_client = None
+
     container = create_app_container(
         settings=cfg,
         postgres_pool=pool,
+        redis_client=redis_client,
         run_in_background=True,
     )
     app.state.container = container
@@ -54,14 +67,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if pool and container.projector:
         try:
             async with pool.acquire() as conn:
-                streams = await conn.fetch("SELECT aggregate_id FROM event_streams")
-                for s in streams:
-                    events = await container.event_store.get_events(s["aggregate_id"])
-                    await container.projector.rebuild_projections_from_events(events)
+                count = await conn.fetchval("SELECT count(*) FROM knowledge_bases")
+                if count == 0:
+                    streams = await conn.fetch("SELECT aggregate_id FROM event_streams")
+                    for s in streams:
+                        events = await container.event_store.get_events(s["aggregate_id"])
+                        await container.projector.rebuild_projections_from_events(events)
         except Exception:
             pass
 
+    # Inicia workers autônomos e watchdog de supervisão
+    if container.ocr_worker:
+        await container.ocr_worker.start()
+    if container.graph_worker:
+        await container.graph_worker.start()
+    if container.ingestion_watchdog:
+        await container.ingestion_watchdog.start()
+
     yield
+
+    # Encerramento gracioso (Graceful Shutdown)
+    if container.ingestion_watchdog:
+        await container.ingestion_watchdog.stop()
+    if container.graph_worker:
+        await container.graph_worker.stop()
+    if container.ocr_worker:
+        await container.ocr_worker.stop()
+    if redis_client:
+        await getattr(redis_client, "aclose", redis_client.close)()
     if pool:
         await pool.close()
 
