@@ -13,6 +13,9 @@ from src.modules.knowledge.domain.interfaces.i_data_source_run_repository import
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
+from src.modules.knowledge.domain.interfaces.i_document_repository import (
+    IDocumentRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
     IEmbeddingService,
 )
@@ -34,6 +37,9 @@ from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStor
 from src.modules.knowledge.domain.interfaces.i_ontology_repository import (
     IOntologyRepository,
 )
+from src.modules.knowledge.domain.interfaces.i_stream_job_queue import (
+    IStreamJobQueue,
+)
 from src.modules.knowledge.domain.interfaces.i_synthetic_toc_extractor import (
     ISyntheticTocExtractor,
 )
@@ -44,6 +50,7 @@ __all__ = [
     "IDataSourceRepository",
     "IDataSourceRunRepository",
     "IDocumentParser",
+    "IDocumentRepository",
     "IEmbeddingService",
     "IGraphExtractor",
     "IGraphStore",
@@ -53,5 +60,6 @@ __all__ = [
     "IMarkdownChunker",
     "IObjectStorage",
     "IOntologyRepository",
+    "IStreamJobQueue",
     "ISyntheticTocExtractor",
 ]

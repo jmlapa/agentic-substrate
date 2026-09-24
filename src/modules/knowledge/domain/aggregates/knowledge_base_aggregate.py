@@ -3,6 +3,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.kernel.domain.aggregate_root import AggregateRoot
+from src.modules.knowledge.domain.aggregates.document_aggregate import (
+    DocumentAggregate,
+)
 from src.modules.knowledge.domain.events.document_attached_event import DocumentAttachedEvent
 from src.modules.knowledge.domain.events.document_chunked_event import (
     DocumentChunkedEvent,
@@ -70,6 +73,35 @@ class KnowledgeBaseAggregate(AggregateRoot):
             )
         )
         return kb
+
+    def create_document(
+        self,
+        file_name: str,
+        content_type: str,
+        enable_ocr: bool = False,
+        ocr_instructions: str | None = None,
+        source_type: DocumentSourceType | None = None,
+        ingested_at: float | None = None,
+        metadata: dict[str, Any] | None = None,
+        document_id: UUID | None = None,
+    ) -> DocumentAggregate:
+        """
+        Delega a criação e o ciclo de vida do documento para o DocumentAggregate autônomo.
+        """
+        doc_id = document_id or uuid4()
+        storage_path = f"{self.storage_partition}/raw/{doc_id}-{file_name}"
+        return DocumentAggregate.create(
+            document_id=doc_id,
+            kb_id=self.id,
+            file_name=file_name,
+            content_type=content_type,
+            storage_path=storage_path,
+            enable_ocr=enable_ocr,
+            ocr_instructions=ocr_instructions,
+            source_type=source_type,
+            ingested_at=ingested_at,
+            metadata=metadata,
+        )
 
     def attach_document(
         self,

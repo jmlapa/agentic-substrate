@@ -13,6 +13,9 @@ from src.modules.knowledge.application.use_cases.get_document_content.get_docume
 from src.modules.knowledge.application.use_cases.get_document_content.get_document_content_response import (  # noqa: E501
     GetDocumentContentResponse,
 )
+from src.modules.knowledge.domain.interfaces.i_document_repository import (
+    IDocumentRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
@@ -29,9 +32,11 @@ class GetDocumentContentUseCase(UseCase[GetDocumentContentRequest, GetDocumentCo
         self,
         kb_repository: IKnowledgeBaseRepository,
         storage: IObjectStorage,
+        document_repo: IDocumentRepository | None = None,
     ) -> None:
         self._kb_repo = kb_repository
         self._storage = storage
+        self._doc_repo = document_repo
         self._heading_pattern = re.compile(r"^(#{1,6})\s+(.+)$")
 
     def _generate_anchor(self, text: str) -> str:
@@ -65,6 +70,19 @@ class GetDocumentContentUseCase(UseCase[GetDocumentContentRequest, GetDocumentCo
             )
 
         doc_info = kb.documents.get(request.document_id)
+        if not doc_info and self._doc_repo is not None:
+            doc = await self._doc_repo.get_by_id(request.document_id)
+            if doc is not None and doc.kb_id == request.kb_id:
+                doc_info = {
+                    "file_name": doc.file_name,
+                    "source_type": doc.source_type,
+                    "status": doc.status,
+                    "markdown_path": doc.markdown_storage_path,
+                    "total_parents": doc.total_parents,
+                    "total_children": doc.total_children,
+                    "ingested_at": doc.ingested_at,
+                }
+
         if not doc_info:
             return Err(
                 DomainError(

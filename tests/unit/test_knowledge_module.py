@@ -49,6 +49,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
     ParallelVlmDocumentParser,
 )
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
+)
 from src.modules.knowledge.infrastructure.extractors.dynamic_ontology_model_builder import (
     DynamicOntologyModelBuilder,
 )
@@ -125,6 +128,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = PostgresDocumentRepository(event_store=store)
         ontology_repo = InMemoryOntologyRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = ParallelVlmDocumentParser()
@@ -136,6 +140,7 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=parser,
             extractor=extractor,
@@ -147,7 +152,9 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
             repository=repo,
             ontology_repository=ontology_repo,
         )
-        attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
+        attach_doc_use_case = AttachAndStoreDocumentUseCase(
+            store, repo, storage, document_repo=doc_repo
+        )
         embedding_service = InMemoryEmbeddingService()
         query_use_case = QueryKnowledgeUseCase(
             graph_store=graph_store,
@@ -179,12 +186,11 @@ async def test_full_knowledge_ingestion_saga(sample_ontology: OntologySchema) ->
         doc_id = doc_res.value.document_id
 
         # 3. Verify that the Saga completed all steps
-        updated_kb = await repo.get_by_id(kb_id)
-        assert updated_kb is not None
-        doc_info = updated_kb.documents[doc_id]
-        assert doc_info["status"] == DocumentStatus.INDEXED
-        assert doc_info.get("total_parents", 0) >= 1
-        assert doc_info.get("total_children", 0) >= 1
+        doc = await doc_repo.get_by_id(doc_id)
+        assert doc is not None
+        assert doc.status == DocumentStatus.INDEXED
+        assert doc.total_parents >= 1
+        assert doc.total_children >= 1
 
         # 4. Verify hybrid query use case
         query_res = await query_use_case.execute(
@@ -212,6 +218,7 @@ async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: Ontolo
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = PostgresDocumentRepository(event_store=store)
         ontology_repo = InMemoryOntologyRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = ParallelVlmDocumentParser()
@@ -222,6 +229,7 @@ async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: Ontolo
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=parser,
             extractor=extractor,
@@ -233,7 +241,9 @@ async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: Ontolo
             repository=repo,
             ontology_repository=ontology_repo,
         )
-        attach_doc_use_case = AttachAndStoreDocumentUseCase(store, repo, storage)
+        attach_doc_use_case = AttachAndStoreDocumentUseCase(
+            store, repo, storage, document_repo=doc_repo
+        )
 
         kb_res = await create_kb_use_case.execute(
             CreateKnowledgeBaseRequest(
@@ -260,12 +270,11 @@ async def test_knowledge_ingestion_saga_with_ocr_options(sample_ontology: Ontolo
         assert isinstance(doc_res, Ok)
         doc_id = doc_res.value.document_id
 
-        updated_kb = await repo.get_by_id(kb_id)
-        assert updated_kb is not None
-        doc_info = updated_kb.documents[doc_id]
-        assert doc_info["enable_ocr"] is True
-        assert doc_info["ocr_instructions"] == custom_instructions
-        assert doc_info["status"] == DocumentStatus.INDEXED
+        doc = await doc_repo.get_by_id(doc_id)
+        assert doc is not None
+        assert doc.enable_ocr is True
+        assert doc.ocr_instructions == custom_instructions
+        assert doc.status == DocumentStatus.INDEXED
 
 
 @pytest.mark.asyncio

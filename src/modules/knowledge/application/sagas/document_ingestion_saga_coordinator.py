@@ -1,6 +1,5 @@
 import asyncio
 import json
-import random
 from collections.abc import Callable, Coroutine
 from typing import Any
 from uuid import UUID
@@ -8,11 +7,8 @@ from uuid import UUID
 from src.kernel.application.event_bus import EventBus
 from src.kernel.application.event_store import EventStore
 from src.kernel.application.logger import Logger
-from src.kernel.domain.domain_error import DomainError
 from src.kernel.domain.domain_event import DomainEvent
-from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
-    KnowledgeBaseAggregate,
-)
+from src.kernel.infrastructure.atomic_job_barrier import AtomicJobBarrier
 from src.modules.knowledge.domain.events.document_chunked_event import (
     DocumentChunkedEvent,
 )
@@ -31,6 +27,9 @@ from src.modules.knowledge.domain.events.graph_extracted_from_document_event imp
 from src.modules.knowledge.domain.interfaces.i_document_parser import (
     IDocumentParser,
 )
+from src.modules.knowledge.domain.interfaces.i_document_repository import (
+    IDocumentRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_embedding_service import (
     IEmbeddingService,
 )
@@ -47,13 +46,20 @@ from src.modules.knowledge.domain.interfaces.i_markdown_chunker import (
 from src.modules.knowledge.domain.interfaces.i_object_storage import (
     IObjectStorage,
 )
+from src.modules.knowledge.domain.interfaces.i_stream_job_queue import (
+    IStreamJobQueue,
+)
 from src.modules.knowledge.domain.value_objects.child_chunk import ChildChunk
 from src.modules.knowledge.domain.value_objects.extracted_graph import (
     ExtractedGraph,
 )
 from src.modules.knowledge.domain.value_objects.graph_edge import GraphEdge
 from src.modules.knowledge.domain.value_objects.graph_node import GraphNode
+from src.modules.knowledge.domain.value_objects.job_task import JobTask
 from src.modules.knowledge.domain.value_objects.parent_chunk import ParentChunk
+from src.modules.knowledge.domain.value_objects.parent_graph_job_payload import (
+    ParentGraphJobPayload,
+)
 from src.modules.knowledge.domain.value_objects.structural_graph_document import (
     StructuralGraphDocument,
 )
@@ -65,6 +71,9 @@ from src.modules.knowledge.infrastructure.adapters.page_checkpoint_storage impor
 )
 from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_storage import (
     ParentGraphCheckpointStorage,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
 )
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
@@ -94,10 +103,16 @@ class DocumentIngestionSagaCoordinator:
         page_checkpoint_storage: PageCheckpointStorage | None = None,
         parent_graph_checkpoint_storage: (ParentGraphCheckpointStorage | None) = None,
         run_in_background: bool = False,
+        document_repo: IDocumentRepository | None = None,
+        stream_queue: IStreamJobQueue | None = None,
+        barrier: AtomicJobBarrier | None = None,
     ) -> None:
         self._bus = event_bus
         self._store = event_store
         self._kb_repo = kb_repository
+        self._document_repo = document_repo or PostgresDocumentRepository(event_store=self._store)
+        self._stream_queue = stream_queue
+        self._barrier = barrier
         self._storage = storage
         self._parser = parser
         self._extractor = extractor
@@ -148,70 +163,21 @@ class DocumentIngestionSagaCoordinator:
             self._wrap_handler(self.handle_graph_extracted),
         )
 
-    async def _load_aggregate(self, kb_id: UUID) -> KnowledgeBaseAggregate:
-        events = await self._store.get_events(kb_id)
-        kb = KnowledgeBaseAggregate(id=kb_id)
-        kb.load_from_history(events)
-        return kb
-
-    async def _save_aggregate(self, kb: KnowledgeBaseAggregate) -> None:
-        expected_version = kb.version - len(kb.uncommitted_events)
-        events_to_publish = list(kb.uncommitted_events)
-        kb.mark_events_as_committed()
-        await self._kb_repo.save(kb)
-        await self._store.append_events(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
-            events=events_to_publish,
-            expected_version=expected_version,
-        )
-
-    async def _execute_atomic_aggregate_mutation(
-        self,
-        kb_id: UUID,
-        mutate_fn: Callable[[KnowledgeBaseAggregate], None],
-        max_retries: int = 5,
-    ) -> KnowledgeBaseAggregate:
-        """
-        Executa a mutação no agregado sob lock por KB com retry exponencial em caso de conflito.
-        """
-        last_err: Exception | None = None
-        for attempt in range(max_retries):
-            try:
-                kb = await self._load_aggregate(kb_id)
-                mutate_fn(kb)
-                await self._save_aggregate(kb)
-                return kb
-            except DomainError as err:
-                if "Concurrency conflict" in str(err) or err.code == "CONCURRENCY_ERROR":
-                    last_err = err
-                    backoff = (0.02 * (2**attempt)) + random.uniform(0.01, 0.03)
-                    await asyncio.sleep(backoff)
-                    continue
-                raise
-            except Exception as err:
-                last_err = err
-                raise
-        if last_err:
-            raise last_err
-        raise RuntimeError("Falha inesperada na mutação atômica do agregado")
-
     async def _record_failure_safely(
         self,
-        kb_id: UUID,
         document_id: UUID,
         step: str,
         error_message: str,
     ) -> None:
         try:
-            await self._execute_atomic_aggregate_mutation(
-                kb_id=kb_id,
-                mutate_fn=lambda kb: kb.mark_processing_failed(
-                    document_id=document_id,
-                    step=step,
-                    error_message=error_message,
-                ),
-            )
+            doc = await self._document_repo.get_by_id(document_id)
+            if doc is not None:
+                doc.mark_processing_failed(step=step, error_message=error_message)
+                await self._document_repo.save(doc)
+            elif self._logger:
+                self._logger.error(
+                    f"DocumentAggregate {document_id} not found in step {step}: {error_message}"
+                )
         except Exception as e:
             if self._logger:
                 self._logger.error(
@@ -229,14 +195,24 @@ class DocumentIngestionSagaCoordinator:
     async def handle_document_stored(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentStoredEvent):
             return
-        kb = await self._load_aggregate(event.aggregate_id)
+        doc = await self._document_repo.get_by_id(event.document_id)
+        if doc is None:
+            if self._logger:
+                self._logger.warning(
+                    f"Doc {event.document_id} not found for handle_document_stored"
+                )
+            return
+
+        kb_id = doc.kb_id or event.kb_id or event.aggregate_id
+        kb = await self._kb_repo.get_by_id(kb_id) if kb_id else None
+        storage_partition = kb.storage_partition if kb else str(kb_id)
+
         try:
             raw_bytes = await self._storage.get_object(event.storage_path)
-            doc_info = kb.documents.get(event.document_id, {})
-            file_name = doc_info.get("file_name", "doc.txt")
-            content_type = doc_info.get("content_type", "text/plain")
-            enable_ocr = bool(doc_info.get("enable_ocr", False))
-            ocr_instructions = doc_info.get("ocr_instructions")
+            file_name = doc.file_name or "doc.txt"
+            content_type = doc.content_type or "text/plain"
+            enable_ocr = bool(doc.enable_ocr)
+            ocr_instructions = doc.ocr_instructions
 
             async def _on_ocr_progress(cur: int, tot: int, msg: str) -> None:
                 pct = self._calculate_percentage(cur, tot)
@@ -245,6 +221,7 @@ class DocumentIngestionSagaCoordinator:
                         DocumentProgressUpdatedEvent(
                             aggregate_id=event.aggregate_id,
                             document_id=event.document_id,
+                            kb_id=kb_id,
                             step="OCR",
                             current=cur,
                             total=tot,
@@ -254,7 +231,7 @@ class DocumentIngestionSagaCoordinator:
                     ]
                 )
 
-            ingested_at = doc_info.get("ingested_at")
+            ingested_at = doc.ingested_at
 
             markdown_text = await self._parser.parse_to_markdown(
                 raw_bytes=raw_bytes,
@@ -263,24 +240,20 @@ class DocumentIngestionSagaCoordinator:
                 enable_ocr=enable_ocr,
                 ocr_instructions=ocr_instructions,
                 doc_id=event.document_id,
-                kb_partition=kb.storage_partition,
+                kb_partition=storage_partition,
                 progress_callback=_on_ocr_progress,
                 ingested_at=ingested_at,
             )
-            md_path = f"{kb.storage_partition}/markdown/{event.document_id}.md"
+            md_path = f"{storage_partition}/markdown/{event.document_id}.md"
             await self._storage.put_object(md_path, markdown_text.encode("utf-8"), "text/markdown")
 
-            await self._execute_atomic_aggregate_mutation(
-                kb_id=event.aggregate_id,
-                mutate_fn=lambda fresh_kb: fresh_kb.mark_document_parsed(
-                    document_id=event.document_id,
-                    markdown_storage_path=md_path,
-                    markdown_preview=markdown_text[:200],
-                ),
+            doc.mark_parsed(
+                markdown_storage_path=md_path,
+                markdown_preview=markdown_text[:200],
             )
+            await self._document_repo.save(doc)
         except Exception as e:
             await self._record_failure_safely(
-                kb_id=event.aggregate_id,
                 document_id=event.document_id,
                 step="PARSE_MARKDOWN",
                 error_message=str(e),
@@ -289,13 +262,25 @@ class DocumentIngestionSagaCoordinator:
     async def handle_document_parsed(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentParsedToMarkdownEvent):
             return
-        kb = await self._load_aggregate(event.aggregate_id)
+        doc = await self._document_repo.get_by_id(event.document_id)
+        if doc is None:
+            if self._logger:
+                self._logger.warning(
+                    f"Doc {event.document_id} not found for handle_document_parsed"
+                )
+            return
+
+        kb_id = doc.kb_id or event.kb_id or event.aggregate_id
+        kb = await self._kb_repo.get_by_id(kb_id) if kb_id else None
+        storage_partition = kb.storage_partition if kb else str(kb_id)
+
         try:
             await self._bus.publish(
                 [
                     DocumentProgressUpdatedEvent(
                         aggregate_id=event.aggregate_id,
                         document_id=event.document_id,
+                        kb_id=kb_id,
                         step="CHUNKING",
                         current=0,
                         total=1,
@@ -306,10 +291,9 @@ class DocumentIngestionSagaCoordinator:
             )
             md_bytes = await self._storage.get_object(event.markdown_storage_path)
             md_text = md_bytes.decode("utf-8")
-            doc_info = kb.documents.get(event.document_id, {})
-            file_name = doc_info.get("file_name", "document.md")
-            source_type = doc_info.get("source_type")
-            ingested_at = doc_info.get("ingested_at")
+            file_name = doc.file_name or "document.md"
+            source_type = doc.source_type
+            ingested_at = doc.ingested_at
 
             chunk_collection = await self._chunker.chunk(
                 document_id=event.document_id,
@@ -319,8 +303,7 @@ class DocumentIngestionSagaCoordinator:
                 ingested_at=ingested_at,
             )
 
-            # Persiste chunks serializados para evitar re-chunking redundante
-            chunks_path = f"{kb.storage_partition}/chunks/{event.document_id}_chunks.json"
+            chunks_path = f"{storage_partition}/chunks/{event.document_id}_chunks.json"
             chunks_data = {
                 "parents": [p.model_dump() for p in chunk_collection.parents],
                 "children": [c.model_dump() for c in chunk_collection.children],
@@ -340,18 +323,14 @@ class DocumentIngestionSagaCoordinator:
                 for p in chunk_collection.parents
             ]
 
-            await self._execute_atomic_aggregate_mutation(
-                kb_id=event.aggregate_id,
-                mutate_fn=lambda fresh_kb: fresh_kb.mark_document_chunked(
-                    document_id=event.document_id,
-                    total_parents=len(chunk_collection.parents),
-                    total_children=len(chunk_collection.children),
-                    chunks_summary=summary,
-                ),
+            doc.mark_chunked(
+                total_parents=len(chunk_collection.parents),
+                total_children=len(chunk_collection.children),
+                chunks_summary=summary,
             )
+            await self._document_repo.save(doc)
         except Exception as e:
             await self._record_failure_safely(
-                kb_id=event.aggregate_id,
                 document_id=event.document_id,
                 step="MARKDOWN_CHUNKING",
                 error_message=str(e),
@@ -360,20 +339,32 @@ class DocumentIngestionSagaCoordinator:
     async def handle_document_chunked(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentChunkedEvent):
             return
-        kb = await self._load_aggregate(event.aggregate_id)
+        doc = await self._document_repo.get_by_id(event.document_id)
+        if doc is None:
+            if self._logger:
+                self._logger.warning(
+                    f"Doc {event.document_id} not found for handle_document_chunked"
+                )
+            return
+
+        kb_id = doc.kb_id or event.kb_id or event.aggregate_id
+        if not kb_id:
+            return
+        kb = await self._kb_repo.get_by_id(kb_id)
+        if kb is None:
+            raise ValueError(f"KnowledgeBase {kb_id} not found")
+
         try:
             if not kb.ontology:
                 raise ValueError("Ontology is missing in Knowledge Base")
 
-            doc_info = kb.documents.get(event.document_id, {})
-            md_path = doc_info.get(
-                "markdown_path",
-                f"{kb.storage_partition}/markdown/{event.document_id}.md",
+            storage_partition = kb.storage_partition
+            md_path = (
+                doc.markdown_storage_path or f"{storage_partition}/markdown/{event.document_id}.md"
             )
-            file_name = doc_info.get("file_name", "document.md")
+            file_name = doc.file_name or "document.md"
 
-            # Recupera chunks do cache se disponível para evitar re-chunking
-            chunks_path = f"{kb.storage_partition}/chunks/{event.document_id}_chunks.json"
+            chunks_path = f"{storage_partition}/chunks/{event.document_id}_chunks.json"
             if await self._storage.exists(chunks_path):
                 raw_chunks = await self._storage.get_object(chunks_path)
                 parsed_json = json.loads(raw_chunks.decode("utf-8"))
@@ -390,7 +381,6 @@ class DocumentIngestionSagaCoordinator:
                 parents = chunk_collection.parents
                 children = chunk_collection.children
 
-            # 1. Geração de Embeddings em Micro-batches de 50 chunks
             embedded_children: list[ChildChunk] = []
             if children:
                 await self._bus.publish(
@@ -398,6 +388,7 @@ class DocumentIngestionSagaCoordinator:
                         DocumentProgressUpdatedEvent(
                             aggregate_id=event.aggregate_id,
                             document_id=event.document_id,
+                            kb_id=kb_id,
                             step="EMBEDDINGS",
                             current=0,
                             total=len(children),
@@ -426,6 +417,7 @@ class DocumentIngestionSagaCoordinator:
                             DocumentProgressUpdatedEvent(
                                 aggregate_id=event.aggregate_id,
                                 document_id=event.document_id,
+                                kb_id=kb_id,
                                 step="EMBEDDINGS",
                                 current=cur_emb,
                                 total=len(children),
@@ -452,7 +444,6 @@ class DocumentIngestionSagaCoordinator:
                         )
                     )
 
-            # 2. Ingestão Estrutural no FalkorDB Graph Store (Document -> Parent -> Child)
             structural_doc = StructuralGraphDocument(
                 document_id=event.document_id,
                 document_name=file_name,
@@ -462,11 +453,55 @@ class DocumentIngestionSagaCoordinator:
             await self._graph_store.ensure_vector_index(kb.id)
             await self._graph_store.store_structural_document(kb.id, structural_doc)
 
-            # 3. Extrair grafo ontológico concorrentemente por Parent Chunk com Checkpoints
             assert kb.ontology is not None
             current_ontology = kb.ontology
             valid_parents = [p for p in parents if p.content.strip()]
             total_parents = len(valid_parents)
+
+            if self._stream_queue is not None and self._barrier is not None:
+                await self._barrier.init_barrier(
+                    event.document_id, total_chunks=total_parents, step="graph"
+                )
+                doc_meta = dict(doc.metadata or getattr(event, "metadata", None) or {})
+                for idx, parent in enumerate(valid_parents):
+                    payload = ParentGraphJobPayload(
+                        kb_id=kb.id,
+                        document_id=event.document_id,
+                        parent_id=parent.id,
+                        parent_index=idx,
+                        total_parents=total_parents,
+                        header_path=parent.header_path,
+                        storage_partition=kb.storage_partition,
+                        content=parent.content,
+                        ontology=current_ontology.model_dump() if current_ontology else {},
+                        metadata=doc_meta,
+                    )
+                    task = JobTask(
+                        id=f"{event.document_id}_{parent.id}",
+                        queue_name="stream:jobs:graph",
+                        payload=payload.model_dump(mode="json"),
+                    )
+                    await self._stream_queue.publish_task("stream:jobs:graph", task)
+
+                await self._bus.publish(
+                    [
+                        DocumentProgressUpdatedEvent(
+                            aggregate_id=event.aggregate_id,
+                            document_id=event.document_id,
+                            kb_id=kb_id,
+                            step="GRAPH_EXTRACTION",
+                            current=0,
+                            total=total_parents,
+                            percentage=0,
+                            message=(
+                                "Tarefas de extração ontológica despachadas para Redis Streams "
+                                f"({total_parents} Chunks)..."
+                            ),
+                        )
+                    ]
+                )
+                return
+
             completed_parents = 0
             parent_lock = asyncio.Lock()
 
@@ -475,6 +510,7 @@ class DocumentIngestionSagaCoordinator:
                     DocumentProgressUpdatedEvent(
                         aggregate_id=event.aggregate_id,
                         document_id=event.document_id,
+                        kb_id=kb_id,
                         step="GRAPH_EXTRACTION",
                         current=0,
                         total=total_parents,
@@ -490,7 +526,6 @@ class DocumentIngestionSagaCoordinator:
                 parent: ParentChunk, idx: int
             ) -> tuple[str, ExtractedGraph]:
                 nonlocal completed_parents
-                # Checagem de Checkpoint no Disco (Zero Token Waste)
                 if self._graph_checkpoint:
                     if await self._graph_checkpoint.has_parent(
                         kb.storage_partition, event.document_id, parent.id
@@ -509,6 +544,7 @@ class DocumentIngestionSagaCoordinator:
                                     DocumentProgressUpdatedEvent(
                                         aggregate_id=event.aggregate_id,
                                         document_id=event.document_id,
+                                        kb_id=kb_id,
                                         step="GRAPH_EXTRACTION",
                                         current=cur_parent,
                                         total=total_parents,
@@ -546,6 +582,7 @@ class DocumentIngestionSagaCoordinator:
                         DocumentProgressUpdatedEvent(
                             aggregate_id=event.aggregate_id,
                             document_id=event.document_id,
+                            kb_id=kb_id,
                             step="GRAPH_EXTRACTION",
                             current=cur_parent,
                             total=total_parents,
@@ -580,15 +617,15 @@ class DocumentIngestionSagaCoordinator:
                 nodes=list(all_nodes.values()),
                 edges=all_edges,
             )
-            await self._execute_atomic_aggregate_mutation(
-                kb_id=event.aggregate_id,
-                mutate_fn=lambda fresh_kb: fresh_kb.mark_graph_extracted(
-                    event.document_id, combined_graph
-                ),
+            doc.mark_graph_extracted(
+                node_count=len(combined_graph.nodes),
+                edge_count=len(combined_graph.edges),
+                subgraph_storage_path=f"{kb.storage_partition}/graphs/{event.document_id}.json",
+                extracted_graph=combined_graph,
             )
+            await self._document_repo.save(doc)
         except Exception as e:
             await self._record_failure_safely(
-                kb_id=event.aggregate_id,
                 document_id=event.document_id,
                 step="GRAPH_EXTRACTION",
                 error_message=str(e),
@@ -597,13 +634,25 @@ class DocumentIngestionSagaCoordinator:
     async def handle_graph_extracted(self, event: DomainEvent) -> None:
         if not isinstance(event, GraphExtractedFromDocumentEvent):
             return
-        kb = await self._load_aggregate(event.aggregate_id)
+        doc = await self._document_repo.get_by_id(event.document_id)
+        if doc is None:
+            if self._logger:
+                self._logger.warning(
+                    f"Doc {event.document_id} not found for handle_graph_extracted"
+                )
+            return
+
+        kb_id = doc.kb_id or event.kb_id or event.aggregate_id
+        if not kb_id:
+            return
+
         try:
             await self._bus.publish(
                 [
                     DocumentProgressUpdatedEvent(
                         aggregate_id=event.aggregate_id,
                         document_id=event.document_id,
+                        kb_id=kb_id,
                         step="INDEXING",
                         current=0,
                         total=1,
@@ -612,24 +661,32 @@ class DocumentIngestionSagaCoordinator:
                     )
                 ]
             )
+            extracted_graph = event.extracted_graph
+            if extracted_graph is None:
+                if event.subgraph_storage_path and await self._storage.exists(
+                    event.subgraph_storage_path
+                ):
+                    raw_bytes = await self._storage.get_object(event.subgraph_storage_path)
+                    extracted_graph = ExtractedGraph.model_validate_json(raw_bytes.decode("utf-8"))
+                else:
+                    extracted_graph = ExtractedGraph(nodes=[], edges=[])
+
             indexed_nodes, indexed_edges = await self._graph_store.store_graph(
-                kb.id, event.extracted_graph
+                kb_id, extracted_graph
             )
 
-            await self._execute_atomic_aggregate_mutation(
-                kb_id=event.aggregate_id,
-                mutate_fn=lambda fresh_kb: fresh_kb.mark_knowledge_indexed(
-                    document_id=event.document_id,
-                    indexed_nodes=indexed_nodes,
-                    indexed_edges=indexed_edges,
-                ),
+            doc.mark_knowledge_indexed(
+                indexed_nodes=indexed_nodes,
+                indexed_edges=indexed_edges,
             )
+            await self._document_repo.save(doc)
 
             await self._bus.publish(
                 [
                     DocumentProgressUpdatedEvent(
                         aggregate_id=event.aggregate_id,
                         document_id=event.document_id,
+                        kb_id=kb_id,
                         step="INDEXED",
                         current=1,
                         total=1,
@@ -640,7 +697,6 @@ class DocumentIngestionSagaCoordinator:
             )
         except Exception as e:
             await self._record_failure_safely(
-                kb_id=event.aggregate_id,
                 document_id=event.document_id,
                 step="INDEXING",
                 error_message=str(e),

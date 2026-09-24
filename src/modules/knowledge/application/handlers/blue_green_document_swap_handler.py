@@ -68,14 +68,29 @@ class BlueGreenDocumentSwapHandler:
             )
             return
 
+        target_kb_id = (
+            event.kb_id
+            or (
+                UUID(str(event.metadata["kb_id"]))
+                if isinstance(event.metadata, dict) and event.metadata.get("kb_id")
+                else None
+            )
+            or (event.aggregate_id if event.aggregate_type == "KnowledgeBaseAggregate" else None)
+        )
+        if not target_kb_id:
+            self._log_error(
+                f"[BlueGreenDocumentSwapHandler] KB ID ausente no doc '{event.document_id}'"
+            )
+            return
+
         self._log_info(
             f"[BlueGreenDocumentSwapHandler] Atomic swap: novo doc '{event.document_id}' "
-            f"indexado. Expurgando versão antiga '{old_doc_id}' da KB '{event.aggregate_id}'"
+            f"indexado. Expurgando versão antiga '{old_doc_id}' da KB '{target_kb_id}'"
         )
 
         result = await self._delete_use_case.execute(
             DeleteDocumentRequest(
-                kb_id=event.aggregate_id,
+                kb_id=target_kb_id,
                 document_id=old_doc_id,
             )
         )

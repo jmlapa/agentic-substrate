@@ -11,3 +11,4 @@ class DocumentChunkedEvent(DomainEvent):
     total_parents: int
     total_children: int
     chunks_summary: list[dict[str, Any]] = Field(default_factory=list)
+    kb_id: UUID | None = None

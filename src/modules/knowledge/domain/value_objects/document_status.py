@@ -9,3 +9,4 @@ class DocumentStatus(StrEnum):
     GRAPH_EXTRACTED = "GRAPH_EXTRACTED"
     INDEXED = "INDEXED"
     FAILED = "FAILED"
+    DELETED = "DELETED"

@@ -150,15 +150,15 @@ class KnowledgeBaseProjector:
 
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "DELETE FROM attached_documents WHERE id = $1 AND kb_id = $2;",
+                "DELETE FROM attached_documents WHERE id = $1;",
                 event.document_id,
-                event.aggregate_id,
             )
 
     async def handle_document_attached(self, event: DomainEvent) -> None:
         if not isinstance(event, DocumentAttachedEvent):
             return
 
+        kb_id = event.kb_id or event.aggregate_id
         query = """
         INSERT INTO attached_documents (
             id, kb_id, file_name, status, storage_path, enable_ocr, ocr_instructions, updated_at
@@ -176,7 +176,7 @@ class KnowledgeBaseProjector:
             await conn.execute(
                 query,
                 event.document_id,
-                event.aggregate_id,
+                kb_id,
                 event.file_name,
                 event.storage_path,
                 event.enable_ocr,
@@ -189,7 +189,10 @@ class KnowledgeBaseProjector:
 
         query = """
         UPDATE attached_documents
-        SET status = 'UPLOADED',
+        SET status = CASE 
+                WHEN status IN ('PENDING_UPLOAD', 'FAILED') THEN 'UPLOADED' 
+                ELSE status 
+            END,
             error_step = NULL,
             error_message = NULL,
             storage_path = $1,
@@ -237,7 +240,10 @@ class KnowledgeBaseProjector:
 
         query = """
         UPDATE attached_documents
-        SET status = 'PARSED',
+        SET status = CASE 
+                WHEN status IN ('PENDING_UPLOAD', 'UPLOADED', 'FAILED') THEN 'PARSED' 
+                ELSE status 
+            END,
             progress_step = 'CHUNKING',
             progress_current = 0,
             progress_total = 1,

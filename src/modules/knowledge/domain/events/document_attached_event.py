@@ -11,6 +11,7 @@ class DocumentAttachedEvent(DomainEvent):
     file_name: str
     content_type: str
     storage_path: str
+    kb_id: UUID | None = None
     source_type: DocumentSourceType = DocumentSourceType.DOCUMENT
     ingested_at: float = 0.0
     enable_ocr: bool = False

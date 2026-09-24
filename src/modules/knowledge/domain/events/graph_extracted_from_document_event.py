@@ -8,4 +8,6 @@ class GraphExtractedFromDocumentEvent(DomainEvent):
     document_id: UUID
     node_count: int
     edge_count: int
-    extracted_graph: ExtractedGraph
+    extracted_graph: ExtractedGraph | None = None
+    subgraph_storage_path: str | None = None
+    kb_id: UUID | None = None

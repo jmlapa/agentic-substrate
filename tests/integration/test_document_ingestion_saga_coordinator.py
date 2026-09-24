@@ -1,5 +1,6 @@
 import tempfile
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -7,6 +8,9 @@ from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
     DocumentIngestionSagaCoordinator,
+)
+from src.modules.knowledge.domain.aggregates.document_aggregate import (
+    DocumentAggregate,
 )
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
@@ -32,6 +36,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 )
 from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
     ParallelVlmDocumentParser,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
 )
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
@@ -71,6 +78,7 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = PostgresDocumentRepository(event_store=store)
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = ParallelVlmDocumentParser()
         chunker = StructureTolerantMarkdownChunker(
@@ -86,6 +94,7 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=parser,
             extractor=extractor,
@@ -110,35 +119,31 @@ async def test_saga_coordinator_e2e_with_chunking_and_embeddings(
         kb.mark_events_as_committed()
 
         # 2. Attach Document and store bytes
-        doc_id = kb.attach_document("guide.md", "text/markdown")
-        doc_info = kb.documents[doc_id]
+        doc_id = uuid4()
+        storage_path = f"{kb.storage_partition}/raw/{doc_id}-guide.md"
+        doc = DocumentAggregate.create(
+            document_id=doc_id,
+            kb_id=kb.id,
+            file_name="guide.md",
+            content_type="text/markdown",
+            storage_path=storage_path,
+        )
         raw_content = b"""# Cloud Architecture Guide
 This guide explains Service payment and Service auth integration.
 
 ## Microservices
 Details about the deployment infrastructure and scaling policies.
 """
-        await storage.put_object(doc_info["storage_path"], raw_content, "text/markdown")
-        kb.mark_document_stored(doc_id, doc_info["storage_path"], len(raw_content))
-
-        # Publish uncommitted events to trigger the Saga
-        uncommitted = list(kb.uncommitted_events)
-        kb.mark_events_as_committed()
-        await repo.save(kb)
-        await store.append_events(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
-            events=uncommitted,
-            expected_version=1,
-        )
+        await storage.put_object(storage_path, raw_content, "text/markdown")
+        doc.mark_stored(storage_path, len(raw_content))
+        await doc_repo.save(doc)
 
         # 3. Verify final state
-        updated_kb = await repo.get_by_id(kb.id)
-        assert updated_kb is not None
-        doc_state = updated_kb.documents[doc_id]
-        assert doc_state["status"] == DocumentStatus.INDEXED
-        assert doc_state["total_parents"] >= 2
-        assert doc_state["total_children"] >= 2
+        updated_doc = await doc_repo.get_by_id(doc_id)
+        assert updated_doc is not None
+        assert updated_doc.status == DocumentStatus.INDEXED
+        assert updated_doc.total_parents >= 2
+        assert updated_doc.total_children >= 2
 
         # 4. Verify hybrid graph search across chunks
         results = await graph_store.query_hybrid(
@@ -157,6 +162,7 @@ async def test_saga_coordinator_handles_chunking_failure(
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = PostgresDocumentRepository(event_store=store)
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = ParallelVlmDocumentParser()
 
@@ -172,6 +178,7 @@ async def test_saga_coordinator_handles_chunking_failure(
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=parser,
             extractor=extractor,
@@ -185,18 +192,21 @@ async def test_saga_coordinator_handles_chunking_failure(
         await store.append_events(kb.id, "KnowledgeBaseAggregate", list(kb.uncommitted_events), 0)
         kb.mark_events_as_committed()
 
-        doc_id = kb.attach_document("doc.txt", "text/plain")
-        doc_info = kb.documents[doc_id]
+        doc_id = uuid4()
+        storage_path = f"{kb.storage_partition}/raw/{doc_id}-doc.txt"
+        doc = DocumentAggregate.create(
+            document_id=doc_id,
+            kb_id=kb.id,
+            file_name="doc.txt",
+            content_type="text/plain",
+            storage_path=storage_path,
+        )
         raw_bytes = b"Some sample plain text"
-        await storage.put_object(doc_info["storage_path"], raw_bytes, "text/plain")
-        kb.mark_document_stored(doc_id, doc_info["storage_path"], len(raw_bytes))
+        await storage.put_object(storage_path, raw_bytes, "text/plain")
+        doc.mark_stored(storage_path, len(raw_bytes))
+        await doc_repo.save(doc)
 
-        uncommitted = list(kb.uncommitted_events)
-        kb.mark_events_as_committed()
-        await repo.save(kb)
-        await store.append_events(kb.id, "KnowledgeBaseAggregate", uncommitted, 1)
-
-        updated_kb = await repo.get_by_id(kb.id)
-        assert updated_kb is not None
-        assert updated_kb.documents[doc_id]["status"] == DocumentStatus.FAILED
-        assert updated_kb.documents[doc_id]["error"]["step"] == "MARKDOWN_CHUNKING"
+        updated_doc = await doc_repo.get_by_id(doc_id)
+        assert updated_doc is not None
+        assert updated_doc.status == DocumentStatus.FAILED
+        assert updated_doc.error_step == "MARKDOWN_CHUNKING"

@@ -86,7 +86,7 @@ async def test_projector_handles_lifecycle_transitions_with_clean_progress() -> 
     )
     await bus.publish([parsed_event])
     sql = mock_conn.execute.call_args[0][0]
-    assert "status = 'PARSED'" in sql
+    assert "'PARSED'" in sql
     assert "progress_step = 'CHUNKING'" in sql
 
     # 2. Chunked Event

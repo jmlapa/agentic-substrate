@@ -5,3 +5,4 @@ from src.kernel.domain.domain_event import DomainEvent
 
 class DocumentDeletedEvent(DomainEvent):
     document_id: UUID
+    kb_id: UUID | None = None

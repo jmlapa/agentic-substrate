@@ -1,5 +1,6 @@
 import tempfile
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -8,6 +9,7 @@ from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
     DocumentIngestionSagaCoordinator,
 )
+from src.modules.knowledge.domain.aggregates.document_aggregate import DocumentAggregate
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
 )
@@ -18,6 +20,9 @@ from src.modules.knowledge.domain.events.document_stored_event import (
     DocumentStoredEvent,
 )
 from src.modules.knowledge.domain.ontology.ontology_schema import OntologySchema
+from src.modules.knowledge.infrastructure.adapters.in_memory_document_repository import (
+    InMemoryDocumentRepository,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
@@ -44,6 +49,7 @@ async def test_saga_resumes_with_zero_token_waste_on_existing_checkpoints() -> N
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = InMemoryDocumentRepository()
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         page_checkpoint = PageCheckpointStorage(storage=storage)
         graph_checkpoint = ParentGraphCheckpointStorage(storage=storage)
@@ -65,6 +71,7 @@ async def test_saga_resumes_with_zero_token_waste_on_existing_checkpoints() -> N
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=mock_parser,
             extractor=mock_extractor,
@@ -81,23 +88,29 @@ async def test_saga_resumes_with_zero_token_waste_on_existing_checkpoints() -> N
         )
         await repo.save(kb)
 
-        doc_id = kb.attach_document("test.pdf", "application/pdf")
-        doc_info = kb.documents[doc_id]
-        storage_path = doc_info["storage_path"]
+        doc_id = uuid4()
+        storage_path = f"{kb.storage_partition}/raw/{doc_id}-test.pdf"
         await storage.put_object(storage_path, b"%PDF-dummy", "application/pdf")
-        kb.mark_document_stored(doc_id, storage_path, len(b"%PDF-dummy"))
-        await repo.save(kb)
-        await store.append_events(kb.id, "KnowledgeBaseAggregate", list(kb.uncommitted_events), 0)
-        kb.mark_events_as_committed()
+
+        doc = DocumentAggregate.create(
+            document_id=doc_id,
+            kb_id=kb.id,
+            file_name="test.pdf",
+            content_type="application/pdf",
+            storage_path=storage_path,
+        )
+        doc.mark_stored(storage_path, len(b"%PDF-dummy"))
+        await doc_repo.save(doc)
 
         # Configura o retorno do parser mockado
         mock_parser.parse_to_markdown.return_value = "# Title\n\n## Section 1\nSome paragraph text."
 
         # Dispara handle_document_stored
         event = DocumentStoredEvent(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
+            aggregate_id=doc.id,
+            aggregate_type="DocumentAggregate",
             document_id=doc_id,
+            kb_id=kb.id,
             storage_path=storage_path,
             byte_size=len(b"%PDF-dummy"),
         )

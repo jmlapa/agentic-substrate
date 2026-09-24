@@ -10,6 +10,9 @@ from src.modules.knowledge.infrastructure.adapters.falkordb_graph_store_adapter 
 from src.modules.knowledge.infrastructure.adapters.gemini_embedding_adapter import (
     GeminiEmbeddingAdapter,
 )
+from src.modules.knowledge.infrastructure.adapters.in_memory_document_repository import (
+    InMemoryDocumentRepository,
+)
 from src.modules.knowledge.infrastructure.adapters.in_memory_embedding_service import (
     InMemoryEmbeddingService,
 )
@@ -52,6 +55,9 @@ from src.modules.knowledge.infrastructure.adapters.parent_graph_checkpoint_stora
 from src.modules.knowledge.infrastructure.adapters.pdf_page_renderer import (
     PdfPageRenderer,
 )
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
+)
 from src.modules.knowledge.infrastructure.adapters.postgres_knowledge_base_repository import (
     PostgresKnowledgeBaseRepository,
 )
@@ -73,6 +79,7 @@ __all__ = [
     "CompositeDocumentParser",
     "FalkorDbGraphStoreAdapter",
     "GeminiEmbeddingAdapter",
+    "InMemoryDocumentRepository",
     "InMemoryEmbeddingService",
     "InMemoryGraphStore",
     "InMemoryKnowledgeBaseRepository",
@@ -87,6 +94,7 @@ __all__ = [
     "ParallelVlmDocumentParser",
     "ParentGraphCheckpointStorage",
     "PdfPageRenderer",
+    "PostgresDocumentRepository",
     "PostgresKnowledgeBaseRepository",
     "PostgresOntologyRepository",
     "QwenSyntheticTocExtractor",

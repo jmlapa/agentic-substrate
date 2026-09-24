@@ -55,29 +55,6 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
             updated_at = NOW();
         """
 
-        doc_query = """
-        INSERT INTO attached_documents (
-            id, kb_id, file_name, status, storage_path, enable_ocr, ocr_instructions,
-            total_parents, total_children, indexed_nodes_count, indexed_edges_count,
-            error_step, error_message, updated_at
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            file_name = EXCLUDED.file_name,
-            status = EXCLUDED.status,
-            storage_path = EXCLUDED.storage_path,
-            enable_ocr = EXCLUDED.enable_ocr,
-            ocr_instructions = EXCLUDED.ocr_instructions,
-            total_parents = EXCLUDED.total_parents,
-            total_children = EXCLUDED.total_children,
-            indexed_nodes_count = EXCLUDED.indexed_nodes_count,
-            indexed_edges_count = EXCLUDED.indexed_edges_count,
-            error_step = EXCLUDED.error_step,
-            error_message = EXCLUDED.error_message,
-            updated_at = NOW();
-        """
-
         status_str = (
             aggregate.status.value
             if isinstance(aggregate.status, KnowledgeBaseStatus)
@@ -95,44 +72,15 @@ class PostgresKnowledgeBaseRepository(IKnowledgeBaseRepository):
                 if row:
                     ontology_id = row["id"]
 
-            async with conn.transaction():
-                await conn.execute(
-                    kb_query,
-                    aggregate.id,
-                    aggregate.name,
-                    aggregate.description,
-                    status_str,
-                    aggregate.storage_partition,
-                    ontology_id,
-                )
-
-                for doc_id, doc_info in aggregate.documents.items():
-                    doc_status_raw = doc_info.get("status", DocumentStatus.PENDING_UPLOAD)
-                    doc_status_str = (
-                        doc_status_raw.value
-                        if isinstance(doc_status_raw, DocumentStatus)
-                        else str(doc_status_raw)
-                    )
-                    err = doc_info.get("error")
-                    err_step = err.get("step") if isinstance(err, dict) else None
-                    err_msg = err.get("error_message") if isinstance(err, dict) else None
-
-                    await conn.execute(
-                        doc_query,
-                        doc_id,
-                        aggregate.id,
-                        doc_info.get("file_name", "document"),
-                        doc_status_str,
-                        doc_info.get("storage_path", ""),
-                        doc_info.get("enable_ocr", False),
-                        doc_info.get("ocr_instructions"),
-                        doc_info.get("total_parents"),
-                        doc_info.get("total_children"),
-                        doc_info.get("indexed_nodes_count", 0),
-                        doc_info.get("indexed_edges_count", 0),
-                        err_step,
-                        err_msg,
-                    )
+            await conn.execute(
+                kb_query,
+                aggregate.id,
+                aggregate.name,
+                aggregate.description,
+                status_str,
+                aggregate.storage_partition,
+                ontology_id,
+            )
 
     async def get_by_id(self, id: UUID) -> KnowledgeBaseAggregate | None:
         kb_query = """

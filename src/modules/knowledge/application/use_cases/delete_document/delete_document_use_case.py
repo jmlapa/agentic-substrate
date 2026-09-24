@@ -8,11 +8,17 @@ from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
 from src.modules.knowledge.domain.events.document_deleted_event import (
     DocumentDeletedEvent,
 )
+from src.modules.knowledge.domain.interfaces.i_document_repository import (
+    IDocumentRepository,
+)
 from src.modules.knowledge.domain.interfaces.i_graph_store import IGraphStore
 from src.modules.knowledge.domain.interfaces.i_knowledge_base_repository import (
     IKnowledgeBaseRepository,
 )
 from src.modules.knowledge.domain.interfaces.i_object_storage import IObjectStorage
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
+)
 
 from .delete_document_request import DeleteDocumentRequest
 from .delete_document_response import DeleteDocumentResponse
@@ -23,6 +29,7 @@ class DeleteDocumentUseCase:
     Caso de uso para exclusão atômica de um documento de uma Knowledge Base,
     removendo arquivos brutos e processados do Storage local,
     nós e arestas do FalkorDB, além da desnormalização no PostgreSQL.
+    Opera sobre DocumentAggregate como Agregado Raiz soberano.
     """
 
     def __init__(
@@ -32,28 +39,21 @@ class DeleteDocumentUseCase:
         graph_store: IGraphStore,
         event_store: EventStore | None = None,
         event_bus: EventBus | None = None,
+        document_repo: IDocumentRepository | None = None,
     ) -> None:
         self._repo = repository
         self._storage = object_storage
         self._graph_store = graph_store
         self._store = event_store
         self._bus = event_bus
+        self._doc_repo = document_repo or (
+            PostgresDocumentRepository(event_store=self._store) if self._store else None
+        )
 
     async def execute(
         self, request: DeleteDocumentRequest
     ) -> Result[DeleteDocumentResponse, DomainError]:
-        kb: KnowledgeBaseAggregate | None = None
-        if self._store:
-            events = await self._store.get_events(request.kb_id)
-            if events:
-                aggregate = KnowledgeBaseAggregate(id=request.kb_id)
-                aggregate.load_from_history(events)
-                kb = aggregate
-            else:
-                kb = await self._repo.get_by_id(request.kb_id)
-        else:
-            kb = await self._repo.get_by_id(request.kb_id)
-
+        kb: KnowledgeBaseAggregate | None = await self._repo.get_by_id(request.kb_id)
         if not kb:
             return Err(
                 DomainError(
@@ -62,7 +62,11 @@ class DeleteDocumentUseCase:
                 )
             )
 
-        if request.document_id not in kb.documents:
+        doc = None
+        if self._doc_repo is not None:
+            doc = await self._doc_repo.get_by_id(request.document_id)
+
+        if not doc and request.document_id not in kb.documents:
             return Err(
                 DomainError(
                     f"Document {request.document_id} not found in Knowledge Base {request.kb_id}",
@@ -81,30 +85,23 @@ class DeleteDocumentUseCase:
         # 2. Limpar subgrafo do documento no FalkorDB
         await self._graph_store.delete_document_subgraph(request.kb_id, request.document_id)
 
-        # 3. Atualizar aggregate e emitir evento
-        kb.remove_document(request.document_id)
-        if self._store:
-            expected_version = kb.version - len(kb.uncommitted_events)
-            events_to_publish = list(kb.uncommitted_events)
-            kb.mark_events_as_committed()
-            await self._store.append_events(
-                aggregate_id=kb.id,
-                aggregate_type="KnowledgeBaseAggregate",
-                events=events_to_publish,
-                expected_version=expected_version,
-            )
-        elif self._bus:
+        # 3. Excluir aggregate soberano e emitir evento de domínio
+        if doc is not None and self._doc_repo is not None:
+            doc.delete()
+            await self._doc_repo.save(doc)
+        elif self._bus is not None:
             await self._bus.publish(
                 [
                     DocumentDeletedEvent(
-                        aggregate_id=request.kb_id,
-                        aggregate_type="KnowledgeBaseAggregate",
+                        aggregate_id=request.document_id,
+                        aggregate_type="DocumentAggregate",
                         document_id=request.document_id,
+                        kb_id=request.kb_id,
                     )
                 ]
             )
 
-        # 4. Remover do Repositório Relacional (Postgres / In-Memory)
+        # 4. Remover do Repositório Relacional / Projeção em Memória
         await self._repo.delete_document(request.kb_id, request.document_id)
 
         return Ok(

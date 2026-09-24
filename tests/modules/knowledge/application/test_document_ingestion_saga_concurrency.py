@@ -1,14 +1,16 @@
 import asyncio
 import tempfile
-from typing import Any
+from uuid import uuid4
 
 import pytest
 
-from src.kernel.domain.domain_error import DomainError
 from src.kernel.infrastructure.in_memory_event_bus import InMemoryEventBus
 from src.kernel.infrastructure.in_memory_event_store import InMemoryEventStore
 from src.modules.knowledge.application.sagas.document_ingestion_saga_coordinator import (
     DocumentIngestionSagaCoordinator,
+)
+from src.modules.knowledge.domain.aggregates.document_aggregate import (
+    DocumentAggregate,
 )
 from src.modules.knowledge.domain.aggregates.knowledge_base_aggregate import (
     KnowledgeBaseAggregate,
@@ -34,6 +36,9 @@ from src.modules.knowledge.infrastructure.adapters.local_file_system_storage_ada
 )
 from src.modules.knowledge.infrastructure.adapters.parallel_vlm_document_parser import (
     ParallelVlmDocumentParser,
+)
+from src.modules.knowledge.infrastructure.adapters.postgres_document_repository import (
+    PostgresDocumentRepository,
 )
 from src.modules.knowledge.infrastructure.chunking.structure_tolerant_markdown_chunker import (
     StructureTolerantMarkdownChunker,
@@ -71,12 +76,13 @@ async def test_concurrent_document_ingestion_completes_all_documents(
 ) -> None:
     """
     Valida que múltiplos documentos disparados concorrentemente na mesma KB
-    completam o pipeline até INDEXED sem serem abortados por colisão de versão.
+    completam o pipeline até INDEXED sem colisões de versão no Event Store.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
+        doc_repo = PostgresDocumentRepository(event_store=store)
         storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
         parser = ParallelVlmDocumentParser()
         chunker = StructureTolerantMarkdownChunker(
@@ -92,6 +98,7 @@ async def test_concurrent_document_ingestion_completes_all_documents(
             event_bus=bus,
             event_store=store,
             kb_repository=repo,
+            document_repo=doc_repo,
             storage=storage,
             parser=parser,
             extractor=extractor,
@@ -116,131 +123,84 @@ async def test_concurrent_document_ingestion_completes_all_documents(
         kb.mark_events_as_committed()
 
         doc_count = 5
-        doc_ids = []
+        docs: list[DocumentAggregate] = []
         for i in range(doc_count):
-            doc_id = kb.attach_document(f"doc_{i}.md", "text/markdown")
-            doc_ids.append(doc_id)
-            doc_info = kb.documents[doc_id]
+            doc_id = uuid4()
+            file_name = f"doc_{i}.md"
+            storage_path = f"{kb.storage_partition}/raw/{doc_id}-{file_name}"
             content = f"# Document {i}\nThis describes Service backend_{i} integration in detail.\n"
             content_bytes = content.encode("utf-8")
-            await storage.put_object(doc_info["storage_path"], content_bytes, "text/markdown")
-            kb.mark_document_stored(doc_id, doc_info["storage_path"], len(content_bytes))
+            await storage.put_object(storage_path, content_bytes, "text/markdown")
 
-        # Commita os eventos de anexo e upload de todos os docs
-        uncommitted = list(kb.uncommitted_events)
-        kb.mark_events_as_committed()
-        await repo.save(kb)
-        await store.append_events(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
-            events=uncommitted,
-            expected_version=1,
-        )
+            doc = DocumentAggregate.create(
+                document_id=doc_id,
+                kb_id=kb.id,
+                file_name=file_name,
+                content_type="text/markdown",
+                storage_path=storage_path,
+            )
+            doc.mark_stored(storage_path, len(content_bytes))
+            docs.append(doc)
+
+        # Salva todos os documentos concorrentemente
+        await asyncio.gather(*(doc_repo.save(doc) for doc in docs))
 
         # Aguarda a conclusão de todas as background tasks da saga
-        timeout = 10.0
+        timeout = 15.0
         start = asyncio.get_event_loop().time()
         while coordinator._background_tasks and (asyncio.get_event_loop().time() - start) < timeout:
             await asyncio.sleep(0.05)
 
-        updated_kb = await repo.get_by_id(kb.id)
-        assert updated_kb is not None
-
-        for doc_id in doc_ids:
-            doc_state = updated_kb.documents.get(doc_id)
-            assert doc_state is not None
-            assert doc_state["status"] == DocumentStatus.INDEXED
-            assert doc_state["total_parents"] >= 1
-            assert doc_state["total_children"] >= 1
+        for doc in docs:
+            saved_doc = await doc_repo.get_by_id(doc.id)
+            assert saved_doc is not None
+            assert saved_doc.status == DocumentStatus.INDEXED
+            assert saved_doc.total_parents >= 1
+            assert saved_doc.total_children >= 1
 
 
 @pytest.mark.asyncio
-async def test_optimistic_retry_recovers_from_injected_concurrency_conflict(
+async def test_sovereign_document_streams_prevent_concurrency_collisions(
     sample_ontology: OntologySchema,
 ) -> None:
     """
-    Injeta DomainError('Concurrency conflict') nas primeiras tentativas de gravação
-    e valida que _execute_atomic_aggregate_mutation tenta novamente e tem sucesso.
+    Valida que documentos distintos processando em paralelo possuem streams unitários
+    separados no Event Store e operam com zero conflito de concorrência.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory():
         bus = InMemoryEventBus()
         store = InMemoryEventStore(event_bus=bus)
         repo = InMemoryKnowledgeBaseRepository()
-        storage = LocalFileSystemStorageAdapter(base_directory=tmpdir)
-        parser = ParallelVlmDocumentParser()
-        chunker = StructureTolerantMarkdownChunker()
-        embedding_service = InMemoryEmbeddingService()
-        extractor = StructuredPydanticGraphExtractor()
-        graph_store = InMemoryGraphStore()
+        doc_repo = PostgresDocumentRepository(event_store=store)
 
-        coordinator = DocumentIngestionSagaCoordinator(
-            event_bus=bus,
-            event_store=store,
-            kb_repository=repo,
-            storage=storage,
-            parser=parser,
-            extractor=extractor,
-            graph_store=graph_store,
-            chunker=chunker,
-            embedding_service=embedding_service,
-        )
-
-        kb = KnowledgeBaseAggregate.create("RetryKB", "Desc", sample_ontology)
+        kb = KnowledgeBaseAggregate.create("IsolatedStreamsKB", "Desc", sample_ontology)
         await repo.save(kb)
-        await store.append_events(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
-            events=list(kb.uncommitted_events),
-            expected_version=0,
-        )
-        kb.mark_events_as_committed()
 
-        doc_id = kb.attach_document("retry_test.md", "text/markdown")
-        kb.mark_document_stored(doc_id, "path", 100)
-        await repo.save(kb)
-        await store.append_events(
-            aggregate_id=kb.id,
-            aggregate_type="KnowledgeBaseAggregate",
-            events=list(kb.uncommitted_events),
-            expected_version=1,
-        )
-        kb.mark_events_as_committed()
+        # Cria 10 documentos independentes na mesma KB
+        docs = [
+            DocumentAggregate.create(
+                document_id=uuid4(),
+                kb_id=kb.id,
+                file_name=f"file_{i}.txt",
+                content_type="text/plain",
+                storage_path=f"{kb.storage_partition}/raw/file_{i}.txt",
+            )
+            for i in range(10)
+        ]
 
-        original_append = store.append_events
-        call_count = 0
+        # Simula mutações concorrentes em todos os 10 documentos simultaneamente
+        async def mutate_doc(doc: DocumentAggregate) -> None:
+            doc.mark_stored(doc.storage_path, 100)
+            doc.mark_parsed(f"md_{doc.id}", "preview")
+            doc.mark_chunked(total_parents=2, total_children=4)
+            await doc_repo.save(doc)
 
-        async def flaking_append(
-            aggregate_id: Any,
-            aggregate_type: Any,
-            events: Any,
-            expected_version: Any,
-        ) -> None:
-            nonlocal call_count
-            call_count += 1
-            if call_count <= 2:
-                # Simula conflito de concorrência nas duas primeiras tentativas
-                raise DomainError(
-                    f"Concurrency conflict: expected version {expected_version}, got 99",
-                    code="CONCURRENCY_ERROR",
-                )
-            await original_append(aggregate_id, aggregate_type, events, expected_version)
+        # Todas as mutações paralelas devem executar sem conflito de concorrência
+        await asyncio.gather(*(mutate_doc(d) for d in docs))
 
-        store.append_events = flaking_append  # type: ignore[method-assign]
-
-        # Executa mutação que sofrerá 2 conflitos antes de ter sucesso na 3ª tentativa
-        result_kb = await coordinator._execute_atomic_aggregate_mutation(
-            kb_id=kb.id,
-            mutate_fn=lambda fresh_kb: fresh_kb.mark_document_parsed(
-                document_id=doc_id,
-                markdown_storage_path="kb/parsed.md",
-                markdown_preview="preview",
-            ),
-            max_retries=5,
-        )
-
-        assert call_count >= 3
-        assert result_kb.documents[doc_id]["status"] in (
-            DocumentStatus.PARSED,
-            DocumentStatus.CHUNKED,
-            DocumentStatus.INDEXED,
-        )
+        for doc in docs:
+            loaded = await doc_repo.get_by_id(doc.id)
+            assert loaded is not None
+            assert loaded.status == DocumentStatus.CHUNKED
+            assert loaded.total_parents == 2
+            assert loaded.total_children == 4

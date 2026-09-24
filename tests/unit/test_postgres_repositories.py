@@ -144,9 +144,9 @@ async def test_postgres_knowledge_base_repository_save_and_get() -> None:
         }
     }
 
-    # Save
+    # Save (O(1) persistence without N+1 attached_documents loop)
     await repo.save(kb)
-    assert mock_conn.execute.await_count == 2
+    assert mock_conn.execute.await_count == 1
 
     # Get by ID
     mock_conn.fetchrow.return_value = {
